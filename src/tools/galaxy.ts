@@ -15,7 +15,7 @@
 import { z } from 'zod'
 import type { CoordinatorRun, DelegationRequest } from '../agent/coordinator.js'
 import { aggregationPolicySchema, type AggregationPolicy, type WorkOrderKind } from '../agent/work-order.js'
-import { DEFAULT_DELEGATE_PROFILE, profileRegistry } from '../agent/profile-registry.js'
+import { DEFAULT_DELEGATE_PROFILE, profileRegistry, delegationToolTimeoutMs } from '../agent/profile-registry.js'
 import { starDomainRegistry } from '../agent/star-domain-registry.js'
 import { formatWorkerResultDigest } from '../agent/worker-result-digest.js'
 import { formatWorkerIdentity } from '../tui/format/profile-labels.js'
@@ -527,5 +527,23 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
     requiresApproval: () => false,
     isConcurrencySafe: () => false,
     isEnabled: () => true,
+    // 外层超时必须覆盖 worker pool 的波次 × profile 预算，否则工具层先杀
+    timeoutMs: (params) => {
+      const dims = (params?.input?.dimensions as Array<{ stars?: string[]; authority?: string; profile?: string; timeoutMs?: number }> | undefined) ?? []
+      const profiles: Array<string | undefined> = []
+      const requestedTimeoutMs: Array<number | undefined> = []
+      for (const d of dims) {
+        const stars = d.stars ?? (d.authority ? [d.authority] : [])
+        for (let i = 0; i < stars.length; i++) {
+          profiles.push(d.profile)
+          requestedTimeoutMs.push(d.timeoutMs)
+        }
+      }
+      return delegationToolTimeoutMs(
+        params?.sessionTurnCount,
+        profiles,
+        { taskCount: profiles.length, requestedTimeoutMs },
+      )
+    },
   }
 }
