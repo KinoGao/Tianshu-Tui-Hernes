@@ -446,14 +446,21 @@ export function resolveEcosystemWorkflowInput(input: string, opts?: { date?: Dat
 
 任务：${parsed.args}
 
-立即执行（三步到位，不调研细节）：
-1. skill(name="galaxy") 
-2. glob 扫项目文件，按后缀分成文件组：
-   - 前端组（*.vue *.tsx *.jsx *.html *.css）→ 后端组（*.java *.go *.py）→ 其他组
-   - 每个文件组的路径列表作为对应维度的 files 字段
-3. galaxy({confirm: false}) 展示方案（每个维度带 files 范围），确认后 galaxy({confirm: true})
+完整生命周期（严格按序执行）：
 
-关键：每个维度的 files 字段必须填具体文件路径，防止 worker 间文件冲突。`,
+【派发阶段】
+1. skill(name="galaxy")
+2. glob 扫文件，按后缀分组为前端组/后端组/其他组
+3. galaxy({confirm: false}) 展示方案，确认后 galaxy({confirm: true}) 启动集群
+4. 等待子代理全部完成——期间不做任何代码操作，只等待
+
+【汇总阶段】
+5. 子代理全部返回后，汇总各维度产出
+6. 判断结果：
+   - 全部通过 → deliver_task commit=true 交付
+   - 有失败/冲突 → 分析根因，用 galaxy 重新启动集群修复
+
+关键：派发后只等待和汇总，不要自己调研或改代码。有问题就重启集群，不要手动修补。`,
       requiredTools: ['galaxy'],
     }
   }
