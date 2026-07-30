@@ -413,8 +413,8 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           requests.push({
             parentTurnId: workerId,
             objective: stars.length > 1
-              ? `${dim.objective}\n\n协作指令：你是房间「${dim.name}」的一员（共 ${stars.length} 席）。\n1. 读代码→声明「我负责：[文件]」→2. 实现→3. 运行相关测试确认通过→4. 运行 typecheck/lint 确认无报错→5. 完成后等互审。同伴：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s; }).join('、')}。`
-              : `${dim.objective}\n\n工业级交付要求：1. 读代码→2. 实现改动→3. 运行相关测试确认通过→4. 运行 typecheck/lint 确认无报错→5. 从入口到出口确认路径通达。不满足任何一条不算完成。`,
+              ? `${dim.objective}\n\n协作指令：你是房间「${dim.name}」的一员（共 ${stars.length} 席）。\n1. 读代码→声明「我负责：[文件]」→2. 先写失败测试复现问题（RED）→3. 修改代码使测试通过（GREEN）→4. 运行 typecheck/lint→5. 完成后等互审。同伴：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s; }).join('、')}。`
+              : `${dim.objective}\n\n工业级交付要求：1. 读代码→2. 先写失败测试复现问题（RED）→3. 修改代码使测试通过（GREEN）→4. 运行 typecheck/lint→5. 确认路径通达。不满足任何一条不算完成。注意：不先写测试直接改代码会被 evidence gate 拦截。`,
             kind: mapDimensionToKind(dim.name),
             profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
             authority: star,
