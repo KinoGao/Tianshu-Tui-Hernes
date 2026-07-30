@@ -442,13 +442,18 @@ export function resolveEcosystemWorkflowInput(input: string, opts?: { date?: Dat
     if (!parsed.args) return { command: parsed.command, prompt: 'Usage: /galaxy <任务描述>\n启动星河集群——拆解为多个维度由不同星域并行执行。' }
     return {
       command: parsed.command,
-      prompt: `用户通过 /galaxy 命令启动了星河集群。任务：${parsed.args}
+      prompt: `用户通过 /galaxy 命令启动了星河集群。你是监管者，不是执行者。
 
-请按以下流程处理：
-1. 先用 glob/grep 分析项目文件结构，按后缀识别前后端等维度边界
-2. 调用 skill(name="galaxy") 加载星河操作指南
-3. 调用 galaxy({confirm: false}) 展示集群方案并请求用户确认
-4. 用户确认后调用 galaxy({confirm: true}) 启动执行`,
+任务：${parsed.args}
+
+你的职责是拆解与监管——不要自己调研代码，不要自己改代码。把调研和执行全部委派给分子 Agent。
+
+立即执行以下步骤（不要跳过，不要内联分析）：
+1. 调用 skill(name="galaxy") 加载星河操作指南
+2. 用 glob 快速扫一眼项目文件后缀分布（仅用于确定维度边界，不要深入读文件）
+3. 调用 galaxy({confirm: false}) 展示集群方案——把代码分析、实现、审查全部放进 dimensions 里
+4. 用户确认后调用 galaxy({confirm: true}) 启动集群执行
+5. 结果出来后汇总报告，不要重新做分子 Agent 已经做过的事`,
       requiredTools: ['galaxy'],
     }
   }

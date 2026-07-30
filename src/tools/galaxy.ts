@@ -104,9 +104,9 @@ const DIMENSION_KIND_MAP: Record<string, WorkOrderKind> = {
   research: 'doc_research',
   search: 'code_search',
   scout: 'code_search',
-  frontend: 'code_search',
-  backend: 'code_search',
-  impl: 'code_search',
+  frontend: 'patch_proposal',
+  backend: 'patch_proposal',
+  impl: 'patch_proposal',
   patch: 'patch_proposal',
   fix: 'patch_proposal',
 }
