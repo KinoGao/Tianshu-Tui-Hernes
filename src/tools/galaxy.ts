@@ -60,7 +60,10 @@ const authorityStringSchema = z.string().refine(
 const dimensionSchema = z.object({
   name: z.string().min(1).describe('维度标识（如 frontend / backend / review / test / docs）'),
   objective: z.string().min(1).describe('该维度的具体执行目标'),
-  authority: authorityStringSchema.describe('该维度使用的星域'),
+  authority: authorityStringSchema.optional().describe('该维度使用的星域（单星域，与 authorities 二选一）'),
+  authorities: z.array(authorityStringSchema).min(2).max(5).optional().describe(
+    '该维度使用的多个星域，共享同一个"房间"——同组 worker 互相感知，可并行讨论。与 authority 二选一，多个星域时用此字段。',
+  ),
   profile: profileStringSchema.optional().describe('worker profile，默认 code_scout'),
   files: z.array(z.string()).optional(),
   symbols: z.array(z.string()).optional(),
@@ -70,7 +73,10 @@ const dimensionSchema = z.object({
     provider: z.string(),
     model: z.string(),
   }).optional().describe('为该维度指定专用模型（如审查用强模型、实现用快模型）'),
-})
+}).refine(
+  d => d.authority !== undefined || d.authorities !== undefined,
+  { message: '每个维度必须指定 authority 或 authorities（至少一个）' },
+)
 
 const galaxyInputSchema = z.object({
   objective: z.string().min(1).describe('集群总目标——要解决的完整任务描述'),
@@ -137,9 +143,13 @@ function formatGalaxyProposal(
 
   for (let i = 0; i < dimensions.length; i++) {
     const d = dimensions[i]!
-    const star = starDomainRegistry.get(d.authority)
-    const label = star ? `${star.name}（${star.motto.slice(0, 12)}…）` : d.authority
-    lines.push(`  ${i + 1}. ${d.name} — ${label}`)
+    const stars = d.authorities ?? (d.authority ? [d.authority] : [])
+    const starLabels = stars.map(s => {
+      const star = starDomainRegistry.get(s)
+      return star ? `${star.name}` : s
+    })
+    const roomTag = stars.length > 1 ? ` 🏠 共享房间（${starLabels.join(' + ')}）` : ` — ${starLabels[0]}`
+    lines.push(`  ${i + 1}. ${d.name}${roomTag}`)
     lines.push(`     ${d.objective}`)
   }
 
@@ -162,24 +172,33 @@ function formatGalaxyResult(
 ): string {
   const passed = run.results.filter(r => r.status === 'passed').length
   const total = run.results.length
-  const execCount = dimensions.length
-  const reviewCount = total - execCount
+
+  // Rebuild dimension→results mapping (multi-authority dims produce N results)
+  const expandedDims: { dimName: string; starName: string; starId: string; isRoom: boolean }[] = []
+  for (const dim of dimensions) {
+    const stars = dim.authorities ?? (dim.authority ? [dim.authority] : [])
+    for (const star of stars) {
+      const starDef = starDomainRegistry.get(star)
+      expandedDims.push({
+        dimName: dim.name,
+        starName: starDef?.name ?? star,
+        starId: star,
+        isRoom: stars.length > 1,
+      })
+    }
+  }
 
   const lines: string[] = [
-    `${GALAXY_GLYPH} 星河集群执行报告 · ${passed}/${total} 通过 · ${execCount} 执行${reviewCount > 0 ? ` + ${reviewCount} 审查` : ''}`,
+    `${GALAXY_GLYPH} 星河集群执行报告 · ${passed}/${total} 通过`,
     '',
   ]
 
-  for (let i = 0; i < run.results.length; i++) {
-    const r = run.results[i]!
-    const dim = dimensions[i]
-    const dimName = dim?.name ?? (i < execCount ? `维度 ${i + 1}` : '审查')
-    const authority = dim?.authority ?? (r as any).authority ?? 'unknown'
+  let ri = 0
+  for (const ed of expandedDims) {
+    const r = run.results[ri]
+    if (!r) break
+    const roomTag = ed.isRoom ? ' 🏠' : ''
 
-    const star = starDomainRegistry.get(authority)
-    const starName = star?.name ?? authority
-
-    const identity = formatWorkerIdentity({ profile: r.profile ?? 'code_scout', authority })
     const digest = formatWorkerResultDigest({
       status: r.status,
       summary: r.summary,
@@ -189,18 +208,18 @@ function formatGalaxyResult(
       evidenceStatus: r.evidenceStatus,
     })
 
-    lines.push(`  ${dimName} (${starName}/${r.profile ?? 'code_scout'}): ${digest}`)
+    lines.push(`  ${ed.dimName}${roomTag} ${ed.starName}: ${digest}`)
     if (r.changedFiles.length > 0) {
       lines.push(`      changed: ${r.changedFiles.slice(0, 5).join(', ')}`)
       if (r.changedFiles.length > 5) lines.push(`      … (+${r.changedFiles.length - 5} more)`)
     }
     lines.push('')
+    ri++
   }
 
   // 聚合结论
   const allPassed = passed === total
   const hasFindings = run.results.some(r => r.findings.length > 0)
-  const hasChanges = run.results.some(r => r.changedFiles.length > 0)
 
   if (allPassed) {
     lines.push('聚合结论: 所有维度通过。')
@@ -284,7 +303,8 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
               properties: {
                 name: { type: 'string', description: '维度标识（如 frontend / backend / review / test / docs）' },
                 objective: { type: 'string', description: '该维度的具体执行目标' },
-                authority: { type: 'string', description: '该维度使用的星域 id（如 tianquan、tianji、yaoguang、wenqu、pojun）。必填——星河的核心是星域选择。' },
+                authority: { type: 'string', description: '该维度使用的星域 id。单星域时使用，与 authorities 二选一。' },
+                authorities: { type: 'array', items: { type: 'string' }, description: '该维度使用的多个星域 id，共享同一个"房间"互相感知。与 authority 二选一。' },
                 profile: { type: 'string', enum: profileRegistry.getProfileNames(), description: 'worker profile。默认按维度名自动推导。' },
                 files: { type: 'array', items: { type: 'string' }, description: '可选，聚焦的文件路径。' },
                 symbols: { type: 'array', items: { type: 'string' }, description: '可选，聚焦的符号。' },
@@ -292,7 +312,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
                 timeoutMs: { type: 'integer', description: TIMEOUT_MS_TOOL_DESCRIPTION },
                 modelOverride: { type: 'object', properties: { provider: { type: 'string' }, model: { type: 'string' } }, description: '可选，为该维度指定专用 provider/model。审查用强模型，实现用快/便宜模型。' },
               },
-              required: ['name', 'objective', 'authority'],
+              required: ['name', 'objective'],
             },
             minItems: 2,
             maxItems: 5,
@@ -347,18 +367,41 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       }
 
       // ── Phase 2: Execute ──────────────────────────────────────────
-      const taskCount = dimensions.length
 
-      // Build delegate_batch requests
-      const requests: DelegationRequest[] = dimensions.map((dim, i) => ({
-        parentTurnId: `${params.toolUseId}:galaxy:${i}`,
-        objective: dim.objective,
-        kind: mapDimensionToKind(dim.name),
-        profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
-        authority: dim.authority,
-        scope: { files: dim.files, symbols: dim.symbols },
-        modelOverride: dim.modelOverride,
-      }))
+      // Build delegate_batch requests: expand authorities arrays into individual workers
+      const requests: DelegationRequest[] = []
+      const roomMap = new Map<string, string[]>() // groupId → worker labels for prompt injection
+
+      for (let i = 0; i < dimensions.length; i++) {
+        const dim = dimensions[i]!
+        const stars = dim.authorities ?? (dim.authority ? [dim.authority] : [])
+        const roomId = `galaxy:room:${i}`
+
+        for (let j = 0; j < stars.length; j++) {
+          const star = stars[j]!
+          const workerId = `${params.toolUseId}:galaxy:${i}:${j}`
+          const roleHint = stars.length > 1 ? `（房间「${dim.name}」第 ${j + 1}/${stars.length} 席，同伴：${stars.filter((_,k) => k !== j).join('、')}）` : ''
+
+          requests.push({
+            parentTurnId: workerId,
+            objective: stars.length > 1
+              ? `${dim.objective}${roleHint}`
+              : dim.objective,
+            kind: mapDimensionToKind(dim.name),
+            profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
+            authority: star,
+            scope: { files: dim.files, symbols: dim.symbols },
+            modelOverride: dim.modelOverride,
+            groupId: stars.length > 1 ? roomId : undefined,
+          })
+
+          if (stars.length > 1) {
+            const entry = roomMap.get(roomId) ?? []
+            entry.push(star)
+            roomMap.set(roomId, entry)
+          }
+        }
+      }
 
       // Auto-append review dimension
       let reviewDimIndex = -1
@@ -368,6 +411,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       })
       if (autoReview && !hasExplicitReview) {
         reviewDimIndex = requests.length
+        const allWorkerIds = requests.map(r => r.parentTurnId)
         requests.push({
           parentTurnId: `${params.toolUseId}:galaxy:review`,
           objective: `审查星河集群所有执行维度的输出。原始目标：${objective}。逐项验证：正确性、完整性、安全性、边界条件。输出通过的项和需修复的项，每项标注具体文件位置。`,
@@ -375,16 +419,20 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           profile: 'reviewer',
           authority: 'yaoguang',
           scope: { files: [] },
-          // 审查依赖所有执行维度——等它们全部完成后再审查
-          dependencies: dimensions.map((_, i) => `${params.toolUseId}:galaxy:${i}`),
+          dependencies: allWorkerIds,
         })
       }
 
       // Activity streaming
       const textStreamer = params.onOutput ? createActivityStreamer(params.onOutput) : undefined
+      // Activity streaming — map all worker IDs to their objectives
       const objectiveById = new Map<string, string>()
-      for (let i = 0; i < taskCount; i++) {
-        objectiveById.set(`${params.toolUseId}:galaxy:${i}`, dimensions[i]!.objective)
+      for (const req of requests) {
+        const dimIdx = req.parentTurnId.match(/:galaxy:(\d+)/)?.[1]
+        const dim = dimIdx !== undefined ? dimensions[parseInt(dimIdx)] : undefined
+        const stars = dim ? (dim.authorities ?? (dim.authority ? [dim.authority] : [])) : []
+        const roomNote = stars.length > 1 ? ` 🏠 ${dim!.name}` : ''
+        objectiveById.set(req.parentTurnId, req.objective || roomNote || '')
       }
       if (reviewDimIndex >= 0) {
         objectiveById.set(`${params.toolUseId}:galaxy:review`, '审查')
