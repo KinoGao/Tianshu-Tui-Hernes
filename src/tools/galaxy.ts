@@ -415,7 +415,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         }
       }
 
-      // Auto-append review dimension
+      // Auto-append review dimension (with peer-review if rooms exist)
       let reviewDimIndex = -1
       const hasExplicitReview = dimensions.some(d => {
         const k = d.name.toLowerCase().replace(/[\s_-]/g, '')
@@ -424,9 +424,12 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       if (autoReview && !hasExplicitReview) {
         reviewDimIndex = requests.length
         const allWorkerIds = requests.map(r => r.parentTurnId)
+        const roomInfo = roomMap.size > 0
+          ? `\n\n同房间互审要求：以下维度有多个星域在共享房间中并行工作，请交叉对比他们的产出：\n${[...roomMap.entries()].map(([room, stars]) => `  - 房间「${room.split(':').pop() ?? room}」: ${stars.join(' + ')} —— 对比各星域的产出，标注一致点、冲突点、互补点`).join('\n')}`
+          : ''
         requests.push({
           parentTurnId: `${params.toolUseId}:galaxy:review`,
-          objective: `审查星河集群所有执行维度的输出。原始目标：${objective}。逐项验证：正确性、完整性、安全性、边界条件。输出通过的项和需修复的项，每项标注具体文件位置。`,
+          objective: `审查星河集群所有执行维度的输出。原始目标：${objective}。${roomInfo}\n逐项验证：正确性、完整性、安全性、边界条件。输出通过的项和需修复的项，每项标注具体文件位置。`,
           kind: 'review',
           profile: 'reviewer',
           authority: 'yaoguang',
