@@ -4080,6 +4080,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   }
   registerWorkflow("/team")
   registerWorkflow("/council")
+  registerWorkflow("/galaxy")
   registerWorkflow("/plan")
   registerWorkflow("/write-plan")
   registerWorkflow("/plan-close")
