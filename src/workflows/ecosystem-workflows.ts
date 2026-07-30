@@ -450,17 +450,21 @@ export function resolveEcosystemWorkflowInput(input: string, opts?: { date?: Dat
 
 【派发阶段】
 1. skill(name="galaxy")
-2. glob 扫文件，按后缀分组为前端组/后端组/其他组
-3. galaxy({confirm: false}) 展示方案，确认后 galaxy({confirm: true}) 启动集群
-4. 等待子代理全部完成——期间不做任何代码操作，只等待
+2. memory recall 查看历史同类任务的星域组合模式，复用成功经验
+3. 如需外部资料，用 web_search 搜索（每个 worker 也可以自己搜）
+4. glob 扫文件，按后缀分组；结合历史模式确定激活哪些专家
+5. galaxy({confirm: false}) 展示方案，确认后 galaxy({confirm: true}) 启动集群
+6. 等待子代理全部完成——期间不做任何代码操作，只等待
 
 【汇总阶段】
-5. 子代理全部返回后，汇总各维度产出
-6. 判断结果：
+7. 子代理全部返回后，汇总各维度产出
+8. memory remember 记录本次星域组合的成功/失败模式
+9. 判断结果：
    - 全部通过 → deliver_task commit=true 交付
    - 有失败/冲突 → 分析根因，用 galaxy 重新启动集群修复
 
-关键：派发后只等待和汇总，不要自己调研或改代码。有问题就重启集群，不要手动修补。`,
+关键：派发后只等待和汇总。有问题就重启集群，不要手动修补。
+门控会随历史模式积累越来越准。`,
       requiredTools: ['galaxy'],
     }
   }
