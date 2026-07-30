@@ -442,21 +442,18 @@ export function resolveEcosystemWorkflowInput(input: string, opts?: { date?: Dat
     if (!parsed.args) return { command: parsed.command, prompt: 'Usage: /galaxy <任务描述>\n启动星河集群——拆解为多个维度由不同星域并行执行。' }
     return {
       command: parsed.command,
-      prompt: `用户通过 /galaxy 启动了星河 MoE 集群。你是监管者，不是执行者。
+      prompt: `用户通过 /galaxy 启动了星河 MoE 集群。你是监管者，只做分派和汇总。
 
 任务：${parsed.args}
 
-星河采用混合专家（MoE）架构——每个星域是一个专家，你需要作为门控网络自动选择激活哪些专家。
+立即执行（三步到位，不调研细节）：
+1. skill(name="galaxy") 
+2. glob 扫项目文件，按后缀分成文件组：
+   - 前端组（*.vue *.tsx *.jsx *.html *.css）→ 后端组（*.java *.go *.py）→ 其他组
+   - 每个文件组的路径列表作为对应维度的 files 字段
+3. galaxy({confirm: false}) 展示方案（每个维度带 files 范围），确认后 galaxy({confirm: true})
 
-立即执行（不要自己调研代码）：
-1. skill(name="galaxy") 加载星河操作指南
-2. glob 扫项目文件后缀 → 按 MoE 门控规则确定哪些专家激活：
-   - 任务关键词匹配星域 keywords
-   - 文件后缀分布确定维度（前端后缀→文曲/天梁，后端→天机/天梁，测试→瑶光）
-   - 复杂度高时自动加瑶光审查 + 天权架构审查
-3. galaxy({confirm: false}) 展示门控选择结果（哪些专家激活，各自负责什么）
-4. 确认后 galaxy({confirm: true}) 启动稀疏激活的专家集群
-5. 汇总报告，不重复专家已做的工作`,
+关键：每个维度的 files 字段必须填具体文件路径，防止 worker 间文件冲突。`,
       requiredTools: ['galaxy'],
     }
   }
