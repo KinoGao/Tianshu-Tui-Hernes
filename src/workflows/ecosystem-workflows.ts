@@ -458,11 +458,14 @@ export function resolveEcosystemWorkflowInput(input: string, opts?: { date?: Dat
 
 【汇总阶段】
 7. 子代理全部返回后，汇总各维度产出
-8. memory remember 记录本次星域组合的成功/失败模式
-9. 判断结果：
-   - 全部通过 → deliver_task commit=true 交付
-   - 有失败/冲突 → 分析根因，用 galaxy 重新启动集群修复
+8. 逐一检查：每个 worker 是否跑了测试？是否 typecheck 通过？是否有遗留 TODO？
+   - 任何不满足 → 标为阻塞，重启集群修复
+9. memory remember 记录本次星域组合的成功/失败模式
+10. 判断结果：
+    - 全部通过 + 测试绿 + typecheck 绿 → deliver_task commit=true 交付
+    - 有失败/冲突/测试红 → 分析根因，用 galaxy 重新启动集群修复
 
+工业级交付铁律：没跑测试不算完成，没 typecheck 不算完成，有 TODO 不算完成。
 关键：派发后只等待和汇总。有问题就重启集群，不要手动修补。
 门控会随历史模式积累越来越准。`,
       requiredTools: ['galaxy'],

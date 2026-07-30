@@ -412,8 +412,8 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           requests.push({
             parentTurnId: workerId,
             objective: stars.length > 1
-              ? `${dim.objective}\n\n协作指令：你是房间「${dim.name}」的一员（共 ${stars.length} 席）。\n1. 先读代码分析职责边界 → 2. 在你的输出开头声明「我负责：[具体文件/模块]」→ 3. 只改你声明的部分，不要碰同伴的领地 → 4. 完成后等互审。同伴是：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s; }).join('、')}。`
-              : dim.objective,
+              ? `${dim.objective}\n\n协作指令：你是房间「${dim.name}」的一员（共 ${stars.length} 席）。\n1. 读代码→声明「我负责：[文件]」→2. 实现→3. 运行相关测试确认通过→4. 运行 typecheck/lint 确认无报错→5. 完成后等互审。同伴：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s; }).join('、')}。`
+              : `${dim.objective}\n\n工业级交付要求：1. 读代码→2. 实现改动→3. 运行相关测试确认通过→4. 运行 typecheck/lint 确认无报错→5. 从入口到出口确认路径通达。不满足任何一条不算完成。`,
             kind: mapDimensionToKind(dim.name),
             profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
             authority: star,

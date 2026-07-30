@@ -168,11 +168,11 @@ describe('GALAXY_TOOL', () => {
 
     // 验证每个请求的结构
     assert.equal(reqs[0]!.authority, 'wenqu')
-    assert.equal(reqs[0]!.objective, '搜索框 UI')
+    assert.ok(reqs[0]!.objective.includes('搜索框 UI'))
     assert.ok(reqs[0]!.parentTurnId.includes(':galaxy:0'))
 
     assert.equal(reqs[1]!.authority, 'tianji')
-    assert.equal(reqs[1]!.objective, '搜索 API')
+    assert.ok(reqs[1]!.objective.includes('搜索 API'))
 
     // 结果格式
     assert.ok(result.content.includes('星河集群执行报告'))
