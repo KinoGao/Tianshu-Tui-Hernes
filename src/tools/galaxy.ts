@@ -415,21 +415,36 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         }
       }
 
-      // Auto-append review dimension (with peer-review if rooms exist)
+      // Auto-append review dimension (with per-room peer review if rooms exist)
       let reviewDimIndex = -1
       const hasExplicitReview = dimensions.some(d => {
         const k = d.name.toLowerCase().replace(/[\s_-]/g, '')
         return k === 'review' || k === 'verify'
       })
       if (autoReview && !hasExplicitReview) {
+        // 同房间互审：每个共享房间追加一个互审 worker，依赖该房间所有执行 worker
+        for (const [roomId, stars] of roomMap) {
+          const roomWorkers = requests.filter(r => r.groupId === roomId)
+          const roomWorkerIds = roomWorkers.map(r => r.parentTurnId)
+          const roomName = roomId.split(':').pop() ?? roomId
+          requests.push({
+            parentTurnId: `${roomId}:peer-review`,
+            objective: `同房间互审——${roomName}房间有 ${stars.join('、')} 并行完成工作。请交叉对比他们的产出：标注一致点（大家看法相同的地方）、冲突点（意见不一致的地方）、互补点（A发现但B遗漏的地方）。不需要重新执行，只做对比分析。`,
+            kind: 'review',
+            profile: 'reviewer',
+            authority: 'yaoguang',
+            scope: { files: [] },
+            dependencies: roomWorkerIds,
+            groupId: roomId,
+          })
+        }
+
+        // 全局审查：依赖所有 worker（含互审 worker），做跨维度一致性检查
         reviewDimIndex = requests.length
         const allWorkerIds = requests.map(r => r.parentTurnId)
-        const roomInfo = roomMap.size > 0
-          ? `\n\n同房间互审要求：以下维度有多个星域在共享房间中并行工作，请交叉对比他们的产出：\n${[...roomMap.entries()].map(([room, stars]) => `  - 房间「${room.split(':').pop() ?? room}」: ${stars.join(' + ')} —— 对比各星域的产出，标注一致点、冲突点、互补点`).join('\n')}`
-          : ''
         requests.push({
           parentTurnId: `${params.toolUseId}:galaxy:review`,
-          objective: `审查星河集群所有执行维度的输出。原始目标：${objective}。${roomInfo}\n逐项验证：正确性、完整性、安全性、边界条件。输出通过的项和需修复的项，每项标注具体文件位置。`,
+          objective: `全局审查——星河集群所有维度（含互审）已完成。逐项验证：正确性、完整性、安全性、边界条件。特别关注跨维度冲突（如前后端接口不一致）。输出通过的项和需修复的项。`,
           kind: 'review',
           profile: 'reviewer',
           authority: 'yaoguang',
