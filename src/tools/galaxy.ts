@@ -284,6 +284,18 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 - 文档/调研/知识 → 天璇：跨域视角与缝隙寻光
 - 全局统筹/编排 → 天枢：全貌定向与架构枢纽
 
+## 文件后缀→维度推断（自动拆解参考）
+
+分析代码时按文件后缀自动判定维度归属：
+- 前端：*.vue *.tsx *.jsx *.html *.css *.scss *.less *.svg → 文曲/天梁
+- 后端：*.java *.go *.rs *.py *.rb *.php *.cs *.kt *.swift → 天机/天梁
+- 类型/接口：*.d.ts *.graphql *.proto *.avsc → 天机/开阳
+- 配置/构建：*.json *.yaml *.toml *.env Dockerfile Makefile → 天府
+- 测试：*.test.ts *.spec.ts __tests__/ → 瑶光
+- 文档：*.md *.mdx *.rst → 天璇
+
+若任务涉及跨后缀文件组，优先按上述分组拆解为独立维度。
+
 ## 汇总机制
 
 星河的核心价值不仅是并行执行，更在于结果汇总。所有分子 Agent 并行工作完成后：
