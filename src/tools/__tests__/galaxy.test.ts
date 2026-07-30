@@ -92,7 +92,7 @@ describe('GALAXY_TOOL', () => {
     assert.ok(result.content.includes('frontend'), 'content should contain dimension name')
     assert.ok(result.content.includes('backend'), 'content should contain dimension name')
     assert.ok(result.content.includes('confirm: true'), 'content should tell user to confirm')
-    assert.ok(result.uiContent.includes('星河方案'))
+    assert.ok(result.uiContent?.includes('星河方案'))
   })
 
   it('proposal mode: autoReview adds review hint', async () => {

@@ -128,7 +128,7 @@ function formatGalaxyProposal(
     '',
     `目标：${objective}`,
     '',
-    `分子 Agent 组成（${dimensions.length} 个维度${autoReview ? ' + 1 自动审查' : ''}）：`,
+    `分子 Agent 组成（${dimensions.length} 个维度${autoReview && !dimensions.some(d => d.name === 'review') ? ' + 1 自动审查' : ''}）：`,
   ]
 
   for (let i = 0; i < dimensions.length; i++) {
@@ -162,7 +162,7 @@ function formatGalaxyResult(
   const reviewCount = total - execCount
 
   const lines: string[] = [
-    `${GALAXY_GLYPH} 星河集群执行报告 · ${passed}/${total} 通过 · ${execCount} 执行 + ${reviewCount} 审查`,
+    `${GALAXY_GLYPH} 星河集群执行报告 · ${passed}/${total} 通过 · ${execCount} 执行${reviewCount > 0 ? ` + ${reviewCount} 审查` : ''}`,
     '',
   ]
 
@@ -205,7 +205,7 @@ function formatGalaxyResult(
     lines.push(`聚合结论: ${failed}/${total} 个维度未通过，请检查上述摘要并在本回合内修复后再交付。`)
   }
   if (hasFindings && !allPassed) {
-    lines.push('审查发现的问题已标注在各维度下方，优先修复阻塞项。')
+    lines.push('各维度发现的问题已标注在上方，优先修复阻塞项。')
   }
 
   if (run.escalated) {
@@ -249,17 +249,17 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 
 ## 星域选择指南（什么维度选什么星域）
 
-分析代码结构后按维度特征选星域：
-- 前端/UI/交互 → 文曲(wenqu)：代码美学与用户界面
-- 后端/逻辑/API → 天机(tianji)：前提质疑与边界条件
-- 架构/方案/规划 → 天权(tianquan)：规划审查与权衡
-- 实现/编码/落地 → 天梁(tianliang)：执行落地与分波交付
-- 审查/验证/安全 → 瑶光(yaoguang)：复现验证与缺陷归族
-- 探索/实验/攻坚 → 破军(pojun)：突破勘探与不计成本
-- 重构/优化/清理 → 天府(tianfu)：守护结构与 fail-closed
-- 数据/存储/模型 → 开阳(kaiyang)：对账与精确构成
-- 文档/调研/知识 → 天璇(tianxuan)：跨域视角与缝隙寻光
-- 全局统筹/编排 → 天枢(tianshu)：全貌定向与架构枢纽
+分析代码结构后按维度特征选星域（调用 galaxy 时在 dimensions[].authority 中填对应的星域标识）：
+- 前端/UI/交互 → 文曲：代码美学与用户界面
+- 后端/逻辑/API → 天机：前提质疑与边界条件
+- 架构/方案/规划 → 天权：规划审查与权衡
+- 实现/编码/落地 → 天梁：执行落地与分波交付
+- 审查/验证/安全 → 瑶光：复现验证与缺陷归族
+- 探索/实验/攻坚 → 破军：突破勘探与不计成本
+- 重构/优化/清理 → 天府：守护结构与 fail-closed
+- 数据/存储/模型 → 开阳：对账与精确构成
+- 文档/调研/知识 → 天璇：跨域视角与缝隙寻光
+- 全局统筹/编排 → 天枢：全貌定向与架构枢纽
 
 ## 汇总机制
 
