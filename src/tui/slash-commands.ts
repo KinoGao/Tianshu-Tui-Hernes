@@ -798,6 +798,18 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     },
   },
   {
+    name: '/galaxy',
+    handler(ctx) {
+      const { parts, pushStatic, setIsStreaming } = ctx
+      if (!parts.slice(1).join(' ').trim()) {
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /galaxy <任务描述>\n       启动星河集群——拆解为多个维度由不同星域并行执行。' }))
+        setIsStreaming(false)
+        return true
+      }
+      return false
+    },
+  },
+  {
     name: '/council',
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
