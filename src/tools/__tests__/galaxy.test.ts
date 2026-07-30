@@ -220,6 +220,32 @@ describe('GALAXY_TOOL', () => {
     assert.equal(reviewReq!.dependencies!.length, 2)
   })
 
+  it('implementation dimensions default to patcher (writable), not code_scout (read-only)', async () => {
+    const captured: any[] = []
+    const tool = createGalaxyTool({
+      delegateBatch: async (requests) => {
+        captured.push(...requests)
+        return makeRun(requests.length)
+      },
+    })
+    await tool.execute({
+      toolUseId: 'tu_profile',
+      cwd: '/repo',
+      input: {
+        objective: 'profile check',
+        dimensions: [
+          { name: '前端', objective: 'UI', authority: 'wenqu' },
+          { name: '后端', objective: 'API', authority: 'tianji' },
+        ],
+        confirm: true,
+      },
+      sessionTurnCount: 10,
+    })
+    assert.ok(captured.length >= 2)
+    assert.equal(captured[0].profile, 'patcher', '前端维度默认应 patcher 可写')
+    assert.equal(captured[1].profile, 'patcher', '后端维度默认应 patcher 可写')
+  })
+
   it('rejects empty dimensions', async () => {
     const tool = createGalaxyTool({ delegateBatch: async () => makeRun() })
 

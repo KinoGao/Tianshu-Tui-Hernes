@@ -15,7 +15,7 @@
 import { z } from 'zod'
 import type { CoordinatorRun, DelegationRequest } from '../agent/coordinator.js'
 import { aggregationPolicySchema, type AggregationPolicy, type WorkOrderKind } from '../agent/work-order.js'
-import { DEFAULT_DELEGATE_PROFILE, profileRegistry, delegationToolTimeoutMs } from '../agent/profile-registry.js'
+import { profileRegistry, delegationToolTimeoutMs } from '../agent/profile-registry.js'
 import { starDomainRegistry } from '../agent/star-domain-registry.js'
 import { formatWorkerResultDigest } from '../agent/worker-result-digest.js'
 import { formatWorkerIdentity } from '../tui/format/profile-labels.js'
@@ -121,7 +121,8 @@ function mapDimensionToProfile(name: string): string {
   if (key === 'review' || key === 'verify') return 'reviewer'
   if (key === 'plan' || key === 'design') return 'planner'
   if (key === 'docs' || key === 'research') return 'doc_scout'
-  return DEFAULT_DELEGATE_PROFILE
+  // 实现类维度默认用 patcher（可写），不是 code_scout（只读）
+  return 'patcher'
 }
 
 // ── Formatting ───────────────────────────────────────────────────────────
