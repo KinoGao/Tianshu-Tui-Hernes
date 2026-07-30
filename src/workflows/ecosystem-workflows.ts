@@ -46,6 +46,7 @@ const WRITING_PLAN_COMMANDS = new Set(['/plan', '/write-plan'])
 const PLAN_CLOSE_COMMANDS = new Set(['/plan-close'])
 const TEAM_COMMANDS = new Set(['/team'])
 const COUNCIL_COMMANDS = new Set(['/council'])
+const GALAXY_COMMANDS = new Set(['/galaxy'])
 
 export function isWritingPlanCommand(command: string): boolean {
   return WRITING_PLAN_COMMANDS.has(command.toLowerCase())
@@ -435,6 +436,21 @@ export function resolveEcosystemWorkflowInput(input: string, opts?: { date?: Dat
     return council
       ? { command: parsed.command, prompt: buildCouncilWorkflowPrompt(council), requiredTools: ['council_convene', 'team_orchestrate'] }
       : { command: parsed.command, prompt: COUNCIL_USAGE }
+  }
+
+  if (GALAXY_COMMANDS.has(parsed.command)) {
+    if (!parsed.args) return { command: parsed.command, prompt: 'Usage: /galaxy <任务描述>\n启动星河集群——拆解为多个维度由不同星域并行执行。' }
+    return {
+      command: parsed.command,
+      prompt: `用户通过 /galaxy 命令启动了星河集群。任务：${parsed.args}
+
+请按以下流程处理：
+1. 先用 glob/grep 分析项目文件结构，按后缀识别前后端等维度边界
+2. 调用 skill(name="galaxy") 加载星河操作指南
+3. 调用 galaxy({confirm: false}) 展示集群方案并请求用户确认
+4. 用户确认后调用 galaxy({confirm: true}) 启动执行`,
+      requiredTools: ['galaxy'],
+    }
   }
 
   if (PLAN_CLOSE_COMMANDS.has(parsed.command)) {
