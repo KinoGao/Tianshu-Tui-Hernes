@@ -66,6 +66,10 @@ const dimensionSchema = z.object({
   symbols: z.array(z.string()).optional(),
   maxTurns: delegateMaxTurnsSchema,
   timeoutMs: delegateTimeoutMsSchema,
+  modelOverride: z.object({
+    provider: z.string(),
+    model: z.string(),
+  }).optional().describe('为该维度指定专用模型（如审查用强模型、实现用快模型）'),
 })
 
 const galaxyInputSchema = z.object({
@@ -286,6 +290,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
                 symbols: { type: 'array', items: { type: 'string' }, description: '可选，聚焦的符号。' },
                 maxTurns: { type: 'integer', description: MAX_TURNS_TOOL_DESCRIPTION },
                 timeoutMs: { type: 'integer', description: TIMEOUT_MS_TOOL_DESCRIPTION },
+                modelOverride: { type: 'object', properties: { provider: { type: 'string' }, model: { type: 'string' } }, description: '可选，为该维度指定专用 provider/model。审查用强模型，实现用快/便宜模型。' },
               },
               required: ['name', 'objective', 'authority'],
             },
@@ -352,6 +357,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
         authority: dim.authority,
         scope: { files: dim.files, symbols: dim.symbols },
+        modelOverride: dim.modelOverride,
       }))
 
       // Auto-append review dimension
