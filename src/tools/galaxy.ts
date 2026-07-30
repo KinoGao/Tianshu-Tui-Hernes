@@ -392,12 +392,11 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         for (let j = 0; j < stars.length; j++) {
           const star = stars[j]!
           const workerId = `${params.toolUseId}:galaxy:${i}:${j}`
-          const roleHint = stars.length > 1 ? `（房间「${dim.name}」第 ${j + 1}/${stars.length} 席，同伴：${stars.filter((_,k) => k !== j).join('、')}）` : ''
 
           requests.push({
             parentTurnId: workerId,
             objective: stars.length > 1
-              ? `${dim.objective}${roleHint}`
+              ? `${dim.objective}\n\n协作指令：你是房间「${dim.name}」的一员（共 ${stars.length} 席）。\n1. 先读代码分析职责边界 → 2. 在你的输出开头声明「我负责：[具体文件/模块]」→ 3. 只改你声明的部分，不要碰同伴的领地 → 4. 完成后等互审。同伴是：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s; }).join('、')}。`
               : dim.objective,
             kind: mapDimensionToKind(dim.name),
             profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
@@ -429,7 +428,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           const roomName = roomId.split(':').pop() ?? roomId
           requests.push({
             parentTurnId: `${roomId}:peer-review`,
-            objective: `同房间互审——${roomName}房间有 ${stars.join('、')} 并行完成工作。请交叉对比他们的产出：标注一致点（大家看法相同的地方）、冲突点（意见不一致的地方）、互补点（A发现但B遗漏的地方）。不需要重新执行，只做对比分析。`,
+            objective: `同房间协商合并——${roomName}房间（${stars.join('、')}）各席已完成独立修改。请做三件事：\n1. 合并各席声明负责的部分，标注领地冲突（两席改了同一文件）\n2. 跑一次完整测试验证合并后没问题\n3. 输出统一汇总：做了什么、测试结果、遗留问题`,
             kind: 'review',
             profile: 'reviewer',
             authority: 'yaoguang',
