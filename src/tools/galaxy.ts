@@ -51,9 +51,10 @@ const profileStringSchema = z.string().refine(
   (val) => ({ message: `未知 profile "${val}"。可用：${profileRegistry.getProfileNames().join(', ')}` }),
 )
 
-/** Dynamic star-domain validation — same as delegate-task.ts */
+/** Dynamic star-domain validation — same as delegate-task.ts.
+ *  Accepts both Chinese names (天机) and Pinyin IDs (tianji). */
 const authorityStringSchema = z.string().refine(
-  (val) => starDomainRegistry.getDomainIds().includes(val),
+  (val) => starDomainRegistry.get(val) !== undefined,
   (val) => ({ message: `未知星域 "${val}"。可用：${starDomainRegistry.getDomainIds().join(', ')}` }),
 )
 
