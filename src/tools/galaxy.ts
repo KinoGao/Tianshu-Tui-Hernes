@@ -420,7 +420,9 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
             scope: { files: dim.files, symbols: dim.symbols },
             modelOverride: dim.modelOverride,
             groupId: stars.length > 1 ? roomId : undefined,
-            budget: toBudgetOverride({ timeoutMs: dim.timeoutMs ?? 300_000 }),
+            ...(dim.timeoutMs || dim.maxTurns
+              ? { budget: toBudgetOverride({ timeoutMs: dim.timeoutMs, maxTurns: dim.maxTurns }) }
+              : {}),
           })
 
           if (stars.length > 1) {
