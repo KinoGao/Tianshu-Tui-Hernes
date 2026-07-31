@@ -2,6 +2,8 @@ import { extname } from 'path'
 import { createRequire } from 'node:module'
 import { spawn } from 'node:child_process'
 import { getResolvedEnv } from './resolved-env.js'
+// web-tree-sitter 0.24.x: default import doubles as a namespace (Parser.SyntaxNode).
+import type Parser from 'web-tree-sitter'
 
 // esbuild ships a native binary, so it can't be inlined into the tsup bundle.
 // Load it lazily via require so a packaged sidecar without esbuild on disk
@@ -75,13 +77,13 @@ function getEsbuildLoadTimeoutMs(): number {
   return Number.isFinite(v) && v > 0 ? v : 3000
 }
 
-/** Timeout for the python3 AST parse child process. A hung interpreter (blocked
- *  import, stuck stdin, slow environment) would otherwise leave the promise
- *  unresolved and stall the whole turn. Override with RIVET_PY_SYNTAX_TIMEOUT
- *  (ms); set to 0/negative to fall back to the 5s default. Read lazily so the
- *  env override is honoured (and testable) without a module reload. */
-function getPySyntaxTimeoutMs(): number {
-  const v = Number.parseInt(process.env.RIVET_PY_SYNTAX_TIMEOUT ?? '', 10)
+/** Timeout for the tree-sitter Python parse (load + parse). Parsing is in-process
+ *  and normally sub-millisecond, but the first wasm load can be slow on some
+ *  environments; a short cap keeps a stuck load from stalling the turn (degrades
+ *  to OK, never a false fatal). Override with RIVET_TS_PARSE_TIMEOUT (ms); set to
+ *  0/negative to fall back to the 5s default. */
+function getTsParseTimeoutMs(): number {
+  const v = Number.parseInt(process.env.RIVET_TS_PARSE_TIMEOUT ?? '', 10)
   return Number.isFinite(v) && v > 0 ? v : 5000
 }
 
@@ -367,12 +369,15 @@ export async function checkSyntax(filePath: string, content: string): Promise<Sy
     }
   }
 
-  // ── Python: AST parse via system python3 ──
+  // ── Python: in-process tree-sitter parse ──
+  // 进程内 WASM 解析（无子进程 → 无跨进程编码问题，surrogate 不再触发误报；
+  // 不依赖系统 python；~毫秒级）。tree-sitter 是容错解析器，对缩进错误/空 body
+  // 等边界比 CPython ast.parse 宽松（可能漏报），对"写完即时结构校验"足够。
   if (ext === '.py') {
     if (content.length > EXTERNAL_PARSE_SIZE_LIMIT) return OK
-    const result = await checkPythonSyntax(content)
+    const result = await checkPythonSyntaxTreeSitter(content)
     if (result.error) {
-      const message = `⚠️ Python syntax error:\n${result.error}\n\nThe file was written but will fail to import/execute.`
+      const message = `⚠️ Python 语法错误${result.line ? `（第 ${result.line} 行）` : ''}：${result.error}\n\n文件已写入但存在语法问题，运行时将失败。`
       return { warning: message, fatal: message }
     }
     return OK
@@ -463,79 +468,86 @@ export async function checkSyntax(filePath: string, content: string): Promise<Sy
   return OK
 }
 
-interface PythonSyntaxResult {
-  ok: boolean
-  error?: string
+export interface PythonSyntaxResult {
+  /** null = clean parse OR infrastructure degrade (never a false fatal). */
+  error: string | null
+  /** 1-based line of the first ERROR/MISSING node, when available. */
+  line?: number
 }
 
-/** Parse Python source via system python3 -c "import ast; ast.parse(...)".
- *  Returns {ok:true} on clean parse OR on any infrastructure failure (missing
- *  interpreter, spawn error, timeout kill) — those must NEVER masquerade as a
- *  fatal syntax error, since the caller rolls back the write on `error`.
- *  Only a genuine non-zero exit with parser output is reported as {ok:false}.
- *  Uses a child process because there is no robust pure-JS Python parser in
- *  the dependency tree, and SWE-bench is overwhelmingly Python. */
-function checkPythonSyntax(content: string): Promise<PythonSyntaxResult> {
-  const isWin = process.platform === 'win32'
-  const candidates: Array<{ command: string; args: string[] }> = isWin
-    ? [
-        { command: 'py', args: ['-3', '-c', 'import ast,sys; ast.parse(sys.stdin.read())'] },
-        { command: 'python', args: ['-c', 'import ast,sys; ast.parse(sys.stdin.read())'] },
-        { command: 'python3', args: ['-c', 'import ast,sys; ast.parse(sys.stdin.read())'] },
-      ]
-    : [
-        { command: 'python3', args: ['-c', 'import ast,sys; ast.parse(sys.stdin.read())'] },
-        { command: 'python', args: ['-c', 'import ast,sys; ast.parse(sys.stdin.read())'] },
-      ]
+// ── tree-sitter Python parser (lazy, in-process WASM) ──
+//
+// Replaces the former `spawn python3 -c "ast.parse(stdin)"` path. That path
+// had three structural weaknesses this eliminates: (1) cross-process encoding —
+// lone surrogates (\udc80, GBK→UTF-8 residue on Windows) crashed the child with
+// UnicodeEncodeError and were misreported as a syntax error → rollback; (2) a
+// hard dependency on a system python interpreter; (3) per-check process fork
+// cost. web-tree-sitter is pure WASM (already used by meridian-parser and listed
+// in tsup externals), so it degrades consistently across platforms.
+//
+// Reuses meridian-parser's proven load pattern (TreeSitter.init + Language.load
+// via require.resolve) but keeps its own cache to avoid coupling to the indexer
+// (parseFile returns heavyweight symbol/edge results + a 250-parse reset).
 
-  async function tryCandidate(candidate: typeof candidates[number]): Promise<PythonSyntaxResult | null> {
-    return new Promise((resolve) => {
-      let child: ReturnType<typeof spawn>
-      try {
-        child = spawn(candidate.command, candidate.args, {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: getResolvedEnv(),
-          windowsHide: true,
-        })
-      } catch {
-        resolve(null) // ENOENT — try next candidate
-        return
-      }
+let _tsPyPromise: Promise<Parser | null> | undefined
 
-      const timer = setTimeout(() => {
-        try { child.kill('SIGKILL') } catch { /* already exited */ }
-        resolve({ ok: true })
-      }, getPySyntaxTimeoutMs())
-
-      let stdout = ''
-      let stderr = ''
-      child.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-      child.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-      child.on('close', (code) => {
-        clearTimeout(timer)
-        if (code === 0 || code === null) {
-          resolve({ ok: true })
-        } else {
-          resolve({ ok: false, error: stderr.trim() || stdout.trim() || `${candidate.command} exited with code ${code}` })
-        }
-      })
-      child.on('error', () => {
-        clearTimeout(timer)
-        resolve(null) // ENOENT — try next candidate
-      })
-      try {
-        child.stdin?.write(content)
-        child.stdin?.end()
-      } catch { /* stdin closed early */ }
-    })
+async function loadPythonParser(): Promise<Parser | null> {
+  try {
+    const TreeSitter = (await import('web-tree-sitter')).default
+    await TreeSitter.init()
+    const parser = new TreeSitter()
+    const req = createRequire(import.meta.url)
+    const wasmPath = req.resolve('tree-sitter-wasms/out/tree-sitter-python.wasm')
+    const language = await TreeSitter.Language.load(wasmPath)
+    parser.setLanguage(language)
+    return parser
+  } catch {
+    return null // load failure → degrade (never a false fatal)
   }
-
-  return (async () => {
-    for (const candidate of candidates) {
-      const result = await tryCandidate(candidate)
-      if (result !== null) return result
-    }
-    // All candidates failed — degrade to OK
-    return { ok: true }
-  })()
 }
+
+async function getPythonParser(): Promise<Parser | null> {
+  if (_tsPyPromise) return _tsPyPromise
+  _tsPyPromise = withTimeout(loadPythonParser(), 'tree-sitter python load', getTsParseTimeoutMs())
+    .catch(() => null)
+  return _tsPyPromise
+}
+
+/** Test-only: clear the tree-sitter python parser cache. */
+export function _resetPythonParserForTest(): void {
+  _tsPyPromise = undefined
+}
+
+/** Depth-first search for the first ERROR or MISSING node (the syntax error
+ *  location). Returns its 1-based line, or undefined if none found. */
+function firstErrorLine(node: Parser.SyntaxNode): number | undefined {
+  if (node.type === 'ERROR' || node.isMissing) return node.startPosition.row + 1
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i)
+    if (!child) continue
+    const line = firstErrorLine(child)
+    if (line !== undefined) return line
+  }
+  return undefined
+}
+
+/**
+ * Check Python syntax in-process via tree-sitter. Returns {error:null} on a
+ * clean parse OR on any infrastructure failure (parser load failed, parse threw)
+ * — those must NEVER masquerade as a fatal syntax error, since the caller rolls
+ * back the write on a non-null error. Only a genuine parse tree with error nodes
+ * is reported as an error.
+ */
+export async function checkPythonSyntaxTreeSitter(content: string): Promise<PythonSyntaxResult> {
+  const parser = await getPythonParser()
+  if (!parser) return { error: null } // degrade
+  try {
+    const tree = parser.parse(content)
+    if (!tree.rootNode.hasError) return { error: null }
+    const line = firstErrorLine(tree.rootNode)
+    return { error: '存在无法解析的语法结构（括号/引号未闭合、意外符号等）。', line }
+  } catch {
+    return { error: null } // parse threw → degrade
+  }
+}
+
