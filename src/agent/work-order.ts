@@ -122,6 +122,8 @@ export const workOrderSchema = z.object({
   disallowedTools: z.array(z.string()),
   dedupeKey: z.string().min(1),
   dependencies: z.array(z.string()),
+  /** Logical group for coordinated or multi-perspective tasks. */
+  groupId: z.string().min(1).optional(),
   aggregationPolicy: aggregationPolicySchema,
   budget: workerBudgetSchema,
   domain: domainAreaSchema.optional(),
@@ -291,6 +293,9 @@ export interface CreateReadOnlyWorkOrderInput {
   scope: WorkOrderScope
   constraints?: string[]
   dependencies?: string[]
+  /** Logical group for related tasks. It participates in deduplication so
+   * independent perspectives over the same file scope are all preserved. */
+  groupId?: string
   aggregationPolicy?: AggregationPolicy
   budget?: Partial<WorkerBudget>
   domain?: DomainArea
@@ -358,8 +363,11 @@ export function createReadOnlyWorkOrder(input: CreateReadOnlyWorkOrderInput): Wo
     disallowedTools: input.profile === 'adversarial_verifier'
       ? ['bash', 'write_file', 'edit_file', 'delegate_task', 'delegate_batch'] // run_tests NOT disallowed — it's the verifier's primary weapon
       : [...PHASE1_DISALLOWED_WORKER_TOOLS],
-    dedupeKey: `${input.kind}:${input.scope.files?.join(',') || input.objective}`,
+    dedupeKey: input.groupId
+      ? `${input.kind}:group:${input.groupId}:${input.authority ?? 'default'}:${input.parentTurnId}:${input.scope.files?.join(',') || input.objective}`
+      : `${input.kind}:${input.scope.files?.join(',') || input.objective}`,
     dependencies: input.dependencies ?? [],
+    groupId: input.groupId,
     aggregationPolicy: input.aggregationPolicy ?? 'primary_decides',
     budget: {
       maxTurns: input.budget?.maxTurns ?? 24,
@@ -405,8 +413,11 @@ export function createWriteWorkOrder(input: CreateWriteWorkOrderInput): WorkOrde
       return toolsForAuthority(tools, input.authority)
     })(),
     disallowedTools: ['delegate_task', 'delegate_batch'],
-    dedupeKey: `write:${input.scope.files?.join(',') || input.objective}`,
+    dedupeKey: input.groupId
+      ? `write:group:${input.groupId}:${input.authority ?? 'default'}:${input.parentTurnId}:${input.scope.files?.join(',') || input.objective}`
+      : `write:${input.scope.files?.join(',') || input.objective}`,
     dependencies: input.dependencies ?? [],
+    groupId: input.groupId,
     aggregationPolicy: input.aggregationPolicy ?? 'primary_decides',
     budget: {
       // Self-contained shards run a full loop (implement + tsc/lint/tests) in one

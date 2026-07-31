@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { WorkOrderQueue } from '../work-queue.js'
-import { createReadOnlyWorkOrder } from '../work-order.js'
+import { createReadOnlyWorkOrder, createWriteWorkOrder } from '../work-order.js'
 
 function order(id: string, dedupeKey?: string, deps: string[] = [], priority = 0) {
   const o = createReadOnlyWorkOrder({
@@ -129,7 +129,7 @@ describe('WorkOrderQueue', () => {
     assert.equal(events.length, 1)
   })
 
-  it('hasFileConflict detects shared files with in-flight orders', () => {
+  it('allows two read-only orders to inspect the same file concurrently', () => {
     const q = new WorkOrderQueue()
     const a = createReadOnlyWorkOrder({
       id: 'a', parentTurnId: 't', kind: 'code_search', profile: 'code_scout',
@@ -137,14 +137,31 @@ describe('WorkOrderQueue', () => {
     })
     const b = createReadOnlyWorkOrder({
       id: 'b', parentTurnId: 't', kind: 'code_search', profile: 'code_scout',
-      objective: 'B', scope: { files: ['src/agent/loop.ts'] },
+      objective: 'B', scope: { files: ['src/agent/loop.ts'] }, groupId: 'independent-perspective',
     })
 
     q.enqueue(a)
     const dequeued = q.dequeue()!
     q.markInFlight(dequeued)
 
-    assert.equal(q.hasFileConflict(b), true)
+    assert.equal(q.hasFileConflict(b), false)
+  })
+
+  it('hasFileConflict detects a writer sharing files with an in-flight reader', () => {
+    const q = new WorkOrderQueue()
+    const reader = createReadOnlyWorkOrder({
+      id: 'reader', parentTurnId: 't', kind: 'code_search', profile: 'code_scout',
+      objective: 'Read', scope: { files: ['src/agent/loop.ts'] },
+    })
+    const writer = createWriteWorkOrder({
+      id: 'writer', parentTurnId: 't', kind: 'patch_proposal', profile: 'patcher',
+      objective: 'Write', scope: { files: ['src/agent/loop.ts'] },
+    })
+
+    q.enqueue(reader)
+    q.markInFlight(q.dequeue()!)
+
+    assert.equal(q.hasFileConflict(writer), true)
   })
 
   it('hasFileConflict returns false when no files', () => {
@@ -185,7 +202,7 @@ describe('WorkOrderQueue', () => {
     assert.deepEqual(q.pending().map(o => o.id), ['child'])
   })
 
-  it('dequeue skips orders with file conflicts', () => {
+  it('dequeue keeps same-file readers parallel', () => {
     const q = new WorkOrderQueue()
     const a = createReadOnlyWorkOrder({
       id: 'a', parentTurnId: 't', kind: 'code_search', profile: 'code_scout',
@@ -193,7 +210,7 @@ describe('WorkOrderQueue', () => {
     })
     const b = createReadOnlyWorkOrder({
       id: 'b', parentTurnId: 't', kind: 'code_search', profile: 'code_scout',
-      objective: 'B', scope: { files: ['src/agent/loop.ts'] },
+      objective: 'B', scope: { files: ['src/agent/loop.ts'] }, groupId: 'independent-perspective',
     })
     const c = createReadOnlyWorkOrder({
       id: 'c', parentTurnId: 't', kind: 'code_search', profile: 'code_scout',
@@ -208,8 +225,8 @@ describe('WorkOrderQueue', () => {
     const first = q.dequeue()!
     q.markInFlight(first)
 
-    // b has file conflict with a, so c should dequeue
+    // b is also read-only, so it can dequeue beside a.
     const second = q.dequeue()!
-    assert.equal(second.id, 'c')
+    assert.equal(second.id, 'b')
   })
 })

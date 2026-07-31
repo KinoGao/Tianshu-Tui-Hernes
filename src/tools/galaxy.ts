@@ -13,12 +13,12 @@
  */
 
 import { z } from 'zod'
-import type { CoordinatorRun, DelegationRequest } from '../agent/coordinator.js'
+import { deriveStableWorkOrderId, type CoordinatorRun, type DelegationRequest } from '../agent/coordinator.js'
+import { classifyProfile } from '../agent/coordination-policy.js'
 import { aggregationPolicySchema, type AggregationPolicy, type WorkOrderKind } from '../agent/work-order.js'
-import { profileRegistry, delegationToolTimeoutMs } from '../agent/profile-registry.js'
+import { profileIsWriteCapable, profileRegistry, delegationToolTimeoutMs } from '../agent/profile-registry.js'
 import { starDomainRegistry } from '../agent/star-domain-registry.js'
 import { formatWorkerResultDigest } from '../agent/worker-result-digest.js'
-import { formatWorkerIdentity } from '../tui/format/profile-labels.js'
 import { validatePathSafe } from './path-validate.js'
 import {
   MAX_TURNS_TOOL_DESCRIPTION,
@@ -28,7 +28,7 @@ import {
   toBudgetOverride,
 } from './delegate-budget.js'
 import type { Tool, ToolCallParams, ToolResult } from './types.js'
-import { createActivityStreamer, createDelegationActivityMapper, progressSnippet } from './worker-activity-stream.js'
+import { createActivityStreamer, createDelegationActivityMapper } from './worker-activity-stream.js'
 import type { WorkerActivityEvent } from '../agent/coordinator.js'
 
 // ── Coordinator interface（与 delegate_batch 同构） ──────────────────────
@@ -59,12 +59,20 @@ const authorityStringSchema = z.string().refine(
   (val) => ({ message: `未知星域 "${val}"。可用：${starDomainRegistry.getDomainIds().join(', ')}` }),
 )
 
+const parallelismSchema = z.enum(['expert', 'data'])
+
 const dimensionSchema = z.object({
   name: z.string().min(1).describe('维度标识（如 frontend / backend / review / test / docs）'),
   objective: z.string().min(1).describe('该维度的具体执行目标'),
   authority: authorityStringSchema.optional().describe('该维度使用的星域（单星域，与 authorities 二选一）'),
   authorities: z.array(authorityStringSchema).min(2).max(5).optional().describe(
-    '该维度使用的多个星域，共享同一个"房间"——同组 worker 互相感知，可并行讨论。与 authority 二选一，多个星域时用此字段。',
+    '该维度使用的多个星域，分别给出独立的只读视角；它们不共享实时上下文，也不能用于并行写入。与 authority 二选一。',
+  ),
+  parallelism: parallelismSchema.default('expert').describe(
+    'expert：按专长派发单个分片（默认）；data：把同一只读任务复制给多个独立副本。',
+  ),
+  replicas: z.number().int().min(2).max(5).optional().describe(
+    '仅 parallelism=data 时必填，表示独立只读副本数量（2–5）。',
   ),
   profile: profileStringSchema.optional().describe('worker profile，默认 code_scout'),
   files: z.array(z.string()).optional(),
@@ -127,6 +135,27 @@ function mapDimensionToProfile(name: string): string {
   return 'patcher'
 }
 
+function isReviewDimension(name: string): boolean {
+  const key = name.toLowerCase().replace(/[\s_-]/g, '')
+  return key === 'review' || key === 'verify'
+}
+
+function galaxyWorkerParentTurnId(
+  toolUseId: string,
+  dimensionIndex: number,
+  authorityIndex: number,
+  replicaIndex?: number,
+): string {
+  // `batch:` makes coordinator work-order IDs deterministic, so dependency
+  // edges point at the IDs the queue actually tracks.
+  const replicaSuffix = replicaIndex === undefined ? '' : `:${replicaIndex}`
+  return `batch:${toolUseId}-galaxy-${dimensionIndex}:${authorityIndex}${replicaSuffix}`
+}
+
+function workerOrderId(parentTurnId: string): string {
+  return deriveStableWorkOrderId(parentTurnId) ?? parentTurnId
+}
+
 // ── Formatting ───────────────────────────────────────────────────────────
 
 const GALAXY_GLYPH = '🌌'
@@ -141,7 +170,7 @@ function formatGalaxyProposal(
     '',
     `目标：${objective}`,
     '',
-    `分子 Agent 组成（${dimensions.length} 个维度${autoReview && !dimensions.some(d => d.name === 'review') ? ' + 1 自动审查' : ''}）：`,
+    `分子 Agent 组成（${dimensions.length} 个维度${autoReview && !dimensions.some(d => isReviewDimension(d.name)) ? ' + 1 自动审查' : ''}）：`,
   ]
 
   for (let i = 0; i < dimensions.length; i++) {
@@ -151,12 +180,13 @@ function formatGalaxyProposal(
       const star = starDomainRegistry.get(s)
       return star ? `${star.name}` : s
     })
-    const roomTag = stars.length > 1 ? ` 🏠 共享房间（${starLabels.join(' + ')}）` : ` — ${starLabels[0]}`
-    lines.push(`  ${i + 1}. ${d.name}${roomTag}`)
+    const parallelTag = d.parallelism === 'data' ? ` DP × ${d.replicas ?? '?'}` : ' EP'
+    const roomTag = stars.length > 1 ? ` ◌ 多视角（${starLabels.join(' + ')}）` : ` — ${starLabels[0]}`
+    lines.push(`  ${i + 1}. ${d.name}${parallelTag}${roomTag}`)
     lines.push(`     ${d.objective}`)
   }
 
-  if (autoReview && !dimensions.some(d => d.name === 'review')) {
+  if (autoReview && !dimensions.some(d => isReviewDimension(d.name))) {
     const yaoguang = starDomainRegistry.get('yaoguang')
     const label = yaoguang ? `瑶光（${yaoguang.motto.slice(0, 12)}…）` : '瑶光'
     lines.push(`  ${dimensions.length + 1}. review — ${label}`)
@@ -169,38 +199,36 @@ function formatGalaxyProposal(
   return lines.join('\n')
 }
 
+interface GalaxyResultTarget {
+  workOrderId: string
+  label: string
+}
+
+interface GalaxyDataParallelGroup {
+  label: string
+  workOrderIds: string[]
+}
+
 function formatGalaxyResult(
   run: CoordinatorRun,
-  dimensions: z.infer<typeof dimensionSchema>[],
+  targets: GalaxyResultTarget[],
+  dataParallelGroups: GalaxyDataParallelGroup[],
 ): string {
   const passed = run.results.filter(r => r.status === 'passed').length
   const total = run.results.length
-
-  // Rebuild dimension→results mapping (multi-authority dims produce N results)
-  const expandedDims: { dimName: string; starName: string; starId: string; isRoom: boolean }[] = []
-  for (const dim of dimensions) {
-    const stars = dim.authorities ?? (dim.authority ? [dim.authority] : [])
-    for (const star of stars) {
-      const starDef = starDomainRegistry.get(star)
-      expandedDims.push({
-        dimName: dim.name,
-        starName: starDef?.name ?? star,
-        starId: star,
-        isRoom: stars.length > 1,
-      })
-    }
-  }
 
   const lines: string[] = [
     `${GALAXY_GLYPH} 星河集群执行报告 · ${passed}/${total} 通过`,
     '',
   ]
 
-  let ri = 0
-  for (const ed of expandedDims) {
-    const r = run.results[ri]
-    if (!r) break
-    const roomTag = ed.isRoom ? ' 🏠' : ''
+  const resultsById = new Map(run.results.map(result => [result.workOrderId, result]))
+  const unmatched = [...run.results]
+  for (const target of targets) {
+    const r = resultsById.get(target.workOrderId) ?? unmatched.shift()
+    if (!r) continue
+    const matchedIndex = unmatched.indexOf(r)
+    if (matchedIndex >= 0) unmatched.splice(matchedIndex, 1)
 
     const digest = formatWorkerResultDigest({
       status: r.status,
@@ -211,13 +239,38 @@ function formatGalaxyResult(
       evidenceStatus: r.evidenceStatus,
     })
 
-    lines.push(`  ${ed.dimName}${roomTag} ${ed.starName}: ${digest}`)
+    lines.push(`  ${target.label}: ${digest}`)
     if (r.changedFiles.length > 0) {
       lines.push(`      changed: ${r.changedFiles.slice(0, 5).join(', ')}`)
       if (r.changedFiles.length > 5) lines.push(`      … (+${r.changedFiles.length - 5} more)`)
     }
     lines.push('')
-    ri++
+  }
+  for (const r of unmatched) {
+    const digest = formatWorkerResultDigest({
+      status: r.status,
+      summary: r.summary,
+      findingsCount: r.findings?.length ?? 0,
+      changedFilesCount: r.changedFiles?.length ?? 0,
+      failureReason: r.failureReason,
+      evidenceStatus: r.evidenceStatus,
+    })
+    lines.push(`  未映射 worker ${r.workOrderId}: ${digest}`)
+    lines.push('')
+  }
+
+  for (const group of dataParallelGroups) {
+    const replicaResults = group.workOrderIds
+      .map(id => resultsById.get(id))
+      .filter((result): result is NonNullable<typeof result> => result !== undefined)
+    const passedReplicas = replicaResults.filter(result => result.status === 'passed').length
+    const quorum = Math.floor(group.workOrderIds.length / 2) + 1
+    const verdict = passedReplicas >= quorum ? 'reached' : 'not reached'
+    lines.push(`  DP ${group.label}: execution quorum ${verdict} (${passedReplicas}/${group.workOrderIds.length}, quorum ${quorum})`)
+  }
+  if (dataParallelGroups.length > 0) {
+    lines.push('  DP replicas are independent evidence sources; final semantic review remains required.')
+    lines.push('')
   }
 
   // 聚合结论
@@ -299,7 +352,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 
 **稀疏激活：** 只有匹配的星域进入集群，不活跃专家不进 prompt，节省 token 和缓存。
 
-**门控输出格式：** 自动生成 galaxy dimensions 数组，每个维度带 authority + files 范围。
+**方案生成边界：** 上层 Agent 基于上述信号提出 galaxy dimensions 数组；galaxy 工具负责校验、隔离与执行，不在工具内部实现确定性的关键词路由器。
 
 调用方式：/galaxy <任务描述> → 自动门控选择专家 → 展示方案 → 确认执行。
 
@@ -335,7 +388,9 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
                 name: { type: 'string', description: '维度标识（如 frontend / backend / review / test / docs）' },
                 objective: { type: 'string', description: '该维度的具体执行目标' },
                 authority: { type: 'string', description: '该维度使用的星域 id。单星域时使用，与 authorities 二选一。' },
-                authorities: { type: 'array', items: { type: 'string' }, description: '该维度使用的多个星域 id，共享同一个"房间"互相感知。与 authority 二选一。' },
+                authorities: { type: 'array', items: { type: 'string' }, description: '该维度使用多个星域作独立只读分析；不共享实时上下文，也不能用于并行写入。与 authority 二选一。' },
+                parallelism: { type: 'string', enum: ['expert', 'data'], default: 'expert', description: 'expert 为按专长的单分片派发；data 为同一只读任务的独立副本。' },
+                replicas: { type: 'integer', minimum: 2, maximum: 5, description: '仅 data 模式：独立副本数。' },
                 profile: { type: 'string', enum: profileRegistry.getProfileNames(), description: 'worker profile。默认按维度名自动推导。' },
                 files: { type: 'array', items: { type: 'string' }, description: '可选，聚焦的文件路径。' },
                 symbols: { type: 'array', items: { type: 'string' }, description: '可选，聚焦的符号。' },
@@ -369,9 +424,17 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 
       const { objective, dimensions, autoReview, confirm, policy } = parsed.data
 
+      if (dimensions.some(dimension => dimension.parallelism === 'data') && policy && policy !== 'all_required') {
+        return {
+          content: '星河已拦截：DP 需要保留每个副本的结果和证据，因此只支持 all_required 聚合策略（默认）。语义分歧由后续审查维度处理。',
+          isError: true,
+        }
+      }
+
       // Pre-flight: validate file paths
       for (let i = 0; i < dimensions.length; i++) {
-        const files = dimensions[i]!.files
+        const dimension = dimensions[i]!
+        const files = dimension.files
         if (files && files.length > 0) {
           const bad = files.filter(f => !validatePathSafe(params.cwd, f).ok)
           if (bad.length > 0) {
@@ -379,6 +442,25 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
               content: `星河已拦截：维度「${dimensions[i]!.name}」引用了项目目录外的文件：${bad.join(', ')}`,
               isError: true,
             }
+          }
+        }
+        const stars = dimension.authorities ?? []
+        const profile = (dimension.profile ?? mapDimensionToProfile(dimension.name)) as import('../agent/work-order.js').WorkerProfile
+        if (dimension.parallelism === 'data') {
+          if (!dimension.replicas) {
+            return { content: `星河已拦截：DP 维度「${dimension.name}」必须指定 replicas（2–5）。`, isError: true }
+          }
+          if (dimension.authorities?.length) {
+            return { content: `星河已拦截：DP 维度「${dimension.name}」只能使用单个 authority；多专家意见请使用 expert 模式的 authorities。`, isError: true }
+          }
+          if (profileIsWriteCapable(profile)) {
+            return { content: `星河已拦截：DP 维度「${dimension.name}」使用了可写 profile「${profile}」。DP 只允许独立只读/验证副本，写入请拆成 EP 单专家分片。`, isError: true }
+          }
+        }
+        if (stars.length > 1 && classifyProfile(profile) === 'hands') {
+          return {
+            content: `星河已拦截：维度「${dimension.name}」包含多个 authority，但其 profile 可写。多 authority 只用于独立只读视角；请拆成文件范围不重叠的单 authority 执行维度。`,
+            isError: true,
           }
         }
       }
@@ -399,39 +481,51 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 
       // ── Phase 2: Execute ──────────────────────────────────────────
 
-      // Build delegate_batch requests: expand authorities arrays into individual workers
+      // Build delegate_batch requests. A multi-authority dimension is a
+      // read-only, independent-perspectives fan-out, not a shared room.
       const requests: DelegationRequest[] = []
-      const roomMap = new Map<string, string[]>() // groupId → worker labels for prompt injection
+      const dimensionIndexByParentTurnId = new Map<string, number>()
+      const replicaIndexByParentTurnId = new Map<string, number>()
+      const dataParallelGroups = new Map<number, GalaxyDataParallelGroup>()
+      const explicitReviewIndexes = new Set(
+        dimensions.flatMap((dimension, index) => isReviewDimension(dimension.name) ? [index] : []),
+      )
 
       for (let i = 0; i < dimensions.length; i++) {
         const dim = dimensions[i]!
         const stars = dim.authorities ?? (dim.authority && dim.authority !== '' ? [dim.authority] : [])
-        const roomId = `galaxy:room:${i}`
+        const isDataParallel = dim.parallelism === 'data'
+        const perspectiveGroupId = stars.length > 1 ? `galaxy:perspectives:${params.toolUseId}:${i}` : undefined
+        const dataParallelGroupId = isDataParallel ? `galaxy:data:${params.toolUseId}:${i}` : undefined
+        const replicaCount = isDataParallel ? dim.replicas! : 1
+        if (isDataParallel) dataParallelGroups.set(i, { label: dim.name, workOrderIds: [] })
 
         for (let j = 0; j < stars.length; j++) {
           const star = stars[j]!
-          const workerId = `${params.toolUseId}:galaxy:${i}:${j}`
+          for (let replicaIndex = 0; replicaIndex < replicaCount; replicaIndex++) {
+            const parentTurnId = galaxyWorkerParentTurnId(params.toolUseId, i, j, isDataParallel ? replicaIndex : undefined)
+            dimensionIndexByParentTurnId.set(parentTurnId, i)
+            if (isDataParallel) replicaIndexByParentTurnId.set(parentTurnId, replicaIndex)
+            const workOrderId = workerOrderId(parentTurnId)
+            if (isDataParallel) dataParallelGroups.get(i)!.workOrderIds.push(workOrderId)
 
-          requests.push({
-            parentTurnId: workerId,
-            objective: stars.length > 1
-              ? `${dim.objective}\n\n协作指令：你是房间「${dim.name}」的一员（共 ${stars.length} 席）。\n1. 读代码→声明「我负责：[文件]」→2. 先写失败测试复现问题（RED）→3. 修改代码使测试通过（GREEN）→4. 运行 typecheck/lint→5. 完成后等互审。同伴：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s; }).join('、')}。`
+            requests.push({
+            parentTurnId,
+            objective: isDataParallel
+              ? `${dim.objective}\n\nData-parallel replica ${replicaIndex + 1}/${replicaCount}: independently inspect the same evidence. Do not modify files, do not assume other replicas' conclusions, and report concrete evidence, uncertainty, and recommended follow-up.`
+              : stars.length > 1
+              ? `${dim.objective}\n\n多视角分析：你与其他星域专家独立检查同一问题，但不共享实时上下文。只做证据驱动的分析与建议，不修改文件；明确列出依据、风险和建议。其他视角：${stars.filter(s => s !== star).map(s => { const sd = starDomainRegistry.get(s); return sd ? sd.name : s }).join('、')}。`
               : `${dim.objective}\n\n工业级交付要求：1. 读代码→2. 先写失败测试复现问题（RED）→3. 修改代码使测试通过（GREEN）→4. 运行 typecheck/lint→5. 确认路径通达。不满足任何一条不算完成。注意：不先写测试直接改代码会被 evidence gate 拦截。`,
             kind: mapDimensionToKind(dim.name),
             profile: (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile,
             authority: star,
             scope: { files: dim.files, symbols: dim.symbols },
             modelOverride: dim.modelOverride,
-            groupId: stars.length > 1 ? roomId : undefined,
+            groupId: dataParallelGroupId ?? perspectiveGroupId,
             ...(dim.timeoutMs || dim.maxTurns
               ? { budget: toBudgetOverride({ timeoutMs: dim.timeoutMs, maxTurns: dim.maxTurns }) }
               : {}),
-          })
-
-          if (stars.length > 1) {
-            const entry = roomMap.get(roomId) ?? []
-            entry.push(star)
-            roomMap.set(roomId, entry)
+            })
           }
         }
       }
@@ -450,10 +544,8 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       }
       // Remove overlapping files from non-owning workers' scopes
       for (const req of requests) {
-        const dimIdxMatch = req.parentTurnId.match(/:galaxy:(\d+):/)
-        if (!dimIdxMatch) continue
-        const dimIdx = parseInt(dimIdxMatch[1]!)
-        if (isNaN(dimIdx)) continue
+        const dimIdx = dimensionIndexByParentTurnId.get(req.parentTurnId)
+        if (dimIdx === undefined) continue
         const owned = dimensions[dimIdx]?.files ?? []
         const deduped = owned.filter(f => {
           const owner = fileOwner.get(f)
@@ -462,41 +554,29 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         ;(req as any).scope = { ...req.scope, files: deduped }
       }
 
-      // Auto-append review dimension (with per-room peer review if rooms exist)
-      let reviewDimIndex = -1
-      const hasExplicitReview = dimensions.some(d => {
-        const k = d.name.toLowerCase().replace(/[\s_-]/g, '')
-        return k === 'review' || k === 'verify'
-      })
-      if (autoReview && !hasExplicitReview) {
-        // 同房间互审：每个共享房间追加一个互审 worker，依赖该房间所有执行 worker
-        for (const [roomId, stars] of roomMap) {
-          const roomWorkers = requests.filter(r => r.groupId === roomId)
-          const roomWorkerIds = roomWorkers.map(r => r.parentTurnId)
-          const roomName = roomId.split(':').pop() ?? roomId
-          requests.push({
-            parentTurnId: `${roomId}:peer-review`,
-            objective: `同房间协商合并——${roomName}房间（${stars.join('、')}）各席已完成独立修改。请做三件事：\n1. 合并各席声明负责的部分，标注领地冲突（两席改了同一文件）\n2. 跑一次完整测试验证合并后没问题\n3. 输出统一汇总：做了什么、测试结果、遗留问题`,
-            kind: 'review',
-            profile: 'reviewer',
-            authority: 'yaoguang',
-            scope: { files: [] },
-            dependencies: roomWorkerIds,
-            groupId: roomId,
-          })
-        }
+      // A review is a true join node. Use stable work-order IDs, not request
+      // parent IDs, because the queue only tracks the former.
+      const executionWorkerIds = requests
+        .filter(request => !explicitReviewIndexes.has(dimensionIndexByParentTurnId.get(request.parentTurnId) ?? -1))
+        .map(request => workerOrderId(request.parentTurnId))
+      const explicitReviewRequests = requests.filter(request =>
+        explicitReviewIndexes.has(dimensionIndexByParentTurnId.get(request.parentTurnId) ?? -1),
+      )
+      for (const request of explicitReviewRequests) {
+        request.dependencies = executionWorkerIds
+      }
 
-        // 全局审查：依赖所有 worker（含互审 worker），做跨维度一致性检查
-        reviewDimIndex = requests.length
-        const allWorkerIds = requests.map(r => r.parentTurnId)
+      const hasExplicitReview = explicitReviewIndexes.size > 0
+      if (autoReview && !hasExplicitReview) {
+        const autoReviewParentTurnId = `batch:${params.toolUseId}-galaxy:auto-review`
         requests.push({
-          parentTurnId: `${params.toolUseId}:galaxy:review`,
-          objective: `全局审查——星河集群所有维度（含互审）已完成。逐项验证：正确性、完整性、安全性、边界条件。特别关注跨维度冲突（如前后端接口不一致）。输出通过的项和需修复的项。`,
+          parentTurnId: autoReviewParentTurnId,
+          objective: '全局审查——星河集群所有执行维度已完成。逐项验证：正确性、完整性、安全性、边界条件。特别关注跨维度冲突（如前后端接口不一致）。输出通过的项和需修复的项。',
           kind: 'review',
           profile: 'reviewer',
           authority: 'yaoguang',
           scope: { files: [] },
-          dependencies: allWorkerIds,
+          dependencies: executionWorkerIds,
         })
       }
 
@@ -505,14 +585,12 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       // Activity streaming — map all worker IDs to their objectives
       const objectiveById = new Map<string, string>()
       for (const req of requests) {
-        const dimIdx = req.parentTurnId.match(/:galaxy:(\d+)/)?.[1]
-        const dim = dimIdx !== undefined ? dimensions[parseInt(dimIdx)] : undefined
+        const dim = dimensions[dimensionIndexByParentTurnId.get(req.parentTurnId) ?? -1]
         const stars = dim ? (dim.authorities ?? (dim.authority ? [dim.authority] : [])) : []
-        const roomNote = stars.length > 1 ? ` 🏠 ${dim!.name}` : ''
-        objectiveById.set(req.parentTurnId, req.objective || roomNote || '')
-      }
-      if (reviewDimIndex >= 0) {
-        objectiveById.set(`${params.toolUseId}:galaxy:review`, '审查')
+        const perspectiveNote = stars.length > 1 ? ` ◌ ${dim!.name}` : ''
+        const label = req.objective || perspectiveNote || '审查'
+        objectiveById.set(req.parentTurnId, label)
+        objectiveById.set(workerOrderId(req.parentTurnId), label)
       }
       const activityMapper = params.onWorkerActivity
         ? createDelegationActivityMapper(params.toolUseId, params.onWorkerActivity, {
@@ -548,7 +626,21 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       }
 
       return {
-        content: formatGalaxyResult(run, dimensions),
+        content: formatGalaxyResult(run, requests.map(request => {
+          const dimensionIndex = dimensionIndexByParentTurnId.get(request.parentTurnId)
+          if (dimensionIndex === undefined) return { workOrderId: workerOrderId(request.parentTurnId), label: '全局审查' }
+          const dimension = dimensions[dimensionIndex]!
+          const stars = dimension.authorities ?? (dimension.authority ? [dimension.authority] : [])
+          const authorityIndex = stars.indexOf(request.authority ?? '')
+          const star = starDomainRegistry.get(request.authority ?? '')
+          const perspective = stars.length > 1 ? ' ◌ 多视角' : ''
+          const replicaIndex = replicaIndexByParentTurnId.get(request.parentTurnId)
+          const replica = replicaIndex === undefined ? '' : ` DP replica ${replicaIndex + 1}/${dimension.replicas}`
+          return {
+            workOrderId: workerOrderId(request.parentTurnId),
+            label: `${dimension.name}${perspective}${replica} ${star?.name ?? request.authority ?? authorityIndex}`,
+          }
+        }), [...dataParallelGroups.values()]),
         uiContent: formatGalaxyUi(run, dimensions),
       }
     },
@@ -558,12 +650,13 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
     isEnabled: () => true,
     // 外层超时必须覆盖 worker pool 的波次 × profile 预算，否则工具层先杀
     timeoutMs: (params) => {
-      const dims = (params?.input?.dimensions as Array<{ stars?: string[]; authority?: string; profile?: string; timeoutMs?: number }> | undefined) ?? []
+      const dims = (params?.input?.dimensions as Array<{ authorities?: string[]; authority?: string; profile?: string; timeoutMs?: number; parallelism?: 'expert' | 'data'; replicas?: number }> | undefined) ?? []
       const profiles: Array<string | undefined> = []
       const requestedTimeoutMs: Array<number | undefined> = []
       for (const d of dims) {
-        const stars = d.stars ?? (d.authority ? [d.authority] : [])
-        for (let i = 0; i < stars.length; i++) {
+        const stars = d.authorities ?? (d.authority ? [d.authority] : [])
+        const replicaCount = d.parallelism === 'data' ? d.replicas ?? 1 : 1
+        for (let i = 0; i < stars.length * replicaCount; i++) {
           profiles.push(d.profile)
           requestedTimeoutMs.push(d.timeoutMs)
         }

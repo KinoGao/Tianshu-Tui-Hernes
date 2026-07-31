@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createGalaxyTool, type GalaxyCoordinator } from '../galaxy.js'
-import type { CoordinatorRun, DelegationRequest } from '../../agent/coordinator.js'
+import { deriveStableWorkOrderId, type CoordinatorRun, type DelegationRequest } from '../../agent/coordinator.js'
 import { aggregationPolicySchema, type AggregationPolicy } from '../../agent/work-order.js'
 
 function makeRun(resultsCount = 1): CoordinatorRun {
@@ -169,7 +169,7 @@ describe('GALAXY_TOOL', () => {
     // 验证每个请求的结构
     assert.equal(reqs[0]!.authority, 'wenqu')
     assert.ok(reqs[0]!.objective.includes('搜索框 UI'))
-    assert.ok(reqs[0]!.parentTurnId.includes(':galaxy:0'))
+    assert.equal(reqs[0]!.parentTurnId, 'batch:tu_galaxy_exec-galaxy-0:0')
 
     assert.equal(reqs[1]!.authority, 'tianji')
     assert.ok(reqs[1]!.objective.includes('搜索 API'))
@@ -218,6 +218,196 @@ describe('GALAXY_TOOL', () => {
     // 审查依赖前两个执行维度
     assert.ok(reviewReq!.dependencies)
     assert.equal(reviewReq!.dependencies!.length, 2)
+    assert.deepEqual(reviewReq!.dependencies, [
+      'tu_galaxy_review-galaxy-0:0',
+      'tu_galaxy_review-galaxy-1:0',
+    ])
+  })
+
+  it('maps out-of-order worker results by stable work-order ID, including auto review', async () => {
+    const tool = createGalaxyTool({
+      delegateBatch: async () => {
+        const run = makeRun(3)
+        run.results[0] = { ...run.results[0]!, workOrderId: 'tu_result_map-galaxy-1:0', summary: 'BACKEND_RESULT' }
+        run.results[1] = { ...run.results[1]!, workOrderId: 'tu_result_map-galaxy-0:0', summary: 'FRONTEND_RESULT' }
+        run.results[2] = { ...run.results[2]!, workOrderId: 'tu_result_map-galaxy:auto-review', summary: 'REVIEW_RESULT' }
+        return run
+      },
+    })
+
+    const result = await tool.execute({
+      toolUseId: 'tu_result_map',
+      cwd: '/repo',
+      input: {
+        objective: '结果映射',
+        dimensions: [
+          { name: 'frontend', objective: '前端', authority: 'wenqu' },
+          { name: 'backend', objective: '后端', authority: 'tianji' },
+        ],
+        autoReview: true,
+        confirm: true,
+      },
+    })
+
+    assert.match(result.content, /frontend 文曲:.*FRONTEND_RESULT/)
+    assert.match(result.content, /backend 天机:.*BACKEND_RESULT/)
+    assert.match(result.content, /全局审查:.*REVIEW_RESULT/)
+  })
+
+  it('makes an explicit review wait for every execution dimension', async () => {
+    const calls: DelegationRequest[][] = []
+    const tool = createGalaxyTool({
+      delegateBatch: async (requests) => {
+        calls.push(requests)
+        return makeRun(requests.length)
+      },
+    })
+
+    await tool.execute({
+      toolUseId: 'tu_explicit_review',
+      cwd: '/repo',
+      input: {
+        objective: '实现并审查上传功能',
+        dimensions: [
+          { name: 'frontend', objective: '上传组件', authority: 'wenqu' },
+          { name: 'backend', objective: '上传 API', authority: 'tianji' },
+          { name: 'review', objective: '审查集成结果', authority: 'yaoguang' },
+        ],
+        autoReview: true,
+        confirm: true,
+      },
+    })
+
+    const review = calls[0]![2]!
+    assert.deepEqual(review.dependencies, [
+      'tu_explicit_review-galaxy-0:0',
+      'tu_explicit_review-galaxy-1:0',
+    ])
+  })
+
+  it('rejects multiple authorities for a writable execution dimension', async () => {
+    const tool = createGalaxyTool({ delegateBatch: async () => makeRun() })
+    const result = await tool.execute({
+      toolUseId: 'tu_multi_write',
+      cwd: '/repo',
+      input: {
+        objective: '并行实现',
+        dimensions: [
+          { name: 'frontend', objective: '实现 UI', authorities: ['wenqu', 'tianliang'] },
+          { name: 'docs', objective: '写文档', authority: 'tianxuan' },
+        ],
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, true)
+    assert.ok(result.content.includes('多个 authority'))
+  })
+
+  it('keeps independent multi-perspective readers distinct in the queue', async () => {
+    const calls: DelegationRequest[][] = []
+    const tool = createGalaxyTool({
+      delegateBatch: async (requests) => {
+        calls.push(requests)
+        return makeRun(requests.length)
+      },
+    })
+
+    await tool.execute({
+      toolUseId: 'tu_perspectives',
+      cwd: '/repo',
+      input: {
+        objective: '多视角审查',
+        dimensions: [
+          { name: 'review', objective: '审查鉴权', authorities: ['yaoguang', 'tianquan'], files: ['src/auth/index.ts'] },
+          { name: 'docs', objective: '核对文档', authority: 'tianxuan' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    const perspectives = calls[0]!.filter(request => request.groupId)
+    assert.equal(perspectives.length, 2)
+    assert.equal(perspectives[0]!.groupId, perspectives[1]!.groupId)
+    assert.notEqual(perspectives[0]!.parentTurnId, perspectives[1]!.parentTurnId)
+  })
+
+  it('fans out data-parallel replicas as independent read-only work orders and reports their execution quorum', async () => {
+    const captured: DelegationRequest[][] = []
+    const tool = createGalaxyTool({
+      delegateBatch: async (requests) => {
+        captured.push(requests)
+        return {
+          ...makeRun(requests.length),
+          results: requests.map((request, index) => ({
+            ...makeRun(1).results[0]!,
+            workOrderId: deriveStableWorkOrderId(request.parentTurnId)!,
+            status: index === 2 ? 'failed' as const : 'passed' as const,
+          })),
+        }
+      },
+    })
+
+    const result = await tool.execute({
+      toolUseId: 'tu_data_parallel',
+      cwd: '/repo',
+      input: {
+        objective: '独立复核鉴权风险',
+        dimensions: [
+          { name: 'review', objective: '审查鉴权边界', authority: 'yaoguang', profile: 'reviewer', parallelism: 'data', replicas: 3, files: ['src/auth/index.ts'] },
+          { name: 'docs', objective: '核对文档', authority: 'tianxuan' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    const replicas = captured[0]!.filter(request => request.groupId?.startsWith('galaxy:data:'))
+    assert.equal(replicas.length, 3)
+    assert.equal(new Set(replicas.map(request => request.parentTurnId)).size, 3)
+    assert.equal(new Set(replicas.map(request => request.groupId)).size, 1)
+    assert.ok(replicas.every(request => request.profile === 'reviewer' && request.authority === 'yaoguang'))
+    assert.ok(replicas.every(request => request.objective.includes('Data-parallel replica')))
+    assert.match(result.content, /DP review: execution quorum reached \(2\/3, quorum 2\)/)
+    assert.match(result.content, /final semantic review remains required/)
+  })
+
+  it('rejects data-parallel work that defaults to a writable profile', async () => {
+    const tool = createGalaxyTool({ delegateBatch: async () => makeRun() })
+    const result = await tool.execute({
+      toolUseId: 'tu_data_write',
+      cwd: '/repo',
+      input: {
+        objective: '并行实现页面',
+        dimensions: [
+          { name: 'frontend', objective: '实现 UI', authority: 'wenqu', parallelism: 'data', replicas: 2 },
+          { name: 'docs', objective: '核对文档', authority: 'tianxuan' },
+        ],
+        confirm: true,
+      },
+    })
+    assert.equal(result.isError, true)
+    assert.ok(result.content.includes('DP') && result.content.includes('可写 profile'))
+  })
+
+  it('keeps every data-parallel replica observable by rejecting lossy aggregation policies', async () => {
+    const tool = createGalaxyTool({ delegateBatch: async () => makeRun() })
+    const result = await tool.execute({
+      toolUseId: 'tu_data_policy',
+      cwd: '/repo',
+      input: {
+        objective: '独立复核',
+        dimensions: [
+          { name: 'review', objective: '审查鉴权', authority: 'yaoguang', profile: 'reviewer', parallelism: 'data', replicas: 2 },
+          { name: 'docs', objective: '核对文档', authority: 'tianxuan' },
+        ],
+        policy: 'first_success',
+        confirm: true,
+      },
+    })
+    assert.equal(result.isError, true)
+    assert.ok(result.content.includes('all_required'))
   })
 
   it('implementation dimensions default to patcher (writable), not code_scout (read-only)', async () => {
