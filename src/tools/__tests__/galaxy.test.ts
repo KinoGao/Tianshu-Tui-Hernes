@@ -246,6 +246,39 @@ describe('GALAXY_TOOL', () => {
     assert.equal(captured[1].profile, 'patcher', '后端维度默认应 patcher 可写')
   })
 
+  it('deduplicates overlapping file scopes — only first dimension keeps the file', async () => {
+    const captured: any[] = []
+    const tool = createGalaxyTool({
+      delegateBatch: async (requests) => {
+        captured.push(...requests)
+        return makeRun(requests.length)
+      },
+    })
+    await tool.execute({
+      toolUseId: 'tu_overlap',
+      cwd: '/repo',
+      input: {
+        objective: 'overlap test',
+        dimensions: [
+          { name: 'backend', objective: 'API', authority: 'tianji', files: ['src/UserController.java', 'src/UserService.java'] },
+          { name: 'cross', objective: 'Cross', authority: 'tianquan', files: ['src/UserController.java', 'src/OrderService.java'] },
+        ],
+        confirm: true,
+        autoReview: false,
+      },
+      sessionTurnCount: 10,
+    })
+    assert.ok(captured.length >= 2)
+    // backend worker (first) keeps both files
+    const backendReq = captured.find((r: any) => r.authority === 'tianji')
+    assert.ok(backendReq, 'backend worker should exist')
+    assert.deepStrictEqual(backendReq.scope.files.sort(), ['src/UserController.java', 'src/UserService.java'].sort())
+    // cross worker gets only its unique file, not the overlapping one
+    const crossReq = captured.find((r: any) => r.authority === 'tianquan')
+    assert.ok(crossReq, 'cross worker should exist')
+    assert.deepStrictEqual(crossReq.scope.files.sort(), ['src/OrderService.java'].sort())
+  })
+
   it('design dimension defaults to patcher (writable), not planner (delegation-only)', async () => {
     const captured: any[] = []
     const tool = createGalaxyTool({

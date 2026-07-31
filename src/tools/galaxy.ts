@@ -435,6 +435,27 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         }
       }
 
+      // ── Detect & deduplicate overlapping file scopes to prevent worker conflicts ──
+      const fileOwner = new Map<string, number>() // file path → first dimension index
+      for (let i = 0; i < dimensions.length; i++) {
+        for (const f of dimensions[i]!.files ?? []) {
+          if (!fileOwner.has(f)) fileOwner.set(f, i)
+        }
+      }
+      // Remove overlapping files from non-owning workers' scopes
+      for (const req of requests) {
+        const dimIdxMatch = req.parentTurnId.match(/:galaxy:(\d+):/)
+        if (!dimIdxMatch) continue
+        const dimIdx = parseInt(dimIdxMatch[1]!)
+        if (isNaN(dimIdx)) continue
+        const owned = dimensions[dimIdx]?.files ?? []
+        const deduped = owned.filter(f => {
+          const owner = fileOwner.get(f)
+          return owner === undefined || owner === dimIdx
+        })
+        ;(req as any).scope = { ...req.scope, files: deduped }
+      }
+
       // Auto-append review dimension (with per-room peer review if rooms exist)
       let reviewDimIndex = -1
       const hasExplicitReview = dimensions.some(d => {
