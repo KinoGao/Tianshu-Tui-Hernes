@@ -279,6 +279,26 @@ describe('GALAXY_TOOL', () => {
     assert.deepStrictEqual(crossReq.scope.files.sort(), ['src/OrderService.java'].sort())
   })
 
+  it('rejects dimensions with empty authority and no authorities', async () => {
+    const tool = createGalaxyTool({ delegateBatch: async () => makeRun(0) })
+    const result = await tool.execute({
+      toolUseId: 'tu_empty_auth',
+      cwd: '/repo',
+      input: {
+        objective: 'empty auth',
+        dimensions: [
+          { name: 'a', objective: 'first', authority: '' },
+          { name: 'b', objective: 'second', authority: 'tianji' },
+        ],
+        confirm: true,
+        autoReview: false,
+      },
+      sessionTurnCount: 10,
+    })
+    assert.equal(result.isError, true)
+    assert.ok(result.content!.includes('authority') || result.content!.includes('星域'), result.content)
+  })
+
   it('design dimension defaults to patcher (writable), not planner (delegation-only)', async () => {
     const captured: any[] = []
     const tool = createGalaxyTool({

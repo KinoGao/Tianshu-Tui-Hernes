@@ -76,7 +76,7 @@ const dimensionSchema = z.object({
     model: z.string(),
   }).optional().describe('为该维度指定专用模型（如审查用强模型、实现用快模型）'),
 }).refine(
-  d => d.authority !== undefined || d.authorities !== undefined,
+  d => (d.authority !== undefined && d.authority !== '') || (d.authorities !== undefined && d.authorities.length > 0),
   { message: '每个维度必须指定 authority 或 authorities（至少一个）' },
 )
 
@@ -434,6 +434,11 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
             roomMap.set(roomId, entry)
           }
         }
+      }
+
+      // Fail early if any dimension has no valid star assigned
+      if (requests.length === 0) {
+        return { content: '星河执行失败：所有维度均未指定有效星域。每个维度必须指定 authority 或 authorities。', isError: true }
       }
 
       // ── Detect & deduplicate overlapping file scopes to prevent worker conflicts ──
