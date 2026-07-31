@@ -829,6 +829,20 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     },
   },
   {
+    name: '/ultra-workflow',
+    handler(ctx) {
+      const { parts, pushStatic, setIsStreaming } = ctx
+      const cmd = parts[0]!.toLowerCase()
+      if (!parts.slice(1).join(' ').trim()) {
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /ultra-workflow <任务描述>\n       超工作流——需求澄清+环境基线 → council 评审 → team 波次 → galaxy 攻坚 → 交付门禁，从大白话到工业级可交付代码。' }))
+        setIsStreaming(false)
+        return true
+      }
+      // 有参数 → 放行：命令文本作为消息进入 agent，触发 ultra-workflow skill 加载协议后按五阶段执行。
+      return false
+    },
+  },
+  {
     name: '/review',
     async handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
@@ -4081,6 +4095,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   registerWorkflow("/team")
   registerWorkflow("/council")
   registerWorkflow("/galaxy")
+  registerWorkflow("/ultra-workflow")
   registerWorkflow("/plan")
   registerWorkflow("/write-plan")
   registerWorkflow("/plan-close")
