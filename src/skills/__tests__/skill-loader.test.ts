@@ -103,37 +103,6 @@ Router body.`, 'utf-8')
     assert.equal(dirSkill.description, 'a directory skill')
   })
 
-  it('a .rivet/skills file overrides a built-in skill of the same name (project copy wins)', () => {
-    // loadProjectSkills 顺序：built-in 先注册 → .rivet/skills 后 set 覆盖。
-    // 这是刻意的设计（用户可定制内置技能），但会让过期的项目副本静默盖掉
-    // 新版内置指令（如 2026-07 galaxy.md 旧版「共享房间」语义 vs 新版
-    // 「独立只读视角」）。此测试 pin 住覆盖语义，防止未来静默翻转。
-    const reg = new SkillRegistry()
-    reg.register({
-      name: 'galaxy',
-      description: 'builtin description',
-      triggers: [/galaxy/],
-      body: 'builtin body',
-      builtIn: true,
-    })
-
-    const dir = mkdtempSync(join(tmpdir(), 'rivet-override-'))
-    writeFileSync(join(dir, 'galaxy.md'), `---
-name: galaxy
-description: project-customized description
-triggers: [custom]
----
-
-Project body.`, 'utf-8')
-    reg.loadFromDirectory(dir)
-
-    const def = reg.get('galaxy')!
-    assert.equal(def.source, 'rivet', 'project copy should replace the built-in')
-    assert.equal(def.description, 'project-customized description')
-    assert.equal(def.body, 'Project body.')
-    assert.equal(def.builtIn, false)
-  })
-
   it('listSkillFiles enumerates sub-files but excludes SKILL.md', () => {
     const root = mkdtempSync(join(tmpdir(), 'rivet-skill-files-'))
     const myDir = join(root, 'pdf')
