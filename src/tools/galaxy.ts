@@ -120,9 +120,9 @@ function mapDimensionToKind(name: string): WorkOrderKind {
 function mapDimensionToProfile(name: string): string {
   const key = name.toLowerCase().replace(/[\s_-]/g, '')
   if (key === 'review' || key === 'verify') return 'reviewer'
-  if (key === 'plan' || key === 'design') return 'planner'
+  if (key === 'plan') return 'planner'
   if (key === 'docs' || key === 'research') return 'doc_scout'
-  // 实现类维度默认用 patcher（可写），不是 code_scout（只读）
+  // 实现类维度（含 design/frontend/backend 等）默认用 patcher（可写）
   return 'patcher'
 }
 

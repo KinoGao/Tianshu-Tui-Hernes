@@ -246,6 +246,32 @@ describe('GALAXY_TOOL', () => {
     assert.equal(captured[1].profile, 'patcher', '后端维度默认应 patcher 可写')
   })
 
+  it('design dimension defaults to patcher (writable), not planner (delegation-only)', async () => {
+    const captured: any[] = []
+    const tool = createGalaxyTool({
+      delegateBatch: async (requests) => {
+        captured.push(...requests)
+        return makeRun(requests.length)
+      },
+    })
+    await tool.execute({
+      toolUseId: 'tu_design',
+      cwd: '/repo',
+      input: {
+        objective: 'design check',
+        dimensions: [
+          { name: 'design', objective: 'UI design', authority: 'wenqu' },
+          { name: 'backend', objective: 'API', authority: 'tianji' },
+        ],
+        confirm: true,
+        autoReview: false,
+      },
+      sessionTurnCount: 10,
+    })
+    assert.ok(captured.length >= 2)
+    assert.equal(captured[0].profile, 'patcher', 'design 维度默认应 patcher 可写，而非 planner 只读')
+  })
+
   it('rejects empty dimensions', async () => {
     const tool = createGalaxyTool({ delegateBatch: async () => makeRun() })
 
