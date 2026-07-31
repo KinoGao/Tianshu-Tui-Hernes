@@ -1,20 +1,12 @@
-import { describe, it, beforeEach, afterEach, after } from 'node:test'
+import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createUndoTool } from '../undo.js'
 import { FileHistory } from '../../agent/file-history.js'
-import { cpuPool } from '../../workers/cpu-pool.js'
 
 const TMP = join(import.meta.dirname, '.undo-test-tmp')
 const BACKUP = join(import.meta.dirname, '.undo-test-backup')
-
-// preview 路径（getDiffStats）会懒加载 spawn CPU worker；其 MessagePort
-// 即使 unref 也会让 node:test runner 等不到进程退出而挂起。测试结束必须
-// 显式 dispose（否则 tsx --test 在套件完成后永久挂起）。
-after(() => {
-  cpuPool.dispose()
-})
 
 describe('createUndoTool', () => {
   let history: FileHistory

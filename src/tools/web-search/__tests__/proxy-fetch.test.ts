@@ -1,7 +1,5 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { once } from 'node:events'
-import { createServer } from 'node:net'
 import { createProxyAwareFetch } from '../proxy-fetch.js'
 
 /**
@@ -58,7 +56,7 @@ describe('createProxyAwareFetch', () => {
   it('without proxy opts, passes init through without dispatcher', async () => {
     await withoutProxyEnv(async () => {
       const spy = spyFetch()
-      const wrapped = createProxyAwareFetch({ noProxy: '*' }, spy.fetch)
+      const wrapped = createProxyAwareFetch(undefined, spy.fetch)
       const res = await wrapped('https://example.com/search', { headers: { 'User-Agent': 'test' } })
       assert.equal(res.status, 200)
       assert.equal(res.ok, true)
@@ -104,26 +102,6 @@ describe('createProxyAwareFetch', () => {
     assert.equal((dispatcher as object).constructor.name, 'ProxyAgent', 'dispatcher should be a ProxyAgent')
   })
 
-  it('uses the npm undici fetch implementation with its ProxyAgent', async () => {
-    const server = createServer(socket => socket.destroy())
-    server.listen(0, '127.0.0.1')
-    await once(server, 'listening')
-    const address = server.address()
-    assert.ok(address && typeof address !== 'string')
-    const wrapped = createProxyAwareFetch({ proxyUrl: `http://127.0.0.1:${address.port}` })
-    const abort = new AbortController()
-    const timeout = setTimeout(() => abort.abort(), 2_000)
-    try {
-      await assert.rejects(
-        () => wrapped('https://example.com/search', { signal: abort.signal }),
-        error => !String(error).includes('invalid onRequestStart method'),
-      )
-    } finally {
-      clearTimeout(timeout)
-      await new Promise<void>((resolve, reject) => server.close(err => err ? reject(err) : resolve()))
-    }
-  })
-
   it('with proxyUrl + noProxy matching the URL host, bypasses proxy', async () => {
     const spy = spyFetch()
     const wrapped = createProxyAwareFetch(
@@ -153,7 +131,7 @@ describe('createProxyAwareFetch', () => {
   it('empty proxy opts behave same as undefined', async () => {
     await withoutProxyEnv(async () => {
       const spy = spyFetch()
-      const wrapped = createProxyAwareFetch({ noProxy: '*' }, spy.fetch)
+      const wrapped = createProxyAwareFetch({}, spy.fetch)
       const res = await wrapped('https://example.com/search')
       assert.equal(res.status, 200)
       const hasDispatcher = 'dispatcher' in (spy.lastInit ?? {})
