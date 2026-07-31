@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
-import { SkillRegistry, parseSkillMarkdown, listSkillFiles, importSkillsIntoRivet, listInstallableSkills, countInstalledSkills, seedBundledSkillsFrom, loadProjectSkills } from '../skill-loader.js'
+import { SkillRegistry, parseSkillMarkdown, listSkillFiles, importSkillsIntoRivet, listInstallableSkills, countInstalledSkills, seedBundledSkillsFrom, loadProjectSkills, registerBuiltinSkills } from '../skill-loader.js'
 import { readFileSync } from 'node:fs'
 import { validatePathSafe } from '../../tools/path-validate.js'
 
@@ -280,5 +280,30 @@ Project body.`, 'utf-8')
   it('seed returns [] when source dir is missing', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'rivet-cwd-'))
     assert.deepEqual(seedBundledSkillsFrom(join(cwd, 'nope'), cwd), [])
+  })
+
+  it('registers the ultra-workflow built-in skill with activation triggers', () => {
+    const reg = new SkillRegistry()
+    registerBuiltinSkills(reg)
+    const skill = reg.get('ultra-workflow')
+    assert.ok(skill, 'ultra-workflow should be registered as a built-in')
+    assert.equal(skill!.builtIn, true)
+    assert.ok(skill!.body.includes('council'), 'body should reference the council phase')
+    assert.ok(skill!.body.includes('team'), 'body should reference the team phase')
+    assert.ok(skill!.body.includes('galaxy'), 'body should reference the galaxy phase')
+
+    // 触发词命中（英文 / 中文指令）
+    assert.ok(
+      reg.match('用 ultra-workflow 编排这个大型任务').some(s => s.name === 'ultra-workflow'),
+      '触发词 /ultra-workflow 应命中',
+    )
+    assert.ok(
+      reg.match('把这三个结合成一个超工作流').some(s => s.name === 'ultra-workflow'),
+      '触发词 超工作流 应命中',
+    )
+    assert.ok(
+      reg.match('用全链路编排跑一遍').some(s => s.name === 'ultra-workflow'),
+      '触发词 全链路编排 应命中',
+    )
   })
 })
