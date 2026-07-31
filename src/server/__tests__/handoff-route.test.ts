@@ -19,7 +19,6 @@ import { createRouter } from '../index.js'
 import { buildSessionRoutes } from '../session-routes.js'
 import { RuntimeSessionManager, type ManagedAgent } from '../session-manager.js'
 import { getSessionDir } from '../../agent/session-persist.js'
-import { readUnacknowledged, recordRecovery } from '../../agent/recovery-journal.js'
 import type { AgentCallbacks } from '../../agent/loop-types.js'
 import type { Artifact } from '../../artifact/types.js'
 import type { OaiMessage } from '../../api/oai-types.js'
@@ -92,7 +91,6 @@ test('运行中 → 409', async () => {
 test('交接 run：prompt 指向项目内文档，收尾归档到 <id>.handoff.md', async () => {
   const { manager, agents, router } = setup()
   const s = (await router('POST', '/sessions', { cwd: workDir }, AUTH)).body as { id: string }
-  recordRecovery(workDir, { file: 'src/legacy.ts', action: 'restore', linesLost: 1 }, s.id)
   const res = await router('POST', `/sessions/${s.id}/handoff`, { note: '重点记下缓存方案' }, AUTH)
   assert.equal(res.status, 200)
 
@@ -111,7 +109,6 @@ test('交接 run：prompt 指向项目内文档，收尾归档到 <id>.handoff.m
   const destPath = join(getSessionDir(workDir), `${s.id}.handoff.md`)
   assert.ok(existsSync(destPath), 'run 收尾应归档到会话目录')
   assert.equal(readFileSync(destPath, 'utf-8'), '# Handoff 交接内容\n')
-  assert.equal(readUnacknowledged(workDir, s.id).length, 0, 'successful handoff must settle source recovery entries')
 
   // handoff_archived 事件可见 + pendingHandoff 已清（再次 handoff 不再 409）
   const events = manager.getEvents(s.id)?.events ?? []

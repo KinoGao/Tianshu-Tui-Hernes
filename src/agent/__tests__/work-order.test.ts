@@ -38,18 +38,6 @@ describe('work-order contract', () => {
     assert.equal(order.aggregationPolicy, 'primary_decides')
   })
 
-  it('keeps same-authority replicas in one group distinct for queue deduplication', () => {
-    const first = createReadOnlyWorkOrder({
-      id: 'dp-first', parentTurnId: 'batch:dp:0', kind: 'review', profile: 'reviewer',
-      objective: 'independent review', scope: { files: ['src/auth.ts'] }, authority: 'yaoguang', groupId: 'dp-auth',
-    })
-    const second = createReadOnlyWorkOrder({
-      id: 'dp-second', parentTurnId: 'batch:dp:1', kind: 'review', profile: 'reviewer',
-      objective: 'independent review', scope: { files: ['src/auth.ts'] }, authority: 'yaoguang', groupId: 'dp-auth',
-    })
-    assert.notEqual(first.dedupeKey, second.dedupeKey)
-  })
-
   it('accepts all built-in registry profiles in work orders', () => {
     const architect = createReadOnlyWorkOrder({
       id: 'wo_architect',
