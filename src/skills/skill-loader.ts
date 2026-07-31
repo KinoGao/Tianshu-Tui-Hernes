@@ -363,7 +363,10 @@ export function listSkillFiles(
     for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       if (out.length >= maxEntries) return
       const abs = join(d, e.name)
-      const rel = relative(skillDir, abs)
+      // 展示层路径统一正斜杠——relative() 在 Windows 返回反斜杠，会让
+      // <skill-files> 里给模型看的路径与 glob/repo_map 输出不一致，
+      // 且跨平台断言不成立（Windows 上 skill-loader 测试红）。
+      const rel = relative(skillDir, abs).replace(/\\/g, '/')
       if (rel === 'SKILL.md') continue
       if (e.isDirectory()) {
         out.push({ path: rel + '/', kind: 'dir' })
