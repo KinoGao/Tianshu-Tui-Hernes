@@ -52,9 +52,10 @@ const profileStringSchema = z.string().refine(
 )
 
 /** Dynamic star-domain validation — same as delegate-task.ts.
- *  Accepts both Chinese names (天机) and Pinyin IDs (tianji). */
+ *  Accepts both Chinese names (天机) and Pinyin IDs (tianji).
+ *  Empty string treated as unspecified (not validated). */
 const authorityStringSchema = z.string().refine(
-  (val) => starDomainRegistry.get(val) !== undefined,
+  (val) => val === '' || starDomainRegistry.get(val) !== undefined,
   (val) => ({ message: `未知星域 "${val}"。可用：${starDomainRegistry.getDomainIds().join(', ')}` }),
 )
 
@@ -404,7 +405,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 
       for (let i = 0; i < dimensions.length; i++) {
         const dim = dimensions[i]!
-        const stars = dim.authorities ?? (dim.authority ? [dim.authority] : [])
+        const stars = dim.authorities ?? (dim.authority && dim.authority !== '' ? [dim.authority] : [])
         const roomId = `galaxy:room:${i}`
 
         for (let j = 0; j < stars.length; j++) {
