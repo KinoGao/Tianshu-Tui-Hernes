@@ -293,6 +293,13 @@ Project body.`, 'utf-8')
     assert.ok(skill!.body.includes('galaxy'), 'body should reference the galaxy phase')
     assert.ok(skill!.body.includes('需求澄清'), 'body should include the beginner requirement-clarification stage')
     assert.ok(skill!.body.includes('工业级'), 'body should include the industrial-grade delivery gate')
+    // 议事会 6 项修复（2026-07-31 council 评审结论）：
+    assert.ok(skill!.body.includes('环境基线'), '任务1：环境基线探测+脚手架子流程')
+    assert.ok(skill!.body.includes('人话'), '任务2：人话进度协议+失败翻译')
+    assert.ok(skill!.body.includes('未派发任何席位'), '任务3：council 门禁守卫（禁用不得静默通过）')
+    assert.ok(skill!.body.includes('autoExecute'), '任务4：council→team 衔接路径指明')
+    assert.ok(skill!.body.includes('confirm: false'), '任务5：galaxy 两阶段确认保留')
+    assert.ok(skill!.body.includes('draftItems'), '任务6：draftItems 构造指引')
 
     // 触发词命中（英文 / 中文指令）
     assert.ok(
