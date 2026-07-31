@@ -291,6 +291,8 @@ Project body.`, 'utf-8')
     assert.ok(skill!.body.includes('council'), 'body should reference the council phase')
     assert.ok(skill!.body.includes('team'), 'body should reference the team phase')
     assert.ok(skill!.body.includes('galaxy'), 'body should reference the galaxy phase')
+    assert.ok(skill!.body.includes('需求澄清'), 'body should include the beginner requirement-clarification stage')
+    assert.ok(skill!.body.includes('工业级'), 'body should include the industrial-grade delivery gate')
 
     // 触发词命中（英文 / 中文指令）
     assert.ok(
