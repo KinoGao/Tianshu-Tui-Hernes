@@ -92,6 +92,7 @@ export function getPaletteCommands(): PaletteCommand[] {
     { name: '/team max', description: 'Run team-mode planning-first workflow' },
     { name: '/council', description: 'Convene a star-domain council (single round; --rounds 2+ enables debate)', argsHint: '[--rounds N]' },
     { name: '/galaxy', description: '启动星河集群——拆解任务为多维度，由不同星域并行执行', argsHint: '<任务描述>' },
+    { name: '/ultra-workflow', description: '超工作流——需求澄清+环境基线 → council 评审 → team 波次 → galaxy 攻坚 → 交付门禁，从大白话到工业级可交付代码', argsHint: '<任务描述>' },
     { name: '/plan', description: 'Create implementation plan (writing-plans workflow)' },
     { name: '/write-plan', description: 'Alias of /plan — same writing-plans workflow' },
     { name: '/plan-mode', description: 'Enter/exit plan authoring mode (/plan-mode toggles)' },
