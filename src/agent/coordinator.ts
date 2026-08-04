@@ -794,6 +794,11 @@ export class DelegationCoordinator {
    *  batch workers go through the same gate, so batch + single + background
    *  share one concurrency budget instead of each having its own. */
   private activeWorkerCount = 0
+  /** S1 分池并发：只读工（explore）与写工（hands）各自的活跃计数，配合
+   *  maxExploreWorkers / maxWriteWorkers 池帽；全局 activeWorkerCount 守
+   *  总上限（三帽最大值）。 */
+  private activeExploreCount = 0
+  private activeWriteCount = 0
   private readonly workerWaiters: Array<() => void> = []
   private shuttingDown = false
   /** P1-8: global in-flight file claim table. Captures scope + write intent
@@ -1806,13 +1811,32 @@ export class DelegationCoordinator {
     }
   }
 
-  /** P1-6: wait until activeWorkerCount < maxWorkers, then claim a slot.
-   *  abort 感知（审查 H1/H3 修复）：等槽期间监听 parentSignal——触发即从
-   *  waiter 队列移除并 reject，不再出现「主控已超时、槽位释放后僵尸唤醒
-   *  继续跑完整 worker」。 */
-  private async acquireWorkerSlot(parentSignal?: AbortSignal): Promise<void> {
+  /** P1-6: wait until the role pool (and the global cap) has a free slot, then
+   *  claim it. 池化并发（S1）：只读工（explore）与写工（hands）各自按
+   *  maxExploreWorkers / maxWriteWorkers 计数；全局上限为三者的最大值——
+   *  未配置分池时 explore=write=maxWorkers，总上限即 maxWorkers，行为与
+   *  旧版完全一致。abort 感知（审查 H1/H3 修复）：等槽期间监听
+   *  parentSignal——触发即从 waiter 队列移除并 reject，不再出现「主控已超时、
+   *  槽位释放后僵尸唤醒继续跑完整 worker」。 */
+  private rolePoolCap(role: 'explore' | 'write'): number {
+    return role === 'write'
+      ? (this.config.maxWriteWorkers ?? this.config.maxWorkers)
+      : (this.config.maxExploreWorkers ?? this.config.maxWorkers)
+  }
+
+  private totalWorkerCap(): number {
+    const explore = this.config.maxExploreWorkers ?? this.config.maxWorkers
+    const write = this.config.maxWriteWorkers ?? this.config.maxWorkers
+    return Math.max(this.config.maxWorkers, explore, write)
+  }
+
+  private async acquireWorkerSlot(order: WorkOrder, parentSignal?: AbortSignal): Promise<void> {
     if (this.shuttingDown) throw new Error('Coordinator is shutting down')
-    while (this.activeWorkerCount >= this.config.maxWorkers) {
+    const role = classifyProfile(order.profile) === 'hands' ? 'write' : 'explore'
+    const poolCap = this.rolePoolCap(role)
+    const totalCap = this.totalWorkerCap()
+    const poolCount = role === 'write' ? this.activeWriteCount : this.activeExploreCount
+    while (this.activeWorkerCount >= totalCap || poolCount >= poolCap) {
       await new Promise<void>((resolve, reject) => {
         let settled = false
         const cleanup = () => {
@@ -1834,11 +1858,16 @@ export class DelegationCoordinator {
       if (this.shuttingDown) throw new Error('Coordinator is shutting down')
     }
     this.activeWorkerCount++
+    if (role === 'write') this.activeWriteCount++
+    else this.activeExploreCount++
   }
 
   /** P1-6: release a slot and wake the next waiter. */
-  private releaseWorkerSlot(): void {
+  private releaseWorkerSlot(order: WorkOrder): void {
+    const role = classifyProfile(order.profile) === 'hands' ? 'write' : 'explore'
     this.activeWorkerCount--
+    if (role === 'write') this.activeWriteCount--
+    else this.activeExploreCount--
     this.workerWaiters.shift()?.()
   }
 
@@ -1920,7 +1949,7 @@ export class DelegationCoordinator {
     // +1 落 order——顶层 order.delegationDepth===1，嵌套 ≥2。
     const nested = (order.delegationDepth ?? 0) >= 2
     // P1-6: wait for a global concurrency slot (covers batch + single + background).
-    if (!nested) await this.acquireWorkerSlot(parentSignal)
+    if (!nested) await this.acquireWorkerSlot(order, parentSignal)
     try {
       // P1-8: cross-wave conflict — 检查与登记必须在同一同步块内（审查 H2：
       // 此前检查在 await 槽位之前，同 tick 两个同文件写工双双绕过 TOCTOU）。
@@ -1952,7 +1981,7 @@ export class DelegationCoordinator {
       return await this.delegateOrder(order, parentSignal, mailbox)
     } finally {
       this.inflightFiles.delete(order.id)
-      if (!nested) this.releaseWorkerSlot()
+      if (!nested) this.releaseWorkerSlot(order)
     }
   }
 
@@ -2962,7 +2991,9 @@ export class DelegationCoordinator {
         return { status: 'completed', results: depthCapped, packet: await buildPrimaryWorkerPacket(depthCapped, this.config.artifactStore) }
       }
 
-    const queue = new WorkOrderQueue(this.config.maxWorkers, {
+    // S1 分池：queue 全局帽与 coordinator 信号量同一口径（三帽最大值）——
+    // 否则 explore 角色帽在全局帽之下形同虚设，只读 fan-out 依旧被 maxWorkers 压住。
+    const queue = new WorkOrderQueue(this.totalWorkerCap(), {
       explore: this.config.maxExploreWorkers,
       write: this.config.maxWriteWorkers,
     })
@@ -3145,8 +3176,9 @@ export class DelegationCoordinator {
       await processNext()
     }
 
-    // Start initial batch of workers
-    for (let i = 0; i < this.config.maxWorkers; i++) {
+    // Start initial batch of workers — pool-aware: read-only fan-outs (galaxy
+    // 多维度只读) 需要比 maxWorkers 更多的循环才能吃满 explore 池帽。
+    for (let i = 0; i < this.totalWorkerCap(); i++) {
       inflight.push(processNext())
     }
     await Promise.all(inflight)

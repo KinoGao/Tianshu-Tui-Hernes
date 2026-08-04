@@ -13,6 +13,7 @@ import {
   shouldDelegateObjective,
   type WorkerRuntimeFactory,
 } from '../coordinator.js'
+import { classifyProfile } from '../coordination-policy.js'
 import { READ_ONLY_WORKER_TOOLS, WRITE_WORKER_TOOLS, type WorkerResult } from '../work-order.js'
 import { CollaborationProtocol } from '../collaboration-protocol.js'
 import { profileRegistry } from '../profile-registry.js'
@@ -2873,5 +2874,110 @@ describe('DelegationCoordinator', () => {
     assert.ok(writerOptIn.stigmergy, '写工显式 opt-in 后挂')
     assert.equal(writerOptIn.stigmergy, read0.stigmergy, 'opt-in 写工与读工共享同一批级实例')
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('S1 分池：explore 池可超过 maxWorkers，write 池守 maxWriteWorkers', async () => {
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+    let exploreActive = 0
+    let writeActive = 0
+    let explorePeak = 0
+    let writePeak = 0
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 2,
+      maxExploreWorkers: 4,
+      maxWriteWorkers: 1,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      runWorker: async config => {
+        const isWrite = classifyProfile(config.order.profile) === 'hands'
+        if (isWrite) { writeActive++; writePeak = Math.max(writePeak, writeActive) }
+        else { exploreActive++; explorePeak = Math.max(explorePeak, exploreActive) }
+        await sleep(40)
+        if (isWrite) writeActive--
+        else exploreActive--
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+      runHands: async config => {
+        writeActive++; writePeak = Math.max(writePeak, writeActive)
+        await sleep(40)
+        writeActive--
+        return {
+          result: resultFor(config.order.id),
+          session: { getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    const run = await coordinator.delegateBatch([
+      { parentTurnId: 'pool:e0', objective: 'Explore module A for routing seams and risk patterns.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/a.ts'] } },
+      { parentTurnId: 'pool:e1', objective: 'Explore module B for cache affinity and hot paths.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/b.ts'] } },
+      { parentTurnId: 'pool:e2', objective: 'Explore module C for delegation boundaries and gates.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/c.ts'] } },
+      { parentTurnId: 'pool:e3', objective: 'Explore module D for evidence flow and verification debt.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/d.ts'] } },
+      { parentTurnId: 'pool:w0', objective: 'Implement feature W0 with tests and typecheck verification.', kind: 'patch_proposal', profile: 'patcher', scope: { files: ['src/w0.ts'] } },
+      { parentTurnId: 'pool:w1', objective: 'Implement feature W1 with tests and typecheck verification.', kind: 'patch_proposal', profile: 'patcher', scope: { files: ['src/w1.ts'] } },
+    ])
+
+    assert.equal(run.status, 'completed')
+    assert.equal(run.results.length, 6)
+    assert.equal(explorePeak, 4, 'explore 池应突破 maxWorkers=2 跑到 4 并发')
+    assert.equal(writePeak, 1, 'write 池守 maxWriteWorkers=1')
+  })
+
+  it('S1 分池：未配置池帽时行为与旧版一致（总并发 ≤ maxWorkers）', async () => {
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+    let active = 0
+    let peak = 0
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 2,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      runWorker: async config => {
+        active++
+        peak = Math.max(peak, active)
+        await sleep(40)
+        active--
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    await coordinator.delegateBatch([
+      { parentTurnId: 'pool:r0', objective: 'Explore module A for routing seams and risk patterns.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/a.ts'] } },
+      { parentTurnId: 'pool:r1', objective: 'Explore module B for cache affinity and hot paths.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/b.ts'] } },
+      { parentTurnId: 'pool:r2', objective: 'Explore module C for delegation boundaries and gates.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/c.ts'] } },
+      { parentTurnId: 'pool:r3', objective: 'Explore module D for evidence flow and verification debt.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/d.ts'] } },
+    ])
+
+    assert.ok(peak <= 2, `未配置分池时并发峰值应 ≤ maxWorkers，实际 ${peak}`)
   })
 })

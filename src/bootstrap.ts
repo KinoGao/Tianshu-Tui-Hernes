@@ -1208,6 +1208,7 @@ export function createAgentRuntime(deps: {
     // 该值同时是 CoordinatorState 的并发上限与 WorkOrderQueue 的容量基准——
     // 全局信号量（activeWorkerCount ≤ maxWorkers）在 coordinator 层实施。
     maxWorkers: resolveCoordinatorMaxWorkers(config),
+    ...resolveCoordinatorPoolCaps(config),
     runtimeFactory,
     routing: workerRouting,
     providerHealth,
@@ -2007,6 +2008,18 @@ function resolveCoordinatorMaxWorkers(config: Config): number {
   const raw = (config.agent as { maxWorkers?: unknown }).maxWorkers
   const n = typeof raw === 'number' ? raw : Number(process.env['RIVET_MAX_WORKERS'])
   return Number.isInteger(n) && n >= 1 ? n : 3
+}
+
+/** S1 分池并发帽：只读/写工各自的可选池帽，缺省 undefined（= maxWorkers）。
+ *  非法值回退缺省——fail-closed 保守侧。 */
+function resolveCoordinatorPoolCaps(config: Config): { maxExploreWorkers?: number; maxWriteWorkers?: number } {
+  const agent = config.agent as { maxExploreWorkers?: unknown; maxWriteWorkers?: unknown }
+  const cap = (raw: unknown): number | undefined =>
+    typeof raw === 'number' && Number.isInteger(raw) && raw >= 1 ? raw : undefined
+  return {
+    ...(cap(agent.maxExploreWorkers) !== undefined ? { maxExploreWorkers: cap(agent.maxExploreWorkers) } : {}),
+    ...(cap(agent.maxWriteWorkers) !== undefined ? { maxWriteWorkers: cap(agent.maxWriteWorkers) } : {}),
+  }
 }
 
 export interface BootstrapOptions {

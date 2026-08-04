@@ -307,6 +307,14 @@ export const agentSchema = z.object({
    *  batch/background 统一入闸；嵌套委派豁免（否则 planner 持槽等子工死锁）。
    *  缺省 3；RIVET_MAX_WORKERS env 可覆盖。 */
   maxWorkers: z.number().int().min(1).optional(),
+  /** 只读 worker（explore 池）并发帽（S1 分池）。缺省 = maxWorkers；
+   *  galaxy 多维度只读 fan-out 可调大（如 6）换取墙钟收益。与 maxWorkers
+   *  的关系：总并发上限 = max(maxWorkers, maxExploreWorkers, maxWriteWorkers)。 */
+  maxExploreWorkers: z.number().int().min(1).optional(),
+  /** 写 worker（hands 池）并发帽（S1 分池）。缺省 = maxWorkers。
+   *  建议保持与 maxWorkers 相同或更小——写写互斥天然序列化，放大写池
+   *  不提升并行度，只增加冲突等待。 */
+  maxWriteWorkers: z.number().int().min(1).optional(),
   /** Default max concurrent workers per team wave when input.maxParallel is unset. Clamped 1..5. */
   maxTeamParallel: z.number().int().min(1).max(5).default(3),
   /** council_convene seat configuration — custom seats with optional per-seat
