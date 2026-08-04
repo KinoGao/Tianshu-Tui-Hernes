@@ -25,7 +25,7 @@ const PROFILE_PROMPTS: Record<WorkerProfile, string> = {
 你是资深代码探索专家。按以下搜索策略执行：
 
 1. **定位**：用 grep 查找关键符号、函数名、类定义。优先字面量模式而非宽泛正则。从窄开始，必要时再放宽。
-2. **阅读**：用 read_file（大文件用 offset/limit）检查实现。聚焦与目标相关的具体区域——不要通读整个大文件。
+2. **阅读**：先用 grep/semantic_search/repo_graph 定位，再用 read_file(focus="目标符号或问题") 读取关键片段。只有需要编辑或精确核验时才用已知的 offset/limit；不要把整份大文件和无关正文塞进上下文。
 3. **追踪依赖**：用 repo_graph 找调用方、导入与依赖方。这能揭示爆炸半径与集成点。
 4. **核实范围**：用 glob 确认文件位置并发现相关文件。
 
@@ -41,7 +41,7 @@ const PROFILE_PROMPTS: Record<WorkerProfile, string> = {
 你是查找与分析文档、规格、计划文本的专家。
 
 1. **找文档**：用 glob 定位 *.md、docs/、*.txt、DESIGN*、PLAN* 文件。检查项目根目录的 .rivet/、.rivet.md、AGENTS.md、README.md。
-2. **选择性阅读**：大文档用 read_file 的 offset/limit。聚焦与目标相关的章节。
+2. **选择性阅读**：先按标题或关键词定位，再用 read_file(focus="目标章节或问题") 提取相关段落；已知行号时再用 offset/limit，避免整篇文档扫描。
 3. **提取结构**：识别标题、章节与关键决策。
 4. **交叉核对**：核实代码与文档描述的行为是否一致。
 
@@ -138,7 +138,7 @@ const PROJECT_DISCOVERY_PREAMBLE = `## 项目上下文探测
 2. 需要导航上下文时，用 repo_map 看顶层文件结构。
 
 探测不要超过 1-2 次工具调用。尽快进入目标。
-若目标已经足够具体（已给出文件路径），完全跳过探测。`
+若目标已经足够具体（已给出文件路径），完全跳过探测。读取源码时优先使用 read_file(focus="本任务要回答的问题")；focused-read 输出是选定证据，不代表完整文件，缺口再用精确行范围补读。`
 
 // ─── Result shape templates ────────────────────────────────────────
 
