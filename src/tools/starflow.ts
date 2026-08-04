@@ -225,6 +225,21 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
       const blocked = run.state.phase !== 'done'
       return {
         content: run.report,
+        orchestration: {
+          kind: 'starflow',
+          runId: run.state.runId,
+          phase: run.state.phase,
+          done: !blocked,
+          resumed: run.resumed ?? Boolean(resume),
+          revision: run.state.revision,
+          phases: Object.fromEntries(
+            Object.entries(run.state.phases).map(([phase, record]) => [phase, {
+              status: record?.status,
+              at: record?.at,
+              ...(record?.elapsedMs === undefined ? {} : { elapsedMs: record.elapsedMs }),
+            }]),
+          ) as import('../agent/orchestration-outcome.js').StarflowOrchestrationOutcome['phases'],
+        },
         // blocked 是工具管线的失败信号（同 galaxy DP quorum 未达成的 isError 先例）。
         isError: blocked || undefined,
         uiContent: `${GLYPH} 星流 · ${blocked ? `受阻于 ${run.state.phase} 阶段` : '全阶段通过，待交付'}`,

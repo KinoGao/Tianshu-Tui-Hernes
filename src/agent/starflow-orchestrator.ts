@@ -18,7 +18,7 @@
 
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomicSync } from '../fs-atomic.js'
 import type { Tool, ToolCallParams, ToolResult } from '../tools/types.js'
@@ -44,6 +44,10 @@ export interface StarflowPhaseRecord {
 
 export interface StarflowState {
   objective: string
+  /** Stable logical run identity carried across a cross-session resume. */
+  runId: string
+  /** Monotonic checkpoint revision; used to make state inspection auditable. */
+  revision: number
   /** Session namespace used for new writes; resume can still discover older sessions. */
   sessionId?: string
   /** 下一个要执行的阶段；blocked 时停留在受阻阶段（resume 从该阶段重跑）。 */
@@ -126,6 +130,8 @@ export interface StarflowDeps {
 
 export interface StarflowRun {
   state: StarflowState
+  /** True when this invocation resumed a persisted run. */
+  resumed?: boolean
   /** 阶段报告（每阶段：状态/摘要/门禁判定；blocked 时给出停在哪、为什么、下一步）。 */
   report: string
 }
@@ -188,8 +194,95 @@ export function starflowStatePath(cwd: string, objective: string, sessionId?: st
   return join(starflowDir(cwd), `${hash}.json`)
 }
 
-function freshState(objective: string, now: number, sessionId?: string): StarflowState {
-  return { objective, ...(sessionId ? { sessionId } : {}), phase: 'council', phases: {}, teamRetries: 0, updatedAt: now }
+const STARFLOW_LEASE_TTL_MS = 60_000
+
+function starflowRunId(objective: string, sessionId?: string, toolUseId?: string): string {
+  return createHash('sha1')
+    .update('starflow-run\0')
+    .update(objective)
+    .update('\0')
+    .update(sessionId ?? '')
+    .update('\0')
+    .update(toolUseId ?? '')
+    .digest('hex')
+    .slice(0, 16)
+}
+
+function starflowLeasePath(cwd: string, objective: string): string {
+  const hash = createHash('sha1').update('starflow-lease\0').update(objective).digest('hex').slice(0, 16)
+  return join(starflowDir(cwd), `${hash}.lease`)
+}
+
+interface StarflowLease {
+  release: () => void
+}
+
+function leaseOwnerIsAlive(path: string, now: number): boolean {
+  try {
+    const ageMs = now - statSync(path).mtimeMs
+    if (ageMs > STARFLOW_LEASE_TTL_MS) return false
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as { pid?: number }
+    if (!Number.isInteger(raw.pid) || raw.pid! <= 0) return false
+    if (!isProcessAlive(raw.pid!)) return false
+    return true
+  } catch {
+    // A competing process can be between open(O_EXCL) and its small owner
+    // payload write. Treat a fresh, unreadable lease as occupied; only an old
+    // or missing file is eligible for stale cleanup.
+    try { return now - statSync(path).mtimeMs <= STARFLOW_LEASE_TTL_MS } catch { return false }
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Acquire one logical lease per objective, independent of session namespace. */
+function acquireStarflowLease(cwd: string, objective: string, runId: string): StarflowLease | undefined {
+  const path = starflowLeasePath(cwd, objective)
+  mkdirSync(starflowDir(cwd), { recursive: true })
+  const owner = JSON.stringify({ pid: process.pid, runId, acquiredAt: Date.now() })
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = openSync(path, 'wx')
+      try { writeFileSync(fd, owner, 'utf8') } finally { closeSync(fd) }
+      const refresh = setInterval(() => {
+        try { utimesSync(path, new Date(), new Date()) } catch { /* owner already released */ }
+      }, Math.floor(STARFLOW_LEASE_TTL_MS / 3))
+      refresh.unref?.()
+      return {
+        release: () => {
+          clearInterval(refresh)
+          try {
+            const current = JSON.parse(readFileSync(path, 'utf8')) as { runId?: string }
+            if (current.runId === runId) unlinkSync(path)
+          } catch { /* stale cleanup is best-effort */ }
+        },
+      }
+    } catch {
+      if (leaseOwnerIsAlive(path, Date.now())) return undefined
+      try { unlinkSync(path) } catch { /* another owner may have won the race */ }
+    }
+  }
+  return undefined
+}
+
+function freshState(objective: string, now: number, sessionId?: string, toolUseId?: string): StarflowState {
+  return {
+    objective,
+    runId: starflowRunId(objective, sessionId, toolUseId),
+    revision: 0,
+    ...(sessionId ? { sessionId } : {}),
+    phase: 'council',
+    phases: {},
+    teamRetries: 0,
+    updatedAt: now,
+  }
 }
 
 function readStateFile(path: string, objective: string): StarflowState | undefined {
@@ -197,7 +290,13 @@ function readStateFile(path: string, objective: string): StarflowState | undefin
     if (!existsSync(path)) return undefined
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as StarflowState
     if (parsed.objective !== objective || typeof parsed.phase !== 'string') return undefined
-    return parsed
+    return {
+      ...parsed,
+      runId: typeof parsed.runId === 'string' && parsed.runId.length > 0
+        ? parsed.runId
+        : starflowRunId(objective, parsed.sessionId),
+      revision: Number.isSafeInteger(parsed.revision) && parsed.revision! >= 0 ? parsed.revision! : 0,
+    }
   } catch {
     return undefined
   }
@@ -228,12 +327,20 @@ function loadState(cwd: string, objective: string, sessionId?: string): Starflow
 
 /** State writes use the shared temp+rename primitive so a killed session cannot
  * leave half a JSON document that silently resets a later resume. */
-function saveState(cwd: string, state: StarflowState): void {
+function saveState(cwd: string, state: StarflowState): boolean {
   try {
     mkdirSync(starflowDir(cwd), { recursive: true })
-    writeFileAtomicSync(starflowStatePath(cwd, state.objective, state.sessionId), JSON.stringify(state, null, 2))
+    const nextState: StarflowState = {
+      ...state,
+      revision: state.revision + 1,
+      updatedAt: Math.max(state.updatedAt, Date.now()),
+    }
+    writeFileAtomicSync(starflowStatePath(cwd, state.objective, state.sessionId), JSON.stringify(nextState, null, 2))
+    state.revision = nextState.revision
+    state.updatedAt = nextState.updatedAt
+    return true
   } catch {
-    // best-effort
+    return false
   }
 }
 
@@ -573,13 +680,29 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
   const loadedState = input.resume ? loadState(deps.cwd, input.objective, deps.params.sessionId) : undefined
   const state = loadedState
     ? { ...loadedState, ...(deps.params.sessionId ? { sessionId: deps.params.sessionId } : {}) }
-    : freshState(input.objective, now(), deps.params.sessionId)
+    : freshState(input.objective, now(), deps.params.sessionId, deps.params.toolUseId)
+  const lease = acquireStarflowLease(deps.cwd, input.objective, state.runId)
+  if (!lease) {
+    state.blockedReason = 'another Starflow run for this objective is still active; wait for its checkpoint or resume it later'
+    return { state, report: buildReport(state, false), resumed: Boolean(loadedState) }
+  }
+
+  try {
   // Promote a cross-session resume into the new session namespace immediately,
   // including when the loaded state is already `done` and no phase re-runs.
   if (loadedState && deps.params.sessionId && loadedState.sessionId !== deps.params.sessionId) {
     saveState(deps.cwd, state)
   }
   // 非 resume 的显式重跑：丢弃旧状态从头来（freshState 已覆盖）。
+  const result = await runStarflowUnlocked(deps, input, state)
+  return { ...result, resumed: Boolean(loadedState) }
+  } finally {
+    lease.release()
+  }
+}
+
+async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, state: StarflowState): Promise<StarflowRun> {
+  const now = () => Date.now()
   let teamRetried = false
   const phaseStartedAt = new Map<'council' | 'team' | 'galaxy' | 'deliver', number>()
   const phaseOutputs = new Map<'council' | 'team' | 'galaxy' | 'deliver', string[]>()

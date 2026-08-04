@@ -148,10 +148,38 @@ describe('STARFLOW_ORCHESTRATOR', () => {
     assert.ok(saved.phases.team.rawPath, 'phase output should have a durable fallback report')
     assert.match(readFileSync(saved.phases.team.rawPath, 'utf8'), /team standard/)
     assert.ok(saved.updatedAt > 0)
+    assert.equal(typeof saved.runId, 'string')
+    assert.ok(saved.revision > 0, 'checkpoint revision should be monotonic and persisted')
     // 报告：交付检查清单 + deliver_task 提示
     assert.match(run.report, /交付检查清单/)
     assert.match(run.report, /deliver_task/)
     assert.match(run.report, /阶段 1 council 评审：✅/)
+  })
+
+  it('同一目标的并发运行被逻辑 lease 隔离，避免两个会话互相覆盖 checkpoint', async () => {
+    const first = makeDeps({})
+    let releaseTeam!: () => void
+    let teamStarted!: () => void
+    const started = new Promise<void>(resolve => { teamStarted = resolve })
+    const hold = new Promise<void>(resolve => { releaseTeam = resolve })
+    first.deps.teamTool = fakeTool('team_orchestrate', async () => {
+      teamStarted()
+      await hold
+      return { content: teamPassContent() }
+    }, first.calls.team)
+
+    const firstPromise = runStarflow(first.deps, baseInput())
+    await started
+
+    const second = makeDeps({ cwd: first.cwd })
+    const secondRun = await runStarflow(second.deps, baseInput())
+    assert.equal(secondRun.state.phase, 'council')
+    assert.match(secondRun.state.blockedReason ?? '', /another Starflow run/i)
+    assert.equal(second.calls.council.length + second.calls.team.length + second.calls.galaxy.length, 0)
+
+    releaseTeam()
+    const firstRun = await firstPromise
+    assert.equal(firstRun.state.phase, 'done')
   })
 
   it('阶段异常会保存可恢复的原始检查点，而不是只返回一行错误', async () => {

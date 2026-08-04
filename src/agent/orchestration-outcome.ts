@@ -69,10 +69,31 @@ export interface GalaxyOrchestrationOutcome {
   dimensions: { total: number; passed: number; failed: string[] }
 }
 
+/**
+ * Structured Starflow lifecycle outcome.  The text report remains the
+ * human-facing fallback, but callers can now render a phase-aware status
+ * without scraping prose (the same separation Codex uses for activity and
+ * thread state).
+ */
+export interface StarflowOrchestrationOutcome {
+  kind: 'starflow'
+  runId: string
+  phase: 'council' | 'team' | 'galaxy' | 'deliver' | 'done'
+  done: boolean
+  resumed: boolean
+  revision: number
+  phases: Partial<Record<'council' | 'team' | 'galaxy' | 'deliver', {
+    status: 'passed' | 'blocked' | 'skipped'
+    at: number
+    elapsedMs?: number
+  }>>
+}
+
 export type OrchestrationOutcome =
   | TeamOrchestrationOutcome
   | CouncilOrchestrationOutcome
   | GalaxyOrchestrationOutcome
+  | StarflowOrchestrationOutcome
 
 export function buildTeamOutcome(
   summary: TeamOutcomeSummarySlice,
