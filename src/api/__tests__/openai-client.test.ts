@@ -828,3 +828,32 @@ describe('system suffix copy-on-write (2026-07-06 double-append regression)', ()
     assert.equal(client.consumeWireDivergence(), null)
   })
 })
+
+describe('wire message normalization', () => {
+  const NOOP_CALLBACKS = {
+    onTextDelta: () => {},
+    onThinkingDelta: () => {},
+    onContentBlock: () => {},
+    onStopReason: () => {},
+    onError: () => {},
+  }
+
+  it('omits empty assistant tool_calls before sending a resumed request', async () => {
+    const client = new OpenAIClient(TEST_CONFIG)
+    let body: any
+    ;(client as any).sendStream = async (next: any) => { body = next }
+    const request: any = {
+      model: 'gpt-4o',
+      stream: true,
+      messages: [
+        { role: 'user', content: 'continue' },
+        { role: 'assistant', content: 'already answered', tool_calls: [] },
+      ],
+    }
+
+    await client.stream(request, NOOP_CALLBACKS as any)
+
+    assert.deepStrictEqual(body.messages[1], { role: 'assistant', content: 'already answered' })
+    assert.deepStrictEqual(request.messages[1], { role: 'assistant', content: 'already answered', tool_calls: [] })
+  })
+})

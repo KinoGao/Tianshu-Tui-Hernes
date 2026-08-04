@@ -1,5 +1,6 @@
 import type { StreamClient, WireDivergence } from './stream-client.js'
 import type { StreamCallbacks } from './stream-client.js'
+import { normalizeOaiMessage } from './oai-types.js'
 import type { OaiChatRequest, OaiMessage } from './oai-types.js'
 import { estimateOaiTokens } from '../compact/micro.js'
 import type { ProviderProfile } from './provider-profile.js'
@@ -339,7 +340,7 @@ export class OpenAIClient implements StreamClient {
         (rest as Record<string, unknown>).content = ''
       }
       return rest
-    })
+    }).map(normalizeOaiMessage)
 
     const body: Record<string, unknown> = {
       // 空 model 回退到 client 绑定值——侧路调用（essence-gate / vision bridge）
