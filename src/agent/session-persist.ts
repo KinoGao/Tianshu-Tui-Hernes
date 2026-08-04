@@ -4,6 +4,7 @@ import { writeFileAtomicSync, writeFileAtomicAsync } from '../fs-atomic.js'
 import { isAbsolute, join, relative, resolve } from 'path'
 import { sessionsDir } from '../config/paths.js'
 import type { ContentBlock, Message } from '../api/types.js'
+import { normalizeOaiMessage, normalizeOaiMessages } from '../api/oai-types.js'
 import type { OaiAssistantMessage, OaiMessage, OaiToolCall, OaiToolMessage } from '../api/oai-types.js'
 import { stableStringify } from '../api/stable-json.js'
 import { parseFrozenSnapshotData, type FrozenSnapshotData } from '../prompt/frozen-snapshot.js'
@@ -59,7 +60,7 @@ import type { ContextClaim } from '../context/claims.js'
 import { assertValidSessionId } from '../validation.js'
 import { appendChecksum, verifyLines } from './checksum.js'
 
-/** Re-export for backward compatibility — tests still import projectSlug from here. */
+/** Re-export for backward compatibility ? tests still import projectSlug from here. */
 export { projectSlug } from '../config/paths.js'
 
 export function getSessionDir(cwd: string): string {
@@ -102,10 +103,11 @@ export function serializeSessionMessage(message: Message, maxChars = MAX_SESSION
 }
 
 export function serializeOaiSessionMessage(message: OaiMessage, maxChars = MAX_SESSION_MESSAGE_JSON_CHARS): string {
-  return serializeSessionJsonValue(message, maxChars, () => ({
-    role: message.role,
-    content: truncateString(JSON.stringify(message), maxChars),
-    ...(message.role === 'tool' ? { tool_call_id: message.tool_call_id } : {}),
+  const normalized = normalizeOaiMessage(message)
+  return serializeSessionJsonValue(normalized, maxChars, () => ({
+    role: normalized.role,
+    content: truncateString(JSON.stringify(normalized), maxChars),
+    ...(normalized.role === 'tool' ? { tool_call_id: normalized.tool_call_id } : {}),
   } as OaiMessage))
 }
 
@@ -188,14 +190,14 @@ export class SessionPersist {
   /**
    * Force appended data to disk so the abort drain waits for durable bytes,
    * not just a completed appendFile. Async on purpose: the sync variant
-   * (fdatasyncSync) blocked the event loop once per message append — ordering
+   * (fdatasyncSync) blocked the event loop once per message append ? ordering
    * is already guaranteed by the session-persist-listener writeChain awaiting
    * this method before the next append starts.
    *
    * Trade-off: writing to page cache (async) rather than fsyncing to disk
    * means a power loss / kernel crash within the ~30s dirty-page writeback
    * window may lose trailing lines (including just-written tool results).
-   * SIGKILL / OOM / process crash are safe — the OS eventually flushes
+   * SIGKILL / OOM / process crash are safe ? the OS eventually flushes
    * page-cache. On next start, loadOai's repairOrphanToolCalls strips any
    * orphan tool_use entries introduced by the gap. Acceptable: the window is
    * narrow, the failure mode is self-healing, and the event-loop benefit
@@ -217,7 +219,7 @@ export class SessionPersist {
    *
    * Written as a checksummed `type: 'model_switch'` line so it survives
    * checksum verification, but parseSessionLine skips it on replay (same
-   * pattern as compact_start/compact_end) — it's an audit breadcrumb, not
+   * pattern as compact_start/compact_end) ? it's an audit breadcrumb, not
    * part of the conversation history. Lets a session JSONL show exactly
    * when/what the model changed mid-session.
    */
@@ -251,30 +253,34 @@ export class SessionPersist {
         }
       } catch { /* skip malformed rows */ }
     }
-    // 压#7: Validate tool_call/tool_result pairing
-    const { messages: repaired, hadOrphans, strippedWriteTool } = this.repairOrphanToolCalls(messages)
+    // ?#7: Validate tool_call/tool_result pairing
+    // Normalize legacy/partial assistant rows before pairing repair. In
+    // particular, an empty `tool_calls` array must not be mistaken for an
+    // orphan batch (and must never reach the provider on resume).
+    const normalized = normalizeOaiMessages(messages)
+    const { messages: repaired, hadOrphans, strippedWriteTool } = this.repairOrphanToolCalls(normalized)
     if (hadOrphans) {
       // Orphan tool_use entries were stripped from history: the stream committed
       // a tool_calls block but no matching result durably landed. The interruption
       // can happen at two points, and we cannot tell which from the log alone:
-      //   (a) BEFORE the tool ran → any file it would touch is unchanged;
+      //   (a) BEFORE the tool ran ? any file it would touch is unchanged;
       //   (b) AFTER the tool ran (file already written) but before the result
-      //       line was flushed → the file DOES exist with the new content.
-      // The old wording asserted "files DO NOT EXIST — re-run", which is false in
-      // case (b) and pushes the model into a blind rewrite (→ blind-overwrite
-      // guard → stuck). For write/edit tools we must stay non-destructive: verify
+      //       line was flushed ? the file DOES exist with the new content.
+      // The old wording asserted "files DO NOT EXIST ? re-run", which is false in
+      // case (b) and pushes the model into a blind rewrite (? blind-overwrite
+      // guard ? stuck). For write/edit tools we must stay non-destructive: verify
       // first, never assume. Read/search tools are safe to just re-run.
       repaired.unshift({
         role: 'system',
         content: strippedWriteTool
           ? '<system-reminder>The previous session was interrupted mid-turn. '
             + 'A write/edit tool call from the last assistant message was stripped '
-            + 'because its result was not recorded — but the interruption may have '
+            + 'because its result was not recorded ? but the interruption may have '
             + 'happened either before OR after the file was actually written, so the '
             + 'file may or may not already contain the intended changes. Do NOT blindly '
             + 're-run the write. First verify the file\'s current state with read_file '
             + 'or grep, then only write what is still missing. This is host-process '
-            + 'interruption recovery, NOT a tool malfunction — the write tools remain '
+            + 'interruption recovery, NOT a tool malfunction ? the write tools remain '
             + 'fully functional; keep using them normally instead of bash workarounds.</system-reminder>'
           : '<system-reminder>The previous session was interrupted mid-turn. '
             + 'Some tool calls from the last assistant message were stripped because '
@@ -282,7 +288,7 @@ export class SessionPersist {
             + 'still need; verify state before assuming any side effects took hold.</system-reminder>',
       })
     }
-    return repaired
+    return repaired.map(normalizeOaiMessage)
   }
 
   /** Tools whose orphan recovery must be non-destructive: the file may already
@@ -291,12 +297,12 @@ export class SessionPersist {
     'write_file', 'edit_file', 'hash_edit', 'ast_edit', 'apply_patch',
   ])
 
-  /** 压#7: Remove orphan tool_use/tool_result pairs left by corrupted/missing lines.
+  /** ?#7: Remove orphan tool_use/tool_result pairs left by corrupted/missing lines.
    *
    * Orphan tool_use entries occur when the stream delivered a complete
    * tool_calls block but the process was killed before the tool executed
    * (force-kill, power loss, or stream error after tool_use commit). The tool
-   * was NEVER run — any files it would have created/modified do NOT exist.
+   * was NEVER run ? any files it would have created/modified do NOT exist.
    * Returns whether any orphans were stripped so the caller can warn the model
    * not to assume side effects from the removed tools, plus whether any stripped
    * orphan was a write/edit tool (so the warning can be non-destructive: the
@@ -354,7 +360,7 @@ export class SessionPersist {
    * Collect audit breadcrumb lines from the current file, re-checksummed for a
    * full rewrite. Rewrites (compact / compactOai / compactOaiAsync) regenerate
    * the file from in-memory messages only, and audit lines never enter memory
-   * (parseSessionLine skips them on replay) — without this, the first rewrite
+   * (parseSessionLine skips them on replay) ? without this, the first rewrite
    * after appendModelSwitch silently destroys the audit trail.
    */
   private collectAuditLines(): string[] {
@@ -391,7 +397,7 @@ export class SessionPersist {
     writeFileAtomicSync(this.filePath, content)
   }
 
-  /** Async atomic compaction — avoids blocking the agent loop on full rewrites (S13). */
+  /** Async atomic compaction ? avoids blocking the agent loop on full rewrites (S13). */
   async compactOaiAsync(messages: OaiMessage[]): Promise<void> {
     const audit = this.collectAuditLines()
     const content = [...audit, ...messages.map(m => appendChecksum(serializeOaiSessionMessage(m)))].join('\n') + '\n'
@@ -404,7 +410,7 @@ export class SessionPersist {
   }
 
   /**
-   * 带校验和的 append
+   * ????? append
    */
   async appendWithChecksum(message: Message): Promise<void> {
     const json = serializeSessionMessage(message)
@@ -414,7 +420,7 @@ export class SessionPersist {
   }
 
   /**
-   * 带校验和的 load（向后兼容）
+   * ????? load??????
    */
   loadWithChecksum(): Message[] {
     if (!existsSync(this.filePath)) return []
@@ -423,9 +429,9 @@ export class SessionPersist {
     
     const { validLines, invalidCount } = verifyLines(lines)
     
-    // 记录校验失败（可选：写入日志或返回统计）
+    // ????????????????????
     if (invalidCount > 0) {
-      // 可以在这里添加日志记录
+      // ???????????
     }
 
     return validLines.map(line => {
@@ -438,16 +444,16 @@ export class SessionPersist {
   }
 
   /**
-   * 写入 compact 开始标记
+   * ?? compact ????
    */
 
   /**
-   * 写入 compact 结束标记
+   * ?? compact ????
    */
 
   /**
-   * 检测 incomplete compact
-   * @returns 是否检测到 incomplete compact
+   * ?? incomplete compact
+   * @returns ????? incomplete compact
    */
 
 
@@ -470,7 +476,7 @@ export class SessionPersist {
       compactEvents: existing?.compactEvents ?? [],
       ...existing,
       ...patch,
-      // These must win over ...existing/...patch — place them last:
+      // These must win over ...existing/...patch ? place them last:
       // - sessionId is authoritative from `this`
       // - createdAt is set once at creation and preserved thereafter
       // - updatedAt always advances to now (the whole point of the field;
@@ -512,16 +518,16 @@ export class SessionPersist {
   }
 
   /**
-   * 冻结前缀快照落盘（`<id>.frozen.json`）——resume 缓存继承的写侧。
-   * 由 PromptEngine 的 onFrozenSnapshotCommit 钩子在每个 user 边界触发（低频）。
+   * ?????????`<id>.frozen.json`???resume ????????
+   * ? PromptEngine ? onFrozenSnapshotCommit ????? user ?????????
    */
   writeFrozenSnapshot(data: FrozenSnapshotData): void {
     writeFileAtomicSync(this.frozenPath, JSON.stringify(data))
   }
 
   /**
-   * 读回冻结前缀快照（resume 缓存继承的读侧）。
-   * 不存在 / 坏 JSON / 形状校验失败一律 undefined——调用方降级为全量重建。
+   * ?????????resume ?????????
+   * ??? / ? JSON / ???????? undefined?????????????
    */
   readFrozenSnapshot(): FrozenSnapshotData | undefined {
     if (!existsSync(this.frozenPath)) return undefined
@@ -575,7 +581,7 @@ export class SessionPersist {
   }
 
   /** Inject durable claims from previous session into a claim store with confidence decay.
-   *  A4: cross-session pollution gate — only inject claims that intersect with current
+   *  A4: cross-session pollution gate ? only inject claims that intersect with current
    *  project files AND were created within 7 days. */
   injectDurableClaims(store: ContextClaimStore, cwd?: string): void {
     const now = Date.now()
@@ -592,7 +598,7 @@ export class SessionPersist {
         if (fileEvidence.length > 0) {
           const hasRelevantFile = fileEvidence.some(e => {
             const abs = resolve(cwd, e.path!)
-            // P3: exact prefix boundary — /Users/a/proj must not match /Users/a/proj-backup.
+            // P3: exact prefix boundary ? /Users/a/proj must not match /Users/a/proj-backup.
             // Use path.relative (cross-platform; handles Windows separators/drive) instead
             // of string prefix: inside iff rel is '' or a non-'..', non-absolute subpath.
             const rel = relative(cwd, abs)
@@ -620,7 +626,7 @@ export class SessionPersist {
     writeFileAtomicSync(this.getHandoffPath(), text)
   }
 
-  /** 会话归档交接文档路径（`<id>.handoff.md`）——loadPrevHandoff 注入管线认的位置。 */
+  /** ???????????`<id>.handoff.md`???loadPrevHandoff ????????? */
   getHandoffPath(): string {
     return join(getSessionDir(this.cwd), `${this.sessionId}.handoff.md`)
   }
@@ -669,7 +675,7 @@ export class SessionPersist {
   }
 
   /**
-   * Cache for listSessionsWithMetadata — avoids re-reading hundreds of session
+   * Cache for listSessionsWithMetadata ? avoids re-reading hundreds of session
    * meta files on every user boundary when cross-session handoff is requested.
    * TTL: 60s. Invalidated on write (saveMetadata / saveHandoff).
    * Keyed by cwd since sessions are per-project.
@@ -750,24 +756,24 @@ export class SessionPersist {
    */
   static formatSessionList(cwd: string, currentId?: string): string {
     const sessions = SessionPersist.listMainSessions(cwd)
-    if (sessions.length === 0) return '没有历史会话。'
+    if (sessions.length === 0) return '???????'
     return sessions.map((s, i) => {
-      const marker = s.id === currentId ? '  ← 当前' : ''
+      const marker = s.id === currentId ? '  ? ??' : ''
       const when = formatRelativeTime(s.updatedAt ?? 0)
       const turns = s.turnCount ?? 0
       const model = s.model ?? '?'
       const domain = s.domain ? ` ${s.domain}` : ''
       const title = (s.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 50)
-      return `${String(i + 1).padStart(2)}. ${s.id.slice(0, 8)}  ${when}  ${turns}轮  ${model}${domain}  ${title}${marker}`
+      return `${String(i + 1).padStart(2)}. ${s.id.slice(0, 8)}  ${when}  ${turns}?  ${model}${domain}  ${title}${marker}`
     }).join('\n')
   }
 }
 
 /**
- * Exit summary printed after TUI teardown — tells the user which session was
+ * Exit summary printed after TUI teardown ? tells the user which session was
  * saved and how to reconnect (Claude Code parity: the id must survive on the
  * scrollback, otherwise resume is undiscoverable). Returns null for sessions
- * with no completed turns — nothing worth resuming, keep the exit quiet.
+ * with no completed turns ? nothing worth resuming, keep the exit quiet.
  */
 export function formatExitSummary(
   meta: Pick<SessionMetadata, 'title' | 'turnCount'> | null | undefined,
@@ -777,39 +783,39 @@ export function formatExitSummary(
   if (turns <= 0) return null
   const short = sessionId.slice(0, 8)
   const title = (meta?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
-  const head = `会话已保存: ${short} · ${turns}轮${title ? ` · “${title}”` : ''}`
-  // 告别行在前、事实在后：退出时刻也是品牌触点（✦ = 天枢启明星）。
-  // 缓存成本备注：回连不是免费的——TTL 内继承冻结锚点 ≈ 只读缓存价，
-  // 过期则整段历史全量重建一次前缀（长会话数元级），随手 --continue 前看一眼。
-  return `✦ 后会有期 — 星轨已存档\n${head}\n恢复: rivet --continue（最近会话）或 rivet --resume ${short}\n缓存成本：尽快回连 ≈ 继承冻结锚点（只读缓存价）；间隔过久缓存过期 → 全量重建一次前缀（长会话数元级）。`
+  const head = `?????: ${short} ? ${turns}?${title ? ` ? ?${title}?` : ''}`
+  // ??????????????????????? = ???????
+  // ????????????????TTL ??????? ? ??????
+  // ?????????????????????????? --continue ?????
+  return `? ???? ? ?????\n${head}\n??: rivet --continue??????? rivet --resume ${short}\n????????? ? ?????????????????????? ? ?????????????????`
 }
 
 /**
- * shutdown 自动交接（buildSessionHandoff 结构化摘要）是否该写：
- * 会话内 /handoff（或人工编辑）已产出更新的交接文档时（mtime 晚于 agent 创建时间）
- * 不覆盖——自动摘要只是「会话内没做手动交接」的兜底。
+ * shutdown ?????buildSessionHandoff ???????????
+ * ??? /handoff???????????????????mtime ?? agent ?????
+ * ??????????????????????????
  */
 export function shouldAutoWriteHandoff(existingMtimeMs: number | null, sessionStartMs: number): boolean {
   if (existingMtimeMs === null) return true
   return existingMtimeMs <= sessionStartMs
 }
 
-/** Compact relative time for session lists, e.g. "刚刚" / "5分钟前" / "3天前". */
+/** Compact relative time for session lists, e.g. "??" / "5???" / "3??". */
 function formatRelativeTime(ts: number): string {
-  if (!ts) return '未知'
+  if (!ts) return '??'
   const diff = Date.now() - ts
-  if (diff < 0) return '刚刚'
+  if (diff < 0) return '??'
   const sec = Math.floor(diff / 1000)
-  if (sec < 60) return '刚刚'
+  if (sec < 60) return '??'
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}分钟前`
+  if (min < 60) return `${min}???`
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}小时前`
+  if (hr < 24) return `${hr}???`
   const day = Math.floor(hr / 24)
-  if (day < 30) return `${day}天前`
+  if (day < 30) return `${day}??`
   const mon = Math.floor(day / 30)
-  if (mon < 12) return `${mon}个月前`
-  return `${Math.floor(mon / 12)}年前`
+  if (mon < 12) return `${mon}???`
+  return `${Math.floor(mon / 12)}??`
 }
 
 const MAX_SESSIONS = 50
@@ -825,13 +831,13 @@ export function evictOldSessionsInternal(dir: string, keepSessionId: string, lim
     sessions = readdirSync(dir)
       .filter((f: string) => f.endsWith('.jsonl'))
       .map((f: string) => f.replace('.jsonl', ''))
-      // 只有主会话占 MAX_SESSIONS 额度（与 listMainSessions 同语义）。曾经全量计数：
-      // - worker-*.jsonl 每次派发新文件（nonce 不复用），team/galaxy 重度使用即洪水
-      //   （实测 46/65 个坑被 worker 占掉），把更老的主会话挤出额度——桌面端会话的
-      //   模型上下文被静默驱逐，重开后 UI 有历史、模型失忆、上下文 0%。
-      //   worker 文件生命周期归 cleanupStaleWorkerSessionDirs（独立阈值）。
-      // - 带点的 id（<id>.claims 等）是主会话附属文件，不是会话；被误计还会被
-      //   当作"最老会话"驱逐，损坏在用主会话的 claims。
+      // ?????? MAX_SESSIONS ???? listMainSessions ????????????
+      // - worker-*.jsonl ????????nonce ?????team/galaxy ???????
+      //   ??? 46/65 ??? worker ???????????????????????
+      //   ?????????????? UI ???????????? 0%?
+      //   worker ??????? cleanupStaleWorkerSessionDirs???????
+      // - ??? id?<id>.claims ??????????????????????
+      //   ??"????"??????????? claims?
       .filter((id: string) => !id.startsWith('worker-') && !id.includes('.'))
   } catch {
     return []
@@ -840,7 +846,7 @@ export function evictOldSessionsInternal(dir: string, keepSessionId: string, lim
   if (sessions.length <= limit) return []
 
   // Sort by mtime (oldest first) so eviction removes least-recently-used sessions.
-  // UUIDs are not time-ordered — lexicographic sort would delete arbitrary sessions.
+  // UUIDs are not time-ordered ? lexicographic sort would delete arbitrary sessions.
   const withMtime = sessions.map(id => {
     let mtime = 0
     try { mtime = statSync(join(dir, `${id}.jsonl`)).mtimeMs } catch { /* ignore */ }

@@ -1,4 +1,5 @@
 import type { Message, ContentBlock } from '../api/types.js'
+import { normalizeOaiMessages } from '../api/oai-types.js'
 import type { OaiMessage, OaiToolMessage } from '../api/oai-types.js'
 import { groupIntoRounds, computeInvariantStatus, groupIntoRoundsOai } from './rounds.js'
 import type { ResumePreflightReport } from './types.js'
@@ -9,7 +10,7 @@ import {
   type WriteProbe,
 } from './write-evidence-probe.js'
 
-// ─── orphan diagnostic: RIVET_DEBUG_ORPHAN=1 dumps adjacency-violation details ───
+// ??? orphan diagnostic: RIVET_DEBUG_ORPHAN=1 dumps adjacency-violation details ???
 const DEBUG_ORPHAN = process.env.RIVET_DEBUG_ORPHAN === '1'
 
 function syntheticResultContent(
@@ -26,7 +27,7 @@ function syntheticResultContent(
 }
 
 /** Count synthetic recovery results already present in history (any format).
- *  Repeated occurrences mean the host environment keeps interrupting — the
+ *  Repeated occurrences mean the host environment keeps interrupting ? the
  *  synthesized message escalates so the model reports it instead of concluding
  *  the write tools are broken. */
 function countPriorRecoveries(contents: Iterable<string>): number {
@@ -65,7 +66,7 @@ export function runResumePreflight(
   const repaired = [...messages]
   let inserted = 0
 
-  // Prior synthetic recoveries anywhere in history — drives repeat escalation.
+  // Prior synthetic recoveries anywhere in history ? drives repeat escalation.
   let priorRecoveries = countPriorRecoveries(function* () {
     for (const m of messages) {
       if (typeof m.content === 'string') continue
@@ -127,7 +128,7 @@ export function runResumePreflight(
   }
 }
 
-// ─── OAI-format resume preflight ───
+// ??? OAI-format resume preflight ???
 
 export interface OaiResumePreflightReport {
   messageCount: number
@@ -202,7 +203,7 @@ function isToolAdjacencyCleanOai(messages: OaiMessage[]): boolean {
       if (DEBUG_ORPHAN) {
         const tid = (m as OaiToolMessage).tool_call_id
         // eslint-disable-next-line no-console
-        console.error(`[RIVET_DEBUG_ORPHAN] adjacency fail: stray tool at L${i} id=${tid} — no preceding assistant(tool_calls)`)
+        console.error(`[RIVET_DEBUG_ORPHAN] adjacency fail: stray tool at L${i} id=${tid} ? no preceding assistant(tool_calls)`)
       }
       return false
     }
@@ -217,7 +218,7 @@ function isToolAdjacencyCleanOai(messages: OaiMessage[]): boolean {
         if (DEBUG_ORPHAN) {
           const reason = !ids.includes(id) ? `foreign id=${id} not in [${ids.join(',')}]` : `duplicate id=${id}`
           // eslint-disable-next-line no-console
-          console.error(`[RIVET_DEBUG_ORPHAN] adjacency fail: assistant(tool_calls) at L${i} → tool at L${j} ${reason}`)
+          console.error(`[RIVET_DEBUG_ORPHAN] adjacency fail: assistant(tool_calls) at L${i} ? tool at L${j} ${reason}`)
         }
         return false
       }
@@ -244,28 +245,32 @@ function isToolAdjacencyCleanOai(messages: OaiMessage[]): boolean {
  * order, pulling the matching `tool` message from anywhere in the history (so a
  * late/out-of-order result is MOVED back into position) and synthesizing a
  * placeholder only when no result exists at all. Any leftover `tool` message
- * (a duplicate or truly orphaned result) is dropped. No-op — same array
- * reference, prefix cache untouched — when adjacency already holds.
+ * (a duplicate or truly orphaned result) is dropped. No-op ? same array
+ * reference, prefix cache untouched ? when adjacency already holds.
  */
 export function runResumePreflightOai(
   messages: OaiMessage[],
   options?: OaiResumePreflightOptions,
 ): OaiResumePreflightReport {
-  if (isToolAdjacencyCleanOai(messages)) {
+  // Normalize before the adjacency fast path. A resumed session containing
+  // `{ tool_calls: [] }` is otherwise returned unchanged and sent directly to
+  // the provider, which rejects the empty array before generation starts.
+  const normalized = normalizeOaiMessages(messages)
+  if (isToolAdjacencyCleanOai(normalized)) {
     return {
-      messageCount: messages.length,
-      roundCount: groupIntoRoundsOai(messages).length,
-      repaired: false,
+      messageCount: normalized.length,
+      roundCount: groupIntoRoundsOai(normalized).length,
+      repaired: normalized !== messages,
       syntheticResultsInserted: 0,
       safe: true,
-      messages,
+      messages: normalized,
     }
   }
 
   // Index every tool message by id as a FIFO queue so identical-id results
   // (rare, pollution) are consumed deterministically front-to-back.
   const toolMsgsById = new Map<string, OaiToolMessage[]>()
-  for (const m of messages) {
+  for (const m of normalized) {
     if (m.role === 'tool') {
       const q = toolMsgsById.get(m.tool_call_id) ?? []
       q.push(m)
@@ -276,14 +281,14 @@ export function runResumePreflightOai(
   const repaired: OaiMessage[] = []
   let inserted = 0
 
-  // Prior synthetic recoveries anywhere in history — drives repeat escalation.
+  // Prior synthetic recoveries anywhere in history ? drives repeat escalation.
   let priorRecoveries = countPriorRecoveries(function* () {
     for (const m of messages) {
       if (m.role === 'tool' && typeof m.content === 'string') yield m.content
     }
   }())
 
-  for (const m of messages) {
+  for (const m of normalized) {
     if (m.role === 'tool') continue // re-emitted in-position below; leftovers are dropped
     repaired.push(m)
     if (m.role !== 'assistant' || !('tool_calls' in m) || !m.tool_calls || m.tool_calls.length === 0) continue
@@ -305,7 +310,7 @@ export function runResumePreflightOai(
         inserted++
         if (DEBUG_ORPHAN) {
           // eslint-disable-next-line no-console
-          console.error(`[RIVET_DEBUG_ORPHAN] synthetic result for tool_call id=${tc.id} name=${toolName ?? '?'} — NO matching tool result found anywhere in ${messages.length} messages`)
+          console.error(`[RIVET_DEBUG_ORPHAN] synthetic result for tool_call id=${tc.id} name=${toolName ?? '?'} ? NO matching tool result found anywhere in ${messages.length} messages`)
         }
       }
     }

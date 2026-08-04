@@ -1,10 +1,10 @@
 /**
- * `rivet serve` — HTTP+SSE Runtime API entry, extracted from the legacy Ink
+ * `rivet serve` ? HTTP+SSE Runtime API entry, extracted from the legacy Ink
  * entry so it ships from the release build (`dist/main.js`). Used directly as a
- * localhost sidecar by 天枢桌面版 (desktop/).
+ * localhost sidecar by ????? (desktop/).
  *
  * Guardrails: binds 127.0.0.1 only; Bearer token fail-closed; reuses the
- * existing AgentLoop / ArtifactStore — no runtime rewrite, only an API surface.
+ * existing AgentLoop / ArtifactStore ? no runtime rewrite, only an API surface.
  */
 import { randomUUID } from 'node:crypto'
 import { join, dirname } from 'node:path'
@@ -67,7 +67,7 @@ export function loadServeAgent(): Promise<ServeAgentModule> {
       }
       return m
     }).catch((err) => {
-      // Don't cache a rejected promise — transient build/load failures would
+      // Don't cache a rejected promise ? transient build/load failures would
       // permanently break session creation otherwise.
       serveAgentPromise = null
       throw err
@@ -93,7 +93,7 @@ export interface ServeContext {
 
 /**
  * Resolve provider/model/auth/apiKey once at server start. On first launch
- * the user may have no API key configured yet — instead of crashing (which
+ * the user may have no API key configured yet ? instead of crashing (which
  * blocks the desktop settings UI from ever being reached), we return a
  * degraded context with apiKey='' and configured=false. The server starts,
  * /config routes accept setup requests, and session creation re-resolves
@@ -122,16 +122,16 @@ export function resolveServeContext(loader: () => Config = loadConfig): ServeCon
     try {
       apiKey = resolveApiKey(provider)
     } catch {
-      // First launch / no env var set — degrade gracefully so the server
+      // First launch / no env var set ? degrade gracefully so the server
       // stays alive and /config routes can receive the key setup.
       // NOTE (crash-restart resilience): a respawned sidecar re-reads config
       // from disk, so an INLINE `apiKey` survives a restart, but an `apiKeyEnv`
       // key only survives if the shell re-injects that env var into the new
       // process. When it doesn't, we land here with configured=false and every
-      // session run would 401 — isModelSpecUsable()/unconfiguredSpecMessage()
+      // session run would 401 ? isModelSpecUsable()/unconfiguredSpecMessage()
       // turn that into a legible error instead of an opaque upstream 401.
       configured = false
-      console.error(`[serve] No API key configured for provider "${provider.name}". Server started in setup mode — configure via desktop Settings or 'rivet config setup'.`)
+      console.error(`[serve] No API key configured for provider "${provider.name}". Server started in setup mode ? configure via desktop Settings or 'rivet config setup'.`)
     }
   }
 
@@ -179,7 +179,7 @@ export function resolveModelSpec(ctx: ServeContext, modelId: string): ResolvedMo
         process.env[prov.apiKeyEnv ?? ''] ??
         (() => { try { return resolveApiKey(prov) } catch { return undefined } })()
       if (!provKey) return null
-      // Always adopt the freshly-resolved key — also for the snapshot's own
+      // Always adopt the freshly-resolved key ? also for the snapshot's own
       // provider. Keeping `ctx.apiKey` there returned an EMPTY key whenever the
       // server started unconfigured and the key arrived later (env/config),
       // making the resolved spec unusable even though provKey was right here.
@@ -207,7 +207,7 @@ export function resolveModelSpec(ctx: ServeContext, modelId: string): ResolvedMo
  * Resolve a model id against the startup `ctx`, falling back to a fresh on-disk
  * read when the snapshot can't resolve it. On first install the server starts in
  * setup mode (configured=false, no API key) and the user configures the key via
- * /config afterwards — the startup snapshot then can't find a key for the target
+ * /config afterwards ? the startup snapshot then can't find a key for the target
  * model, which would make switchModel 409 until restart. Re-reading config on the
  * miss path (mirrors resolveInitialSpec) also covers providers added/edited via
  * Settings after startup. Cheap: the fresh read only happens on the rare miss.
@@ -240,10 +240,10 @@ export function listAllModels(ctx: ServeContext): { id: string; alias: string; p
 /**
  * Enumerate selectable models for the picker, preferring a fresh on-disk read
  * so providers added/edited via Settings *after* startup show up without a
- * restart — the companion to resolveModelSpecWithReload (which makes the actual
+ * restart ? the companion to resolveModelSpecWithReload (which makes the actual
  * switch resolve the freshly-configured key). The startup snapshot is only a
  * fallback for the degraded case where the fresh read throws (e.g. a missing
- * default provider mid-edit). Called on picker open — low frequency, so the
+ * default provider mid-edit). Called on picker open ? low frequency, so the
  * extra config read is negligible.
  */
 export function listAllModelsWithReload(
@@ -267,7 +267,7 @@ export function listAllModelsWithReload(
  * this call, a user continuing a prior session after restart sees full UI
  * history (from the event log) but the model receives an empty context.
  *
- * For brand-new sessions the file doesn't exist yet → loadOai() returns [] →
+ * For brand-new sessions the file doesn't exist yet ? loadOai() returns [] ?
  * no-op. Called once per session in buildSessionStores, before the mutation
  * listener is wired (so replaceMessages doesn't trigger a redundant disk write).
  */
@@ -302,14 +302,14 @@ export function isModelSpecUsable(spec: ResolvedModelSpec): boolean {
   return spec.apiKey !== '' || !!spec.auth
 }
 
-/** Actionable message when a session is asked to run without a usable key —
+/** Actionable message when a session is asked to run without a usable key ?
  *  shown instead of letting the request hit the provider and 401. */
 export function unconfiguredSpecMessage(spec: ResolvedModelSpec): string {
   const provider = spec.provider.name
   const envHint = spec.provider.apiKeyEnv
     ? ` The provider is configured to read its key from the \`${spec.provider.apiKeyEnv}\` environment variable, which is not set in this process (a common cause after a sidecar restart). Set it and relaunch, or store the key inline via Settings.`
     : ' Configure it in Settings (or run `rivet config setup`).'
-  return `No usable API key for provider "${provider}" — the request was not sent.${envHint}`
+  return `No usable API key for provider "${provider}" ? the request was not sent.${envHint}`
 }
 
 
@@ -318,23 +318,23 @@ export function buildDelegateSummary(
   run: import('../agent/coordinator.js').CoordinatorRun,
 ): string {
   const result = run.results[0]
-  const statusLabel = result?.status === 'passed' ? '完成'
-    : result?.status === 'blocked' ? '受阻'
-    : result?.status === 'escalated' ? '已升级'
-    : result?.status === 'failed' ? '失败'
-    : run.status === 'skipped' ? '已跳过' : '完成'
+  const statusLabel = result?.status === 'passed' ? '??'
+    : result?.status === 'blocked' ? '??'
+    : result?.status === 'escalated' ? '???'
+    : result?.status === 'failed' ? '??'
+    : run.status === 'skipped' ? '???' : '??'
   const lines: string[] = []
-  lines.push(`子代理任务「${input.objective}」${statusLabel}。`)
+  lines.push(`??????${input.objective}?${statusLabel}?`)
   const changed = result?.changedFiles ?? []
   if (changed.length > 0) {
-    lines.push('', '变更文件：')
+    lines.push('', '?????')
     for (const f of changed.slice(0, 20)) lines.push(`- ${f}`)
-    if (changed.length > 20) lines.push(`- …其余 ${changed.length - 20} 个`)
+    if (changed.length > 20) lines.push(`- ??? ${changed.length - 20} ?`)
   }
   if (result?.summary) {
-    lines.push('', '子代理总结：', result.summary.slice(0, 1200))
+    lines.push('', '??????', result.summary.slice(0, 1200))
   }
-  lines.push('', '请审查以上结果，确认无误后继续。')
+  lines.push('', '????????????????')
   return lines.join('\n')
 }
 
@@ -349,7 +349,7 @@ export interface RunServeOptions {
   /** Disable persistence (tests / ephemeral). */
   ephemeral?: boolean
   /**
-   * R1 — shared cross-session registry (file claims / OwnershipGuard / conflict
+   * R1 ? shared cross-session registry (file claims / OwnershipGuard / conflict
    * blocking). Tests inject a pre-built one; production creates it async at boot.
    * When absent, concurrency features stay dormant and behavior is unchanged.
    */
@@ -382,14 +382,14 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
   const ctx = opts.context ?? resolveServeContext()
   // Hot credential pickup: sessions created after a Settings edit must resolve
   // the CURRENT on-disk key, not the startup snapshot's. Only wired when the
-  // context came from disk — an injected context (tests) stays deterministic.
+  // context came from disk ? an injected context (tests) stays deterministic.
   const specReload = opts.context ? undefined : resolveServeContext
   const startedAt = Date.now()
 
-  // R1 — one shared SessionRegistry for the whole sidecar. Created async (the
+  // R1 ? one shared SessionRegistry for the whole sidecar. Created async (the
   // SQLite backend dynamic-imports better-sqlite3); sessions are created
   // seconds later by user interaction, by which time it's resolved. Tests pass a
-  // pre-built registry. Ephemeral mode (tests) skips it → behavior unchanged.
+  // pre-built registry. Ephemeral mode (tests) skips it ? behavior unchanged.
   let sessionRegistry: SessionRegistry | undefined = opts.sessionRegistry
   if (!sessionRegistry && !opts.ephemeral) {
     const registryDir = desktopDir()
@@ -410,12 +410,12 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
         opts.sessionDir ?? desktopSessionsDir(),
       )
 
-  // Wave J: sidecar 级 SharedRuntime——providerHealth 跨 session 共享让
-  // health 统计累积；domainStores 按 cwd 缓存避免重复磁盘 load + 跨 session
-  // lessons 可见。runServe 进程级单例，传给每个 buildManagedAgent。
-  // Wave F: sameCwdRunningCount 是 late-bound——sessions 创建后才能引用，
-  // 先置 null，sessions 就绪后回写。getSameCwdRunningSessions getter 对
-  // sessions 未就绪的窗口期会回退 0（安全）。
+  // Wave J: sidecar ? SharedRuntime??providerHealth ? session ???
+  // health ?????domainStores ? cwd ???????? load + ? session
+  // lessons ???runServe ?????????? buildManagedAgent?
+  // Wave F: sameCwdRunningCount ? late-bound??sessions ????????
+  // ?? null?sessions ??????getSameCwdRunningSessions getter ?
+  // sessions ?????????? 0?????
   const sharedRuntime: SharedRuntime = {
     providerHealth: new ProviderHealthTracker(),
     domainStores: new Map(),
@@ -426,7 +426,7 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     sessions: null,
   }
 
-  // Initialize MCP manager asynchronously — dynamic import keeps the MCP SDK
+  // Initialize MCP manager asynchronously ? dynamic import keeps the MCP SDK
   // out of the cold /health import graph. Fire-and-forget so listen isn't blocked.
   // Use live loadConfig().mcp (not the startup ctx snapshot) so servers added
   // while this IIFE is still loading are not lost; reconcileFromConfig after
@@ -439,11 +439,11 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
       await mgr.initialize()
       // Assign mgr FIRST so POST /mcp/servers can route to connectAndDiscover
       // immediately. Otherwise a POST between reconcile arg-eval and assignment
-      // sees mgr===null → persist-only → never auto-connects.
+      // sees mgr===null ? persist-only ? never auto-connects.
       sharedRuntime.mcpManager = mgr
       // Reconcile: pick up any servers persisted while this IIFE was loading
       // (POST before mgr was assigned). Since mgr is now live, future POSTs
-      // will call connectAndDiscover directly — no second reconcile needed.
+      // will call connectAndDiscover directly ? no second reconcile needed.
       const reconciled = await mgr.reconcileFromConfig(loadConfig().mcp)
       if (reconciled.length > 0) {
         sharedRuntime.sessions?.injectMcpTools(reconciled)
@@ -461,11 +461,11 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
   // adapted to the manager's ManagedAgent surface (run/abort + artifacts). The
   // manager's session id is threaded into buildAgentLoop so the agent's stores
   // align with the session. Agent assembly is dynamically imported (Wave C) so
-  // ... (goal handles resolver captured on first load — see createAgent below).
+  // ... (goal handles resolver captured on first load ? see createAgent below).
   let goalHandlesResolve: typeof import('./serve-agent.js').resolveGoalHandles | null = null
   let reviewGateResolve: typeof import('./serve-agent.js').resolveReviewGateRef | null = null
-  // P1 任务身份化 — Mission 存储：session-manager（创建/隐式关联）与
-  // /missions 路由共享同一实例（内存 cache 一致）。
+  // P1 ????? ? Mission ???session-manager???/??????
+  // /missions ??????????? cache ????
   const missionStore = new MissionStore()
   // cold /health does not pay for tools/Meridian/council.
   const sessions = new RuntimeSessionManager({
@@ -492,9 +492,9 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     },
     defaultCwd: process.cwd(),
     persistence,
-    // R1 — late-bound getter: registry resolves async after server start.
+    // R1 ? late-bound getter: registry resolves async after server start.
     getSessionRegistry: () => sessionRegistry,
-    // Goal mode — late-bound per-session goal handles (refs + sessionDir +
+    // Goal mode ? late-bound per-session goal handles (refs + sessionDir +
     // cheap-client profile). Delegates to serve-agent's stores registry.
     // The resolver reference is captured on the first createAgent call (when
     // serve-agent is dynamically imported); before that, returns undefined
@@ -504,19 +504,19 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
       const liveCtx = specReload ? specReload() : ctx
       return goalHandlesResolve(sessionId, liveCtx.config)
     },
-    // 审查门会话开关 — 与 goal handles 同模式（refs 迟绑定）。
+    // ??????? ? ? goal handles ????refs ?????
     resolveReviewGateRef: (sessionId) => reviewGateResolve?.(sessionId),
     defaultReviewGate: ctx.config.agent.review.skipAuto ? 'off' : 'auto',
-    // PlusMenu — provider model source + default for the model picker.
+    // PlusMenu ? provider model source + default for the model picker.
     // Reload-aware: picks up providers configured after startup (no restart).
     listModels: () => listAllModelsWithReload(ctx),
     defaultModelId: ctx.model.id,
     defaultDomain: ctx.config.agent?.defaultDomain,
-    // 一键续跑兜底模型（可选，用户显式配置）。未配置时原模型不可用的续跑
-    // fail-closed —— 绝不静默回退默认模型（跨模型续跑会重建整条前缀缓存）。
+    // ?????????????????????????????????
+    // fail-closed ?? ???????????????????????????
     resumeFallbackModel: ctx.config.agent?.resumeFallbackModel,
-    // Goal 计划倒计时自动批准窗口（ms）。默认 150s（manager 内建）；
-    // RIVET_GOAL_PLAN_AUTO_APPROVE_MS 覆盖，0 = 关闭（纯手动审批）。
+    // Goal ????????????ms???? 150s?manager ????
+    // RIVET_GOAL_PLAN_AUTO_APPROVE_MS ???0 = ??????????
     goalPlanAutoApproveMs: (() => {
       const raw = process.env.RIVET_GOAL_PLAN_AUTO_APPROVE_MS
       if (raw == null || raw.trim() === '') return undefined
@@ -526,19 +526,19 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     missionStore,
   })
 
-  // Wave F: sessions 现已就绪——把真实 sameCwdRunningCount 回写到 SharedRuntime。
-  // 之后任何 buildManagedAgent → buildSessionStores 创建的 refs.getSameCwdRunningSessions
-  // 都会读到这条真实值；verificationSnapshotManager 的多 session 冲突检测真正生效。
+  // Wave F: sessions ????????? sameCwdRunningCount ??? SharedRuntime?
+  // ???? buildManagedAgent ? buildSessionStores ??? refs.getSameCwdRunningSessions
+  // ??????????verificationSnapshotManager ?? session ?????????
   sharedRuntime.sameCwdRunningCount = (cwd, excludeSessionId) =>
     sessions.sameCwdRunningCount(cwd, excludeSessionId)
-  // I4: sessions 就绪后回写，让 user hooks 能把结果推送到桌面事件流。
+  // I4: sessions ??????? user hooks ?????????????
   sharedRuntime.sessions = sessions
 
   // Legacy single-prompt path (M0): one-shot POST /prompt SSE.
   //
   // Rebased onto RuntimeSessionManager so BOTH prompt paths share one execution
   // model and one disconnect semantic (a dropped connection never aborts; abort
-  // is always explicit). Each POST /prompt materializes a real session — its
+  // is always explicit). Each POST /prompt materializes a real session ? its
   // events persist, show up in /sessions, and survive a client disconnect. The
   // dedicated per-run AgentLoop set this path used to maintain is gone with it.
   const activeLegacyRuns = new Set<string>()
@@ -560,7 +560,7 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
       state.sessionId = rec.id
       // Adapter-owned subscription, independent of the streaming one (which
       // dies with the client connection): keeps /status bookkeeping honest and
-      // preserves the legacy auto-deny approval semantics — a one-shot client
+      // preserves the legacy auto-deny approval semantics ? a one-shot client
       // speaks no intervention protocol, so a dangling approval would hang the
       // run until timeout (or forever when no timeout is configured).
       const adminUnsub = sessions.subscribe(rec.id, (ev) => {
@@ -581,11 +581,11 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     },
   })
 
-  // Multi-session routes (M0.5 → M3): /sessions/*. R3 rollback routes consult
+  // Multi-session routes (M0.5 ? M3): /sessions/*. R3 rollback routes consult
   // the live registry to build an OwnershipGuard, so thread it in via getter.
   Object.assign(routes, buildSessionRoutes(sessions, apiToken, () => sessionRegistry, ctx.config))
 
-  // Mission routes (P1 任务身份化): /missions/* — 与 session-manager 共享同一 store。
+  // Mission routes (P1 ?????): /missions/* ? ? session-manager ???? store?
   Object.assign(routes, buildMissionRoutes(missionStore, apiToken))
 
   // Config routes: provider + API key management for the desktop settings UI.
@@ -594,8 +594,8 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
   // Environment route: host toolchain availability (python, uv, git, node) for setup UI.
   Object.assign(routes, buildEnvRoute(apiToken))
 
-  // Browser routes: chromium 就绪探测 + 一键安装。只装桌面端的用户没有 CLI 可敲
-  // `rivet browser install`，缺了这两条路由截图能力对他们就是不可用。
+  // Browser routes: chromium ???? + ??????????????? CLI ??
+  // `rivet browser install`?????????????????????
   Object.assign(routes, buildBrowserRoutes(apiToken))
 
   // Project templates route: first-run AGENTS.md / .rivet.md bootstrap for desktop UI.
@@ -604,7 +604,7 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
   // Project docs route: read/write AGENTS.md / .rivet.md for the desktop settings UI.
   Object.assign(routes, buildProjectDocsRoutes(apiToken))
 
-  // Cache usage route: 跨会话 cache-log 聚合 — 桌面端读不到 ~/.rivet 下的日志文件。
+  // Cache usage route: ??? cache-log ?? ? ?????? ~/.rivet ???????
   Object.assign(routes, buildCacheRoutes({ apiToken, defaultCwd: () => process.cwd() }))
 
   // MCP routes: server management + live status for the desktop MCP settings UI.
@@ -617,7 +617,7 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
   // Plugin routes: presets + install/enable/remove for desktop plugin market UI.
   Object.assign(routes, buildPluginRoutes(apiToken))
 
-  // Open file in system editor / reveal in file manager — thin wrapper so the
+  // Open file in system editor / reveal in file manager ? thin wrapper so the
   // Desktop webview can request the sidecar to open a local path without
   // needing a Tauri plugin.
   routes['POST /open-file'] = async (body) => {
@@ -629,8 +629,8 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     const bodyCwd = (body as Record<string, unknown>)?.cwd
     const { existsSync } = require('node:fs') as typeof import('node:fs')
     const { resolve: resolvePath } = require('node:path') as typeof import('node:path')
-    // 用请求体里的 cwd（=项目目录）解析相对路径，而非 sidecar 的 process.cwd()
-    // （=home 目录）——否则 Windows 下相对路径解析到错误位置 → existsSync 404。
+    // ?????? cwd?=?????????????? sidecar ? process.cwd()
+    // ?=home ??????? Windows ???????????? ? existsSync 404?
     const resolved = typeof bodyCwd === 'string' && bodyCwd
       ? resolvePath(bodyCwd, filePath)
       : resolvePath(filePath)
@@ -638,11 +638,11 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
       return { status: 404, body: { error: `Path not found: ${resolved}` } }
     }
     const command = reveal ? buildRevealCommand(resolved) : buildOpenPathCommand(resolved)
-    // Windows 上 reveal=false (打开文件/文件夹) 时绕过 buildOpenPathCommand 的
-    // PowerShell Start-Process——实测 spawned ok 但实际窗口/编辑器不弹 (尤其
-    // 中文/特殊字符路径)。直接 spawn explorer.exe [路径]: explorer 对文件夹
-    // 打开资源管理器, 对文件用关联程序打开 (跟双击一样), 不经 PowerShell 引号
-    // 二次解析, 最可靠。reveal=true 仍走 buildRevealCommand (explorer /select,)。
+    // Windows ? reveal=false (????/???) ??? buildOpenPathCommand ?
+    // PowerShell Start-Process???? spawned ok ?????/????? (??
+    // ??/??????)??? spawn explorer.exe [??]: explorer ????
+    // ???????, ?????????? (?????), ?? PowerShell ??
+    // ????, ????reveal=true ?? buildRevealCommand (explorer /select,)?
     let effectiveCommand = command
     if (!reveal && process.platform === 'win32') {
       effectiveCommand = { cmd: 'explorer.exe', args: [resolved.replace(/\//g, '\\')] }
@@ -656,12 +656,12 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
       })
       return { status: 200, body: { opened: resolved } }
     } catch (err) {
-      console.error(`[open-file] spawn failed: ${effectiveCommand.cmd} ${effectiveCommand.args.join(' ')} → ${(err as Error).message}`)
-      return { status: 500, body: { error: `启动失败: ${(err as Error).message}` } }
+      console.error(`[open-file] spawn failed: ${effectiveCommand.cmd} ${effectiveCommand.args.join(' ')} ? ${(err as Error).message}`)
+      return { status: 500, body: { error: `????: ${(err as Error).message}` } }
     }
   }
 
-  // N1: GET /health — sidecar liveness for the desktop crash-reconnect banner.
+  // N1: GET /health ? sidecar liveness for the desktop crash-reconnect banner.
   // RIVET_VERSION is injected at build time via tsup define (tsup.config.ts) so
   // the packaged sidecar reports the real version. Falls back to
   // npm_package_version (CLI `npm start` dev) then a placeholder.
@@ -693,7 +693,7 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     buildGreetingRoute(greetingBaseUrl, greetingApiKey, () => getGreetingConfig()),
   )
 
-  // N3: async orchestration — cron scheduler → task registry → runtime pool that
+  // N3: async orchestration ? cron scheduler ? task registry ? runtime pool that
   // spins up *visible* sessions. Disabled in ephemeral mode (tests) to avoid
   // leaking timers.
   let scheduler: CronScheduler | undefined
@@ -706,15 +706,15 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     taskRegistry = registry
     const runtimePool = new SessionRuntimePool({ manager: sessions, defaultCwd: process.cwd() })
     // CronLock: with multiple sidecars pointed at the same desktop dir, exactly
-    // one wins the lock and runs the scheduler — the rest stay idle instead of
+    // one wins the lock and runs the scheduler ? the rest stay idle instead of
     // double-firing every scheduled task.
     const lock = new CronLock({ lockPath: join(rivetDir, 'scheduled_tasks.lock') })
     wiring = new CronWiring({ scheduler, registry, runtimePool, lock })
     void wiring.start().catch(() => { /* non-fatal: scheduler stays idle */ })
     Object.assign(routes, buildScheduleRoutes(scheduler, apiToken, {
       getStatus: () => wiring?.getStatus(),
-      // 付费版 v1 · T5 — 非 always-review / 含 computer_use 的定时任务归 Pro。
-      // 用启动时的 ctx.config：Pro 状态经 RIVET_PRO 注入，激活后本就要求重启 sidecar。
+      // ??? v1 ? T5 ? ? always-review / ? computer_use ?????? Pro?
+      // ????? ctx.config?Pro ??? RIVET_PRO ???????????? sidecar?
       isUnattendedAutomationEnabled: () =>
         isProFeatureEnabled(ctx.config, 'unattendedAutomation'),
     }))
@@ -743,29 +743,32 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
     scheduler,
     shared: sharedRuntime,
     close: (cb) => {
-      // Legacy /prompt runs live on manager sessions too — abortAll covers both.
+      // Legacy /prompt runs live on manager sessions too ? abortAll covers both.
       sessions.abortAll()
-      // Wave L: 与 TUI createShutdownHandler 对称——abort 中止 turn 后，对所有
-      // session 显式 shutdown 释放 coordinator stallSweep + 在途 worker 句柄。
-      // 进程退出 OS 会回收，但显式 shutdown 语义清晰、对齐双侧路径。
-      sessions.shutdownAll()
-      void wiring?.stop()
-      wiring?.dispose()
-      taskRegistry?.dispose()
-      scheduler?.stop()
-      // Kill MCP child processes synchronously — async shutdown() may not
-      // complete before the process exits, leaving orphaned subprocesses.
-      sharedRuntime.mcpManager?.killChildrenSync()
-      // Wave G: 释放 per-cwd 共享 Meridian/LSP 资源（module may still be loading).
-      if (serveAgentMod) {
-        serveAgentMod.disposeSharedCwdResources(sharedRuntime)
-      } else {
-        sharedRuntime.meridianIndexers.clear()
-        sharedRuntime.lspManagers.clear()
-        sharedRuntime.domainStores.clear()
+      // Wave L: ? TUI createShutdownHandler ????abort ?? turn ?????
+      // session ?? shutdown ?? coordinator stallSweep + ?? worker ???
+      // ?????? claims/worker finally ???????? handoff ???
+      // ????????????????????
+      const finish = () => {
+        void wiring?.stop()
+        wiring?.dispose()
+        taskRegistry?.dispose()
+        scheduler?.stop()
+        // Kill MCP child processes synchronously ? async shutdown() may not
+        // complete before the process exits, leaving orphaned subprocesses.
+        sharedRuntime.mcpManager?.killChildrenSync()
+        // Wave G: ?? per-cwd ?? Meridian/LSP ???module may still be loading).
+        if (serveAgentMod) {
+          serveAgentMod.disposeSharedCwdResources(sharedRuntime)
+        } else {
+          sharedRuntime.meridianIndexers.clear()
+          sharedRuntime.lspManagers.clear()
+          sharedRuntime.domainStores.clear()
+        }
+        loopHealth.stop()
+        server.close(cb)
       }
-      loopHealth.stop()
-      server.close(cb)
+      void sessions.shutdownAll().then(finish, finish)
     },
   }
 }
@@ -786,7 +789,7 @@ export function probeParentAlive(ppid: number): boolean {
     process.kill(ppid, 0)
     return true
   } catch (err) {
-    // ESRCH = parent gone. EPERM = alive but not ours → still alive.
+    // ESRCH = parent gone. EPERM = alive but not ours ? still alive.
     return (err as NodeJS.ErrnoException).code === 'EPERM'
   }
 }
@@ -795,13 +798,13 @@ export function probeParentAlive(ppid: number): boolean {
  * Parent-death watchdog. The desktop shell spawns the sidecar with
  * `RIVET_PARENT_PID` set to its own pid; we poll whether that process still
  * exists and self-terminate when it's gone. This is the cross-platform backstop
- * for the case the shell's `Child::kill()` can't cover — a crash, a SIGKILL, or
- * Windows "End task" — which would otherwise leave an orphaned `node.exe`
+ * for the case the shell's `Child::kill()` can't cover ? a crash, a SIGKILL, or
+ * Windows "End task" ? which would otherwise leave an orphaned `node.exe`
  * holding the port. No-op when the env var is absent (manual `rivet serve`).
  *
- * 宽限：单次探测失败可能是瞬时误报（父进程短暂无响应、电源状态切换等），
- * 立即自杀会造成「sidecar 半夜无故死亡」。改为连续 maxMisses 次（默认 3 次
- * ≈ 9s）失败才触发退出，期间任一次成功即清零；每次 miss 记日志留现场。
+ * ???????????????????????????????????
+ * ????????sidecar ???????????? maxMisses ???? 3 ?
+ * ? 9s?????????????????????? miss ???????
  */
 export function installParentWatchdog(
   onParentGone: (info: { ppid: number; misses: number }) => void,
@@ -823,7 +826,7 @@ export function installParentWatchdog(
     }
     misses++
     if (misses < maxMisses) {
-      console.error(`[serve] parent pid ${ppid} probe miss ${misses}/${maxMisses} — exiting after ${maxMisses} consecutive misses`)
+      console.error(`[serve] parent pid ${ppid} probe miss ${misses}/${maxMisses} ? exiting after ${maxMisses} consecutive misses`)
       return
     }
     // fired guard: shutdown (process.exit) may take a beat; the interval must
@@ -832,7 +835,7 @@ export function installParentWatchdog(
     clearInterval(timer)
     onParentGone({ ppid, misses })
   }, intervalMs)
-  // Don't let the watchdog itself keep the event loop alive — the HTTP server
+  // Don't let the watchdog itself keep the event loop alive ? the HTTP server
   // already does, and an unref'd timer won't block a clean exit.
   timer.unref()
 }
@@ -840,7 +843,7 @@ export function installParentWatchdog(
 /**
  * Best-effort exit-reason breadcrumb. OOM / hard kills can't write anything, so
  * the PRESENCE of this file distinguishes a deliberate self-shutdown (watchdog,
- * signal) from a silent death — the exact ambiguity that made the "sidecar died
+ * signal) from a silent death ? the exact ambiguity that made the "sidecar died
  * overnight" incidents unattributable. Written to the desktop dir next to the
  * scheduler artifacts; failures are swallowed.
  */
@@ -855,7 +858,7 @@ function writeExitBreadcrumb(reason: string, extra: Record<string, unknown> = {}
       ...extra,
     }, null, 2))
   } catch {
-    // best-effort — never block shutdown on breadcrumb IO
+    // best-effort ? never block shutdown on breadcrumb IO
   }
 }
 
@@ -872,7 +875,7 @@ export async function serveCommand(args: string[]): Promise<void> {
   }
   const port = parseInt(rawPort, 10)
   if (isNaN(port) || port < 1 || port > 65535) {
-    console.error(`Invalid port: ${rawPort} (must be 1–65535)`)
+    console.error(`Invalid port: ${rawPort} (must be 1?65535)`)
     process.exit(1)
   }
 
@@ -896,7 +899,7 @@ export async function serveCommand(args: string[]): Promise<void> {
     shutdownServer()
   })
   installParentWatchdog(({ ppid, misses }) => {
-    console.error(`[serve] parent process gone (pid ${ppid}, ${misses} consecutive probe misses) — shutting down sidecar`)
+    console.error(`[serve] parent process gone (pid ${ppid}, ${misses} consecutive probe misses) ? shutting down sidecar`)
     writeExitBreadcrumb('parent-gone', { ppid, misses })
     shutdownServer()
   })

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionVitalsTool, formatVitals, type SessionVitalsData } from '../session-vitals.js'
+import { buildRuntimeSelfModel } from '../../agent/runtime-self-model.js'
 
 function makeVitals(overrides: Partial<SessionVitalsData> = {}): SessionVitalsData {
   return {
@@ -15,6 +16,12 @@ function makeVitals(overrides: Partial<SessionVitalsData> = {}): SessionVitalsDa
       rendered: 20, dropped: 5, adopted: 3, ignored: 2,
       top: [{ key: 'convergence', delivered: 12, adopted: 0, ignored: 0, silenced: true }],
     },
+    runtime: buildRuntimeSelfModel({
+      now: 42,
+      phase: 'galaxy',
+      contextRatio: 0.34,
+      coordinator: { activeWorkers: 2, maxWorkers: 4, inFlightFileScopes: 1 },
+    }),
     turn: 42,
     ...overrides,
   }
@@ -25,14 +32,16 @@ describe('session_vitals tool (W5, incident 20b9714e)', () => {
     const out = formatVitals(makeVitals())
     assert.ok(out.includes('340,000 / 1,000,000'), 'exact context numbers present')
     assert.ok(out.includes('34.0%'), 'context ratio present')
-    assert.ok(out.includes('命中≈90.0%'), 'cache hit proxy present')
+    assert.ok(out.includes('???90.0%'), 'cache hit proxy present')
     assert.ok(out.includes('convergence: delivered=12 adopted=0'), 'advisory ledger top entry present')
-    assert.ok(out.includes('[已静默]'), 'silenced marker present')
+    assert.ok(out.includes('[???]'), 'silenced marker present')
+    assert.ok(out.includes('health=healthy attention=normal phase=galaxy'), 'runtime self-model present')
+    assert.ok(out.includes('workers=2/4'), 'worker counters present')
   })
 
-  it('empty-truth discipline: missing data is labeled 无数据, never fabricated', () => {
-    const out = formatVitals(makeVitals({ cache: [], sensorium: null }))
-    assert.ok(out.includes('无数据'), 'missing dimensions must say 无数据')
+  it('empty-truth discipline: missing data is labeled ???, never fabricated', () => {
+    const out = formatVitals(makeVitals({ cache: [], sensorium: null, runtime: null }))
+    assert.ok(out.includes('???'), 'missing dimensions must say ???')
     assert.ok(!out.includes('NaN'), 'no NaN leakage')
   })
 
@@ -46,7 +55,7 @@ describe('session_vitals tool (W5, incident 20b9714e)', () => {
   it('execute degrades gracefully without a runtime (worker context)', async () => {
     const tool = createSessionVitalsTool(() => null)
     const result = await tool.execute({ input: {} } as never)
-    assert.ok(result.content.includes('不可用'))
+    assert.ok(result.content.includes('???'))
   })
 
   it('is read-only: no approval, concurrency-safe, always enabled', () => {

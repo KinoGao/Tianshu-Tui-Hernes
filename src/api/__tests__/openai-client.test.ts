@@ -410,7 +410,7 @@ describe('error handling', () => {
     })
     const out = parseOpenAIError(402, body, { providerName: 'deepseek', baseUrl: 'https://api.deepseek.com/v1' })
     assert.ok(out.startsWith('OpenAI API error (invalid_request_error): Insufficient Balance\n'))
-    assert.ok(out.includes('DeepSeek 账户余额不足'))
+    assert.ok(out.includes('DeepSeek ??????'))
     assert.ok(out.includes('https://platform.deepseek.com/top_up'))
     assert.ok(out.includes('/model'))
   })
@@ -420,7 +420,7 @@ describe('error handling', () => {
       error: { code: 'insufficient_balance', message: 'Insufficient balance' },
     })
     const out = parseOpenAIError(402, body, { baseUrl: 'https://api.siliconflow.cn/v1' })
-    assert.ok(out.includes('SiliconFlow 账户余额不足'))
+    assert.ok(out.includes('SiliconFlow ??????'))
     assert.ok(out.includes('https://cloud.siliconflow.cn'))
   })
 
@@ -429,7 +429,7 @@ describe('error handling', () => {
       error: { code: 'invalid_request_error', message: 'Insufficient Balance' },
     })
     const out = parseOpenAIError(402, body)
-    assert.ok(out.includes('账户余额不足'))
+    assert.ok(out.includes('??????'))
     assert.ok(!out.includes('platform.deepseek.com'))
   })
 
@@ -450,7 +450,7 @@ describe('retry-after parsing (parseRetryAfterMs)', () => {
     assert.ok(mod.OpenAIClient, 'OpenAIClient loads successfully with shared parseRetryAfterMs')
     // parseRetryAfterMs was removed from this module in 119dd49
     assert.equal(typeof (mod as Record<string, unknown>).parseRetryAfterMs, 'undefined',
-      'parseRetryAfterMs must not exist on openai-client exports — it lives in error-classifier')
+      'parseRetryAfterMs must not exist on openai-client exports ? it lives in error-classifier')
   })
 
   it('HTTP-date via Date.parse works for future timestamp', () => {
@@ -517,7 +517,7 @@ describe('DeepSeek-specific features', () => {
     }
 
     // Single combined chunk: finish_reason AND usage in the same SSE frame.
-    // This is the DeepSeek behavior — unlike OpenAI which sends usage as a
+    // This is the DeepSeek behavior ? unlike OpenAI which sends usage as a
     // separate trailing chunk.
     client.processDelta(
       {
@@ -571,7 +571,7 @@ describe('DeepSeek-specific features', () => {
     )
     assert.equal(stopUsage.reasoning_tokens, 80)
 
-    // Provider without the split → reasoning_tokens undefined, not zero.
+    // Provider without the split ? reasoning_tokens undefined, not zero.
     const client2 = new OpenAIClient(TEST_CONFIG)
     let usage2: any = null
     client2.processDelta(
@@ -607,7 +607,7 @@ describe('DeepSeek-specific features', () => {
     assert.equal(stopReason, 'end_turn')
   })
 
-  it('7: thinking-only turn — onThinkingDelta called, onTextDelta not called', () => {
+  it('7: thinking-only turn ? onThinkingDelta called, onTextDelta not called', () => {
     const client = new OpenAIClient(TEST_CONFIG)
 
     const texts: string[] = []
@@ -709,7 +709,7 @@ describe('usage calibration (GLM prompt_tokens inflation)', () => {
   }
 
   it('GLM factor=0: replaces input_tokens with local estimate', () => {
-    // 1000 chars of content → ~250 tokens estimated
+    // 1000 chars of content ? ~250 tokens estimated
     const bigText = 'x'.repeat(1000)
     const client = makeClient(0, [{ role: 'user', content: bigText }])
 
@@ -744,8 +744,8 @@ describe('usage calibration (GLM prompt_tokens inflation)', () => {
 
     const usage = getUsage(client)
 
-    // apiRatio = 250 / 1_970_432 ≈ 0.000127
-    // cache_read = round(1_778_816 * 0.000127) ≈ 226
+    // apiRatio = 250 / 1_970_432 ? 0.000127
+    // cache_read = round(1_778_816 * 0.000127) ? 226
     assert.ok(usage.cache_read_input_tokens < usage.input_tokens,
       'cache_read should be scaled down proportionally')
     assert.ok(usage.cache_read_input_tokens > 0,
@@ -754,7 +754,7 @@ describe('usage calibration (GLM prompt_tokens inflation)', () => {
 })
 
 describe('system suffix copy-on-write (2026-07-06 double-append regression)', () => {
-  // DeepSeek + thinking enabled → non-empty systemSuffix at construction.
+  // DeepSeek + thinking enabled ? non-empty systemSuffix at construction.
   const SUFFIX_CONFIG: OpenAIClientConfig = {
     ...TEST_CONFIG,
     providerName: 'deepseek',
@@ -772,7 +772,7 @@ describe('system suffix copy-on-write (2026-07-06 double-append regression)', ()
   function makeSuffixClient(): { client: OpenAIClient; bodies: any[] } {
     const client = new OpenAIClient(SUFFIX_CONFIG)
     const bodies: any[] = []
-    // Intercept just before the network — everything in stream() (reasoning
+    // Intercept just before the network ? everything in stream() (reasoning
     // strip, suffix append, sanitize, wire probe) has already run on `body`.
     ;(client as any).sendStream = async (body: any) => { bodies.push(body) }
     return { client, bodies }
@@ -824,7 +824,36 @@ describe('system suffix copy-on-write (2026-07-06 double-append regression)', ()
     await client.stream(makeRequest(), NOOP_CALLBACKS as any)
     await client.stream(makeRequest('follow-up'), NOOP_CALLBACKS as any)
 
-    // Pure append with byte-stable system → no divergence recorded.
+    // Pure append with byte-stable system ? no divergence recorded.
     assert.equal(client.consumeWireDivergence(), null)
+  })
+})
+
+describe('wire message normalization', () => {
+  const NOOP_CALLBACKS = {
+    onTextDelta: () => {},
+    onThinkingDelta: () => {},
+    onContentBlock: () => {},
+    onStopReason: () => {},
+    onError: () => {},
+  }
+
+  it('omits empty assistant tool_calls before sending a resumed request', async () => {
+    const client = new OpenAIClient(TEST_CONFIG)
+    let body: any
+    ;(client as any).sendStream = async (next: any) => { body = next }
+    const request: any = {
+      model: 'gpt-4o',
+      stream: true,
+      messages: [
+        { role: 'user', content: 'continue' },
+        { role: 'assistant', content: 'already answered', tool_calls: [] },
+      ],
+    }
+
+    await client.stream(request, NOOP_CALLBACKS as any)
+
+    assert.deepStrictEqual(body.messages[1], { role: 'assistant', content: 'already answered' })
+    assert.deepStrictEqual(request.messages[1], { role: 'assistant', content: 'already answered', tool_calls: [] })
   })
 })

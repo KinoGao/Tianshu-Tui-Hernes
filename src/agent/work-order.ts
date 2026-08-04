@@ -13,16 +13,16 @@ export const READ_ONLY_WORKER_TOOLS = ['read_file', 'read_section', 'glob', 'gre
 /**
  * Write-capable worker tools. Patcher/verifier profiles are classified as
  * 'hands' role (see coordination-policy.ts:classifyProfile) and dispatched
- * through runHands → runHandsSession, which creates an isolated git worktree
+ * through runHands ? runHandsSession, which creates an isolated git worktree
  * before the worker executes. The worktree isolation ensures writes are
  * scoped and mergeable, but write operations may still be blocked by the
- * host agent framework's subagent sandbox — that is a host-layer constraint,
+ * host agent framework's subagent sandbox ? that is a host-layer constraint,
  * not a Rivet permission issue.
  */
 export const WRITE_WORKER_TOOLS = ['read_file', 'read_section', 'glob', 'grep', 'diff', 'inspect_project', 'repo_map', 'repo_graph', 'related_tests', 'edit_file', 'write_file', 'bash', 'run_tests'] as const
 export const PHASE1_DISALLOWED_WORKER_TOOLS = ['bash', 'write_file', 'edit_file', 'run_tests', 'delegate_task', 'delegate_batch'] as const
 
-/** 领域轴 — 代码区域，团队协同的天然边界 */
+/** ??? ? ?????????????? */
 export const domainAreaSchema = z.enum([
   'frontend',   // src/tui/
   'backend',    // src/agent/, src/api/, src/compact/, src/context/
@@ -45,7 +45,7 @@ export const workOrderKindSchema = z.enum([
 
 export type WorkOrderKind = z.infer<typeof workOrderKindSchema>
 
-/** Dynamic profile validation — accepts built-in + user-loaded profiles. */
+/** Dynamic profile validation ? accepts built-in + user-loaded profiles. */
 export const workerProfileSchema = z.string().refine(
   (val) => profileRegistry.getProfileNames().includes(val),
   (val) => ({ message: `Unknown worker profile "${val}". Available: ${profileRegistry.getProfileNames().join(', ')}` }),
@@ -53,7 +53,7 @@ export const workerProfileSchema = z.string().refine(
 
 export type WorkerProfile = z.infer<typeof workerProfileSchema>
 
-/** 字符串枚举聚合策略（现有五档）。quorum 是对象形态（带组级阈值 k）。 */
+/** ????????????????quorum ??????????? k?? */
 export const aggregationPolicyKinds = [
   'all_required',
   'first_success',
@@ -66,7 +66,7 @@ export const aggregationPolicySchema = z.union([
   z.enum(aggregationPolicyKinds),
   z.object({
     kind: z.literal('quorum'),
-    /** 组内通过数达 k 即组通过（组阈值可由 aggregateResults 的 quorumGroups 覆盖）。 */
+    /** ?????? k ?????????? aggregateResults ? quorumGroups ???? */
     k: z.number().int().min(1),
   }),
 ])
@@ -111,7 +111,7 @@ export function clampWorkerMaxTurns(runtimeDefault: number, budgetMaxTurns: numb
  * .rivet/artifacts/). Batch order ids (`batch:0`) are intentionally stable
  * across delegation runs (dependencies/resume/claims key off them), so
  * without a per-dispatch nonce every run of the session appends to the SAME
- * worker-batch-0.jsonl — cumulative context, stale artifacts (session
+ * worker-batch-0.jsonl ? cumulative context, stale artifacts (session
  * 2c1186f5). The coordinator mints a nonce per dispatch; both the worker's
  * AgentLoop session and the coordinator's artifact fallback registration
  * must derive through here so they stay in sync.
@@ -121,10 +121,10 @@ export function deriveWorkerSessionId(orderId: string, dispatchNonce?: string): 
   return dispatchNonce ? `${base}-${dispatchNonce}` : base
 }
 
-/** 条件依赖边（星河收编 #6）：主依赖失败时的分支。
- *  - onFailure=skip：依赖失败 → 本任务不执行（清扫时标 skipped）
- *  - onFailure=alternate：依赖失败 → 改等 alternateOrderId（其完成才可运行，
- *    其失败则本任务同样跳过）。 */
+/** ?????????? #6????????????
+ *  - onFailure=skip????? ? ??????????? skipped?
+ *  - onFailure=alternate????? ? ?? alternateOrderId?????????
+ *    ????????????? */
 export const dependencyEdgeSchema = z.object({
   dependsOn: z.string().min(1),
   onFailure: z.enum(['skip', 'alternate']).optional(),
@@ -133,7 +133,7 @@ export const dependencyEdgeSchema = z.object({
 
 export type DependencyEdge = z.infer<typeof dependencyEdgeSchema>
 
-/** 依赖的实际 id：字符串边取自身，条件边取 dependsOn。 */
+/** ????? id????????????? dependsOn? */
 export function dependencyId(dep: string | DependencyEdge): string {
   return typeof dep === 'string' ? dep : dep.dependsOn
 }
@@ -152,8 +152,8 @@ const workOrderSchema = z.object({
   dependencies: z.array(z.union([z.string().min(1), dependencyEdgeSchema])),
   /** Logical group for coordinated or multi-perspective tasks. */
   groupId: z.string().min(1).optional(),
-  /** 写工显式 opt-in 批级共享信息素（星河收编 #3）。读工默认共享；写工只有
-   *  显式声明才挂批级 store（守护实现独立性）。 */
+  /** ???? opt-in ???????????? #3?????????????
+   *  ???????? store?????????? */
   batchStigmergy: z.boolean().optional(),
   aggregationPolicy: aggregationPolicySchema,
   budget: workerBudgetSchema,
@@ -161,21 +161,21 @@ const workOrderSchema = z.object({
   workerCwd: z.string().optional(),
   reviewDepth: z.number().int().min(0).optional(),
   /** B3: delegation nesting depth (0 = spawned by primary). Capped by the
-   *  coordinator at MAX_DELEGATION_DEPTH — nesting allowed but gated. */
+   *  coordinator at MAX_DELEGATION_DEPTH ? nesting allowed but gated. */
   delegationDepth: z.number().int().min(0).default(0),
   /** Star domain authority for cognitive injection (V3 Component A). */
   authority: z.string().optional(),
-  /** Why this authority was chosen (≤60 chars). Omitted when authority unset. */
+  /** Why this authority was chosen (?60 chars). Omitted when authority unset. */
   authorityReason: z.string().max(60).optional(),
   /** Team planner risk tier for shadow-only model tier recommendation. */
   riskTier: z.enum(['low', 'medium', 'high']).optional(),
   /** Per-order provider/model override (highest routing precedence). When set,
-   *  the worker runs on this exact provider/model with its own client/cache —
+   *  the worker runs on this exact provider/model with its own client/cache ?
    *  used by heterogeneous council seats. Silently ignored if the provider is
    *  unknown or lacks credentials (runtimeFactory falls back to the session model). */
   modelOverride: z.object({ provider: z.string().min(1), model: z.string().min(1) }).optional(),
-  /** 瑶光门 tier 下限：路由结果不得低于此档（council 席位 tierHint+noDowngrade
-   *  等场景）。只抬升不降级；modelOverride 仍然最高优先。 */
+  /** ??? tier ??????????????council ?? tierHint+noDowngrade
+   *  ????????????modelOverride ??????? */
   tierFloor: z.enum(['cheap', 'balanced', 'strong']).optional(),
 })
 
@@ -185,8 +185,8 @@ const verificationMetadataSchema = z.object({
   command: z.string(),
   status: z.enum(['passed', 'failed', 'blocked']),
   scope: z.enum(['full', 'targeted']),
-  // 数值字段可选（2026-08-01）：worker 自报的 verification 只作交叉校验，
-  // 系统补充的元数据（reconcileCapturedWorkerFacts）不含计数——不再硬性要求。
+  // ???????2026-08-01??worker ??? verification ???????
+  // ?????????reconcileCapturedWorkerFacts??????????????
   exitCode: z.number().optional(),
   passed: z.number().optional(),
   failed: z.number().optional(),
@@ -198,17 +198,17 @@ export const workerFindingSchema = z.object({
   claim: z.string().min(1),
   evidence: z.string().min(1),
   confidence: z.enum(['low', 'medium', 'high']),
-  /** 'firsthand' = worker 亲自 read/grep/跑命令拿到的原始观测。
-   *  'inferred' = 基于已有信息的推断，未经 worker 亲自落地取证。
-   *  省略时表示未声明（等同于旧版 finding，消费端按转述处理）。 */
+  /** 'firsthand' = worker ?? read/grep/???????????
+   *  'inferred' = ???????????? worker ???????
+   *  ?????????????? finding??????????? */
   evidenceKind: z.enum(['firsthand', 'inferred']).optional(),
-  /** file:line 引用（如 "src/agent/foo.ts:42"）或命令 exit code 引用（如 "cmd: node --test exit=0"）。
-   *  一手实测必须至少带一条引用；转述推断可省略。 */
+  /** file:line ???? "src/agent/foo.ts:42"???? exit code ???? "cmd: node --test exit=0"??
+   *  ?????????????????????? */
   evidenceRefs: z.array(z.string().min(1)).optional(),
-  /** 结论极性：'defect' = 缺陷发现（省略时按 defect 处理，fail-closed）；
-   *  'confirmation' = 核实通过（确认无问题/链路闭合）。审查 blocking 判定只认
-   *  defect——confirmation 单独汇总为「已核实清单」，不进 blocking 文案。
-   *  审查/验证类 worker 用，其他 worker 省略。 */
+  /** ?????'defect' = ????????? defect ???fail-closed??
+   *  'confirmation' = ??????????/???????? blocking ????
+   *  defect??confirmation ??????????????? blocking ???
+   *  ??/??? worker ???? worker ??? */
   polarity: z.enum(['defect', 'confirmation']).optional(),
 })
 
@@ -222,13 +222,13 @@ export type WorkerArtifact = z.infer<typeof workerArtifactSchema>
 
 /** Root cause when a worker fails (status = 'blocked' or 'failed').
  *  Enables the primary agent to choose the right recovery strategy:
- *  - json_parse / schema_mismatch → retry with clearer format instructions
- *  - timeout / circuit_open → do NOT retry immediately, wait or skip
- *  - max_turns → deterministic budget exhaustion; same-budget retry is dead,
+ *  - json_parse / schema_mismatch ? retry with clearer format instructions
+ *  - timeout / circuit_open ? do NOT retry immediately, wait or skip
+ *  - max_turns ? deterministic budget exhaustion; same-budget retry is dead,
  *    re-dispatch with a bigger budget or narrower scope
- *  - worker_crash → retry may help (infra flake)
- *  - claim_conflict → resolve the conflict first
- *  - caller_aborted → the primary cancelled this, don't retry same request
+ *  - worker_crash ? retry may help (infra flake)
+ *  - claim_conflict ? resolve the conflict first
+ *  - caller_aborted ? the primary cancelled this, don't retry same request
  */
 export type WorkerFailureReason =
   | 'caller_aborted'
@@ -252,7 +252,7 @@ export const workerResultSchema = z.object({
   patchSummary: z.string().optional(),
   verification: verificationMetadataSchema.optional(),
   changedFiles: z.array(z.string()),
-  /** Persisted diff artifact id (set by runHandsSession after落盘). Absent if the
+  /** Persisted diff artifact id (set by runHandsSession after??). Absent if the
    *  worker produced no diff or persistence failed. Carried through to
    *  DelegationActivity.artifactId so the UI can fetch this worker's diff. */
   diffArtifactId: z.string().optional(),
@@ -260,24 +260,24 @@ export const workerResultSchema = z.object({
   risks: z.array(z.string()),
   nextActions: z.array(z.string()),
   evidenceStatus: z.enum(['verified', 'failed', 'blocked', 'unverified', 'skipped']).default('unverified'),
-  /** Why the worker failed — enables recovery-strategy differentiation. */
+  /** Why the worker failed ? enables recovery-strategy differentiation. */
   failureReason: z.enum(['caller_aborted', 'circuit_open', 'claim_conflict', 'timeout', 'max_turns', 'json_parse', 'schema_mismatch', 'worker_crash', 'worker_blocked', 'policy_short_circuit', 'unknown']).optional(),
-  /** Runtime metadata: 派发时的 objective，由 coordinator 盖章。
+  /** Runtime metadata: ???? objective?? coordinator ???
    *
-   *  刻意**不进** `workerResultIngestSchema`——那份是 worker 自报的入口，zod 会
-   *  把它写的 objective 剥掉。对账的两边必须有一边来自派发侧，否则 worker 可以
-   *  把目标和交付写成自洽的一对。主控 packet 靠它把「派它去做什么」与「它交回
-   *  什么」并排放在一起。 */
+   *  ??**??** `workerResultIngestSchema`????? worker ??????zod ?
+   *  ???? objective ????????????????????? worker ??
+   *  ???????????????? packet ????????????????
+   *  ?????????? */
   objective: z.string().optional(),
-  /** Runtime metadata: 派发侧 profile，由 coordinator 与 objective 同点盖章。
-   *  刻意不进 ingest schema（同 objective 纪律）——digest/展示拿它标识身份时
-   *  不能信 worker 自报。 */
+  /** Runtime metadata: ??? profile?? coordinator ? objective ?????
+   *  ???? ingest schema?? objective ?????digest/?????????
+   *  ??? worker ??? */
   profile: z.string().optional(),
-  /** Runtime metadata: 派发侧 authority（星域 id），与 profile 同点盖章。 */
+  /** Runtime metadata: ??? authority??? id??? profile ????? */
   authority: z.string().optional(),
-  /** Runtime metadata: 派发侧 logical group（DP 副本组/多视角组），由 coordinator
-   *  与 objective 同点盖章。quorum 聚合按它分组；刻意不进 ingest schema（同
-   *  objective 纪律）——分组不能信 worker 自报。 */
+  /** Runtime metadata: ??? logical group?DP ???/??????? coordinator
+   *  ? objective ?????quorum ??????????? ingest schema??
+   *  objective ?????????? worker ??? */
   groupId: z.string().optional(),
   /** Runtime metadata: actual model used by the worker. */
   model: z.string().optional(),
@@ -292,10 +292,13 @@ export const workerResultSchema = z.object({
     reasoning_tokens: z.number().optional(),
     total_tokens: z.number().optional(),
   }).optional(),
-  /** D 度量：结果契约失败的细分类型（no_json/json_syntax/schema_field/truncated），
-   *  由解析侧在 terminal 路径盖章——worker 自报不可信，但 hands 路径会经
-   *  parseWorkerResult 内部往返一次，ingest 侧也要放行此键（同 failureReason 纪律）。 */
+  /** D ???????????????no_json/json_syntax/schema_field/truncated??
+   *  ????? terminal ??????worker ??????? hands ????
+   *  parseWorkerResult ???????ingest ????????? failureReason ???? */
   parseErrorKind: z.enum(['no_json', 'json_syntax', 'schema_field', 'truncated']).optional(),
+  /** M2 ????worker ???????? settle ????????????
+   *  coordinator ? settle ?????? worker ??????? ingest schema? */
+  durationMs: z.number().optional(),
 })
 
 const workerResultIngestSchema = z.object({
@@ -329,36 +332,36 @@ const workerResultIngestSchema = z.object({
     z.undefined().transform(() => [] as (Record<string, unknown> | string)[]),
   ]).default([]),
   evidenceStatus: z.enum(['verified', 'failed', 'blocked', 'unverified', 'skipped']).default('unverified'),
-  /** 运行时字段，不指望模型自己写。但 hands 路径会把上游构造好的结果
-   *  `JSON.stringify` 后交给 `parseWorkerResult` 再解一次——不收这个键的话，
-   *  写工的失败原因（含续跑判据依赖的 max_turns / timeout）会在这道内部序列化
-   *  边界上被静默剥掉，主控只看到一个没有原因的 blocked。 */
+  /** ???????????????? hands ????????????
+   *  `JSON.stringify` ??? `parseWorkerResult` ??????????????
+   *  ???????????????? max_turns / timeout??????????
+   *  ????????????????????? blocked? */
   failureReason: z.enum(['caller_aborted', 'circuit_open', 'claim_conflict', 'timeout', 'max_turns', 'json_parse', 'schema_mismatch', 'worker_crash', 'worker_blocked', 'policy_short_circuit', 'unknown']).optional(),
-  /** D 度量细分，同 failureReason 的内部往返纪律（见 workerResultSchema 同名注释）。 */
+  /** D ?????? failureReason ????????? workerResultSchema ?????? */
   parseErrorKind: z.enum(['no_json', 'json_syntax', 'schema_field', 'truncated']).optional(),
 })
 
 export type WorkerResult = z.infer<typeof workerResultSchema>
 
-/** D 度量：结果契约失败的细分类型。failureReason 只给路由级枚举
- *  （json_parse / schema_mismatch），度量需要知道具体死法——
- *  是语法错、字段错、截断，还是根本没产出 JSON。 */
+/** D ???????????????failureReason ???????
+ *  ?json_parse / schema_mismatch??????????????
+ *  ??????????????????? JSON? */
 export type WorkerParseErrorKind =
-  /** 全文找不到任何 JSON 候选（纯散文/思考流） */
+  /** ??????? JSON ??????/???? */
   | 'no_json'
-  /** JSON.parse 失败：未转义引号/逗号/括号等语法错 */
+  /** JSON.parse ????????/??/?????? */
   | 'json_syntax'
-  /** JSON 合法但 zod 校验不过：缺字段/类型错/多字段 */
+  /** JSON ??? zod ????????/???/??? */
   | 'schema_field'
-  /** 输出被 maxTokens/中断截断（Unterminated string / Unexpected end） */
+  /** ??? maxTokens/?????Unterminated string / Unexpected end? */
   | 'truncated'
 
-/** 从 parseWorkerResult 抛出的错误分类。只认 WorkerResultParseError 与
- *  extractJsonCandidates 的「无 JSON」错误；其余返回 undefined（调用方不附带）。
+/** ? parseWorkerResult ?????????? WorkerResultParseError ?
+ *  extractJsonCandidates ??? JSON???????? undefined?????????
  *
- *  zod issue 列表是 JSON 数组文本（'[' 开头），JSON.parse 报错是散文——
- *  借此区分候选的失败层级：全 zod → schema_field（JSON 合法但字段不合规）；
- *  任一语法错 → json_syntax（报告本身坏了，字段错只是碎片候选的副产品）。 */
+ *  zod issue ??? JSON ?????'[' ????JSON.parse ???????
+ *  ????????????? zod ? schema_field?JSON ??????????
+ *  ????? ? json_syntax??????????????????????? */
 export function classifyWorkerParseError(error: unknown): WorkerParseErrorKind | undefined {
   if (error instanceof WorkerResultParseError) {
     const joined = error.parseErrors.join(' | ')
@@ -399,9 +402,9 @@ export interface CreateReadOnlyWorkOrderInput {
   sessionTurn?: number
   /** Per-order provider/model override (highest routing precedence). */
   modelOverride?: { provider: string; model: string }
-  /** 瑶光门 tier 下限：路由结果不得低于此档。只抬升不降级。 */
+  /** ??? tier ????????????????????? */
   tierFloor?: 'cheap' | 'balanced' | 'strong'
-  /** 写工显式 opt-in 批级共享信息素（星河收编 #3）。 */
+  /** ???? opt-in ???????????? #3?? */
   batchStigmergy?: boolean
 }
 
@@ -412,9 +415,9 @@ function toolsForAuthority(tools: string[], authority?: string): string[] {
   if (!domainDef) {
     // Fail closed: an authority layer is an extra restriction. If the domain
     // id is misspelled or not loaded, do not silently fall back to the profile
-    // tool set — that makes the restriction disappear without a signal.
+    // tool set ? that makes the restriction disappear without a signal.
     console.warn(
-      `[work-order] Unknown authority "${authority}" — worker gets zero tools (fail-closed). ` +
+      `[work-order] Unknown authority "${authority}" ? worker gets zero tools (fail-closed). ` +
       `Known domains: ${starDomainRegistry.getDomainIds().join(', ')}.`,
     )
     return []
@@ -427,8 +430,8 @@ function toolsForAuthority(tools: string[], authority?: string): string[] {
 /** Per-task constraint budget. Constraints render verbatim into the worker
  *  prompt, so an unbounded list would push out the objective it qualifies. */
 const MAX_TASK_CONSTRAINTS = 12
-/** 单条约束字符上限（含样板/任务级）。导出供 plan-constraints.ts 渲染器对齐——
- *  渲染器必须自己保证产出 ≤ 此值并带截断指针，避免此处无声再切一刀。 */
+/** ????????????/???????? plan-constraints.ts ???????
+ *  ??????????? ? ???????????????????? */
 export const MAX_TASK_CONSTRAINT_CHARS = 400
 
 /**
@@ -468,7 +471,7 @@ export function createReadOnlyWorkOrder(input: CreateReadOnlyWorkOrderInput): Wo
             'Return only evidence-backed claims.',
             'Do not suggest edits as completed changes.',
             'Do not request write, edit, or bash tools.',
-            'Run tests whenever possible — your verdict requires command+evidence output.',
+            'Run tests whenever possible ? your verdict requires command+evidence output.',
           ]
         : [
             'Return only evidence-backed claims.',
@@ -483,7 +486,7 @@ export function createReadOnlyWorkOrder(input: CreateReadOnlyWorkOrderInput): Wo
       return toolsForAuthority(tools, input.authority)
     })(),
     disallowedTools: input.profile === 'adversarial_verifier'
-      ? ['bash', 'write_file', 'edit_file', 'delegate_task', 'delegate_batch'] // run_tests NOT disallowed — it's the verifier's primary weapon
+      ? ['bash', 'write_file', 'edit_file', 'delegate_task', 'delegate_batch'] // run_tests NOT disallowed ? it's the verifier's primary weapon
       : [...PHASE1_DISALLOWED_WORKER_TOOLS],
     dedupeKey: input.groupId
       ? `${input.kind}:group:${input.groupId}:${input.authority ?? 'default'}:${input.parentTurnId}:${input.scope.files?.join(',') || input.objective}`
@@ -550,7 +553,7 @@ export function createWriteWorkOrder(input: CreateWriteWorkOrderInput): WorkOrde
       // Self-contained shards run a full loop (implement + tsc/lint/tests) in one
       // context, so write workers need a generous turn budget to finish a
       // long-program shard without being cut off mid-task. Flash has a 1M window;
-      // 8–14 turns was far too tight for real implement+verify work.
+      // 8?14 turns was far too tight for real implement+verify work.
       maxTurns: input.budget?.maxTurns ?? 32,
       maxTokens: input.budget?.maxTokens ?? profileRegistry.get(input.profile ?? 'patcher')?.defaultMaxTokens ?? 16384,
       timeoutMs: Math.round((input.budget?.timeoutMs
@@ -612,7 +615,7 @@ function extractBalancedJsonCandidates(text: string): string[] {
 }
 
 /** Marker for "the only parseable candidate was our own truncation repair".
- *  Not a JSON.parse message — the repair succeeds, which is exactly why the
+ *  Not a JSON.parse message ? the repair succeeds, which is exactly why the
  *  failure has to be announced explicitly. */
 const TRUNCATED_REPORT_MESSAGE = 'Worker report was cut off mid-value; only the auto-closed repair parsed'
 
@@ -626,7 +629,7 @@ interface JsonCandidates {
 
 function collectJsonCandidates(text: string): JsonCandidates {
   let repaired: string | undefined
-  // Strategy 1: fenced JSON (```json ... ``` or ``` ... ```) — Codex-style multi-tag.
+  // Strategy 1: fenced JSON (```json ... ``` or ``` ... ```) ? Codex-style multi-tag.
   const fenced = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)]
     .map(m => m[1]?.trim())
     .filter((c): c is string => Boolean(c?.includes('{') && c.includes('}')))
@@ -634,14 +637,14 @@ function collectJsonCandidates(text: string): JsonCandidates {
   // Strategy 2: balanced { ... } pairs anywhere in the response.
   const balanced = extractBalancedJsonCandidates(text)
 
-  // Strategy 3: YAML/TOML fences — some models wrap JSON in ```yaml or ```toml.
+  // Strategy 3: YAML/TOML fences ? some models wrap JSON in ```yaml or ```toml.
   const altFenced = [...text.matchAll(/```(?:yaml|toml)?\s*([\s\S]*?)```/g)]
     .map(m => m[1]?.trim())
     .filter((c): c is string => Boolean(c?.startsWith('{') && c.endsWith('}')))
 
   const all = [...fenced, ...altFenced, ...balanced]
 
-  // Strategy 4: tail extraction — models most often place JSON at the END of
+  // Strategy 4: tail extraction ? models most often place JSON at the END of
   // the response after prose. Try the last N characters as a candidate.
   const TAIL_SIZE = 8000
   const tail = text.length > TAIL_SIZE ? text.slice(-TAIL_SIZE) : text
@@ -657,21 +660,21 @@ function collectJsonCandidates(text: string): JsonCandidates {
 
   if (all.length > 0) return { candidates: all }
 
-  // Strategy 5: raw text — treat the entire trimmed message as a candidate.
+  // Strategy 5: raw text ? treat the entire trimmed message as a candidate.
   const trimmed = text.trim()
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     return { candidates: [trimmed] }
   }
 
-  // Strategy 6: truncated JSON repair — find the first {, balance braces
+  // Strategy 6: truncated JSON repair ? find the first {, balance braces
   // AND close unclosed strings (maxTokens truncation mid-string is the
-  // most common "Unterminated string in JSON" cause — brace-only repair
+  // most common "Unterminated string in JSON" cause ? brace-only repair
   // leaves the string open and JSON.parse still fails).
   const firstBrace = text.indexOf('{')
   if (firstBrace !== -1) {
     const truncated = text.slice(firstBrace)
     // Stack tracks opener order so closers are emitted in correct nesting
-    // order (e.g. {"a":[{"b":"val → needs "}]} not "]} }).
+    // order (e.g. {"a":[{"b":"val ? needs "}]} not "]} }).
     const stack: string[] = []
     let inStr = false
     let esc = false
@@ -687,7 +690,7 @@ function collectJsonCandidates(text: string): JsonCandidates {
     }
     // Build repair suffix: close unclosed string first, then closers in
     // reverse stack order. If `esc` is still true, the last character was
-    // a dangling `\` — strip it so the appended `"` closes the string
+    // a dangling `\` ? strip it so the appended `"` closes the string
     // rather than being escaped.
     const closers = stack.reverse().map(opener => opener === '{' ? '}' : ']').join('')
     let suffix = ''
@@ -717,8 +720,8 @@ function extractJsonParseError(error: unknown): string {
 }
 
 function parseJsonCandidate(candidate: string): unknown {
-  // 先尝试直接解析；失败后 repair 非法 JSON 转义序列（如 Windows 路径
-  // "F:\x" 中的 \x）再试一次。worker 输出含裸反斜杠是高频故障模式。
+  // ??????????? repair ?? JSON ?????? Windows ??
+  // "F:\x" ?? \x??????worker ???????????????
   try {
     return JSON.parse(candidate) as unknown
   } catch {
@@ -765,7 +768,7 @@ function parseWorkerResultObject(parsed: unknown, expectedWorkOrderId: string): 
 
 /** Thrown when JSON candidates exist in the worker output but none parses into
  *  a schema-valid WorkerResult. MUST be thrown (not swallowed into a blocked
- *  result) so the caller's catch-driven repair loop fires — a single malformed
+ *  result) so the caller's catch-driven repair loop fires ? a single malformed
  *  character in an otherwise complete report is recoverable with one cheap
  *  in-session repair re-ask (worker context is prefix-cached). See session
  *  2c1186f5: a 10.9k-char scout report was discarded because the terminal
@@ -781,7 +784,7 @@ export class WorkerResultParseError extends Error {
 }
 
 export function parseWorkerResult(text: string, expectedWorkOrderId: string): WorkerResult {
-  // collectJsonCandidates throws when truly no JSON is found — let it propagate
+  // collectJsonCandidates throws when truly no JSON is found ? let it propagate
   // so the caller's repair loop can trigger a retry with the repair prompt.
   const { candidates, repaired } = collectJsonCandidates(text)
   const errors: string[] = []
@@ -806,7 +809,7 @@ export function parseWorkerResult(text: string, expectedWorkOrderId: string): Wo
     // Reached only when every intact candidate already failed, so the only
     // thing that parsed is the report we auto-closed ourselves. Returning it
     // hands the caller a clean `passed` with a summary cut mid-sentence and
-    // whatever findings happened to survive — indistinguishable from a worker
+    // whatever findings happened to survive ? indistinguishable from a worker
     // that genuinely had nothing to report. Throw instead: the caller's repair
     // loop re-asks, and if retries exhaust, salvageWorkerResult recovers the
     // same findings with status 'blocked' and evidenceStatus 'unverified'.
@@ -818,11 +821,11 @@ export function parseWorkerResult(text: string, expectedWorkOrderId: string): Wo
 
   // All JSON candidates failed to parse or validate. Throw so the caller's
   // repair loop fires (repair prompt / json-mode re-ask). Terminal handling
-  // (salvage → blocked) is the caller's responsibility after retries exhaust.
+  // (salvage ? blocked) is the caller's responsibility after retries exhaust.
   throw new WorkerResultParseError(candidates.length, errors)
 }
 
-/** Field-level salvage — the terminal tier between "repair retries exhausted"
+/** Field-level salvage ? the terminal tier between "repair retries exhausted"
  *  and an empty blocked result. Scans all JSON candidates for independently
  *  parseable finding objects and a summary string, and rebuilds a degraded but
  *  usable WorkerResult (status stays 'blocked', evidenceStatus 'unverified')
@@ -830,9 +833,9 @@ export function parseWorkerResult(text: string, expectedWorkOrderId: string): Wo
  *  entire report to one syntax error. Returns null when nothing is salvageable.
  *
  *  Two-tier recovery:
- *  1. Candidate-level — a balanced/fenced candidate that is itself a finding
+ *  1. Candidate-level ? a balanced/fenced candidate that is itself a finding
  *     object (`{claim,evidence,confidence}`) parses straight through.
- *  2. Finding-element-level — a candidate that parses to a wrapper object with
+ *  2. Finding-element-level ? a candidate that parses to a wrapper object with
  *     a `findings` array (common when a fenced/tail candidate captures the full
  *     WorkerResult but its sibling fields contain an unescaped quote that broke
  *     `workerResultIngestSchema`). The wrapper itself fails the finding schema
@@ -911,10 +914,10 @@ export function salvageWorkerResult(text: string, expectedWorkOrderId: string, p
     artifacts: [{
       kind: 'note',
       title: 'Parse-salvaged worker report',
-      content: `Result contract failed but individual findings were recovered. Treat findings as unverified leads — the full report did not pass schema validation.`,
+      content: `Result contract failed but individual findings were recovered. Treat findings as unverified leads ? the full report did not pass schema validation.`,
     }],
     changedFiles: [],
-    risks: [`parse-salvaged: ${findings.length} finding(s) recovered from a malformed report — verify before trusting`],
+    risks: [`parse-salvaged: ${findings.length} finding(s) recovered from a malformed report ? verify before trusting`],
     nextActions: ['Weigh salvaged findings as unverified leads; re-dispatch with resume if full fidelity is needed'],
     evidenceStatus: 'unverified',
     failureReason: 'json_parse',
@@ -922,13 +925,13 @@ export function salvageWorkerResult(text: string, expectedWorkOrderId: string, p
   }
 }
 
-/** verdict ≠ status（2026-08-02 审查语义失真事故）：审查/验证工单的「发现缺陷」
- *  不是 worker 运行失败。worker 把审查结论编码成 failed/escalated 时（有 findings
- *  且无 failureReason/parseErrorKind 等基础设施失败标记），归一为 passed：
- *  缺陷走 findings/polarity 通道；连败计数、熔断、升级只记真实运行失败。
- *  blocked（预算/超时死亡）不归一；非审查/验证类工单不归一。
- *  2026-08-02 事故：3 个审查 worker 报告全部解析成功，但因 verdict=fail 被计
- *  3 连败触发升级，且 findings 被 mapSquadronFindings 的 passed 过滤丢弃。 */
+/** verdict ? status?2026-08-02 ????????????/???????????
+ *  ?? worker ?????worker ???????? failed/escalated ??? findings
+ *  ?? failureReason/parseErrorKind ?????????????? passed?
+ *  ??? findings/polarity ??????????????????????
+ *  blocked???/????????????/?????????
+ *  2026-08-02 ???3 ??? worker ??????????? verdict=fail ??
+ *  3 ???????? findings ? mapSquadronFindings ? passed ????? */
 export function normalizeReviewVerdictStatus(order: WorkOrder, result: WorkerResult): WorkerResult {
   if (order.kind !== 'review' && order.kind !== 'verify') return result
   if (result.status !== 'failed' && result.status !== 'escalated') return result
@@ -937,7 +940,7 @@ export function normalizeReviewVerdictStatus(order: WorkOrder, result: WorkerRes
   return {
     ...result,
     status: 'passed',
-    risks: [...result.risks, 'verdict-normalized: worker 将审查结论编码为 status，已按 verdict≠status 归一为 passed（缺陷见 findings/polarity）'],
+    risks: [...result.risks, 'verdict-normalized: worker ???????? status??? verdict?status ??? passed???? findings/polarity?'],
   }
 }
 
@@ -960,21 +963,21 @@ export function buildBlockedWorkerResult(order: WorkOrder, reason: string, failu
   }
 }
 
-/** 聚合策略中途达标（first_success 已有通过者 / quorum 组已达 k）后，
- *  未完成的兄弟 worker 被短路取消时的合成结果。不是故障：状态 blocked
- *  仅表示"没有产出"，evidenceStatus=skipped 表示证据门无需评估。 */
+/** ?????????first_success ????? / quorum ??? k???
+ *  ?????? worker ??????????????????? blocked
+ *  ???"????"?evidenceStatus=skipped ?????????? */
 export function buildPolicyCancelledResult(order: WorkOrder, policyLabel: string): WorkerResult {
   return {
     workOrderId: order.id,
     objective: order.objective,
     groupId: order.groupId,
     status: 'blocked',
-    summary: `Policy short-circuit: 聚合策略（${policyLabel}）已达标，本 worker 被取消以节省预算。这不是故障，无需重派。`,
+    summary: `Policy short-circuit: ?????${policyLabel}?????? worker ????????????????????`,
     findings: [],
     artifacts: [],
     changedFiles: [],
-    risks: [`policy_short_circuit: 兄弟结果已满足 ${policyLabel}，本结果被策略性取消`],
-    nextActions: [`如需其部分产出，可 delegate_task({resume: "${order.id}"}) 续跑`],
+    risks: [`policy_short_circuit: ??????? ${policyLabel}??????????`],
+    nextActions: [`????????? delegate_task({resume: "${order.id}"}) ??`],
     evidenceStatus: 'skipped',
     failureReason: 'policy_short_circuit',
   }

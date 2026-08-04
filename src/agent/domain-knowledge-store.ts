@@ -1,5 +1,5 @@
 /**
- * Domain Knowledge Store — per-domain experience accumulation (V3 Component B).
+ * Domain Knowledge Store ? per-domain experience accumulation (V3 Component B).
  *
  * Storage model: one JSONL file per domain under .rivet/knowledge/domains/<id>.jsonl
  * Reuses three paradigms:
@@ -7,11 +7,11 @@
  *   - project-memory-writer: lock + atomic write + monotonic append
  *   - dream: high-gate distillation (only high-confidence + evidence)
  *
- * Design constraints (from spec §6):
+ * Design constraints (from spec ?6):
  *   - Per-domain namespace isolation (no cross-domain pollution)
  *   - Lock + atomic write + monotonic append (canonical invariant)
- *   - Dedup by id (hash of domainId + canonical text) → reinforce on match
- *   - Grade: novice → journeyman → expert (by independent reinforcement count)
+ *   - Dedup by id (hash of domainId + canonical text) ? reinforce on match
+ *   - Grade: novice ? journeyman ? expert (by independent reinforcement count)
  *   - Decay lets stale lessons naturally age out
  *   - Write does not block return (debounced 200ms + flushSync on exit)
  */
@@ -22,7 +22,7 @@ import { randomBytes, createHash } from 'node:crypto'
 import { computeCurrentStrength } from '../context/stigmergy.js'
 import type { StarDomainId } from './star-domain.js'
 
-// ─── Types ──────────────────────────────────────────────────────
+// ??? Types ??????????????????????????????????????????????????????
 
 export type DomainLessonKind =
   | 'defect_pattern'     // tianquan/tianfu: codebase defect patterns
@@ -38,7 +38,7 @@ export interface DomainLesson {
   id: string
   domainId: string
   kind: DomainLessonKind
-  /** One reusable judgment, ≤200 chars */
+  /** One reusable judgment, ?200 chars */
   text: string
   /** file:line / command / counterexample */
   evidence: string
@@ -59,18 +59,25 @@ export interface DepositInput {
   halfLifeMs?: number
 }
 
-/** 星河路由记录（收编 #5）：一次 galaxy/维度派发的路由事实。
- *  按 taskShape（归一化维度名）聚合胜率，供 formatGalaxyProposal 回召。 */
+/** ????????? #5???? galaxy/??????????
+ *  ? taskShape?????????????? formatGalaxyProposal ???
+ *  model??? S4??????????DP ?? A/B ????????????
+ *  costTokens??? L3??? worker ?? token ???input+output???
+ *  ??????????proposal ???????????? */
 export interface GalaxyRoutingRecord {
   dimensionName: string
   authority: string
-  /** 归一化任务形状（小写去空白）——胜率聚合键。 */
+  /** ?????????????????????? */
   taskShape: string
   status: 'passed' | 'failed' | 'blocked'
+  /** ???????????????/????? */
+  model?: string
+  /** ? worker ? token ?????input+output??????????? */
+  costTokens?: number
   depositedAt: number
 }
 
-// ─── Constants ──────────────────────────────────────────────────
+// ??? Constants ??????????????????????????????????????????????????
 
 const DEFAULT_HALF_LIFE_MS = 604_800_000 // 7 days (same as stigmergy)
 const PRUNE_THRESHOLD = 0.05
@@ -92,7 +99,7 @@ const GRADE_THRESHOLDS: Array<{ min: number; grade: DomainGrade }> = [
   { min: 1, grade: 'novice' },
 ]
 
-// ─── Helpers ────────────────────────────────────────────────────
+// ??? Helpers ????????????????????????????????????????????????????
 
 function computeGrade(reinforcement: number): DomainGrade {
   for (const t of GRADE_THRESHOLDS) {
@@ -221,20 +228,20 @@ function parseLessons(raw: string): DomainLesson[] {
     .filter((e): e is DomainLesson => e !== null && typeof e.id === 'string' && typeof e.text === 'string')
 }
 
-// ─── DomainKnowledgeStore ───────────────────────────────────────
+// ??? DomainKnowledgeStore ???????????????????????????????????????
 
 export class DomainKnowledgeStore {
   private cache = new Map<string, DomainLesson[]>()
   private dirty = new Set<string>()
   private flushTimer: ReturnType<typeof setTimeout> | null = null
-  /** 星河路由记录（收编 #5）：独立 JSONL（跨域共享，按 taskShape 聚合），
-   *  复用锁 + 原子写范式。有界（MAX_ROUTING_RECORDS，LRU 截断）。 */
+  /** ????????? #5???? JSONL??????? taskShape ????
+   *  ??? + ?????????MAX_ROUTING_RECORDS?LRU ???? */
   private routingCache: GalaxyRoutingRecord[] | null = null
   private routingDirty = false
 
   constructor(private baseDir: string) {}
 
-  // ── Core operations ──────────────────────────────────────────
+  // ?? Core operations ??????????????????????????????????????????
 
   /** Deposit a lesson. If dedup key matches existing, reinforce instead. */
   deposit(input: DepositInput): void {
@@ -279,7 +286,7 @@ export class DomainKnowledgeStore {
     this.scheduleFlush()
   }
 
-  /** Recall top-K lessons for a domain, sorted by grade×decay strength. */
+  /** Recall top-K lessons for a domain, sorted by grade?decay strength. */
   recall(domainId: string, topK = 8): DomainLesson[] {
     const safeDomainId = sanitizeDomainId(domainId)
     if (!safeDomainId) return []
@@ -326,7 +333,7 @@ export class DomainKnowledgeStore {
       }
     }
 
-    // Sort by grade×strength desc, cap
+    // Sort by grade?strength desc, cap
     const kept = [...byId.values()]
       .filter(l => computeCurrentStrength(l.strength, now - l.depositedAt, l.halfLifeMs) >= PRUNE_THRESHOLD)
       .sort((a, b) => {
@@ -338,20 +345,32 @@ export class DomainKnowledgeStore {
     return { kept, pruned: lessons.length - kept.length }
   }
 
-  // ── Galaxy routing records（星河收编 #5）──────────────────────
+  // ?? Galaxy routing records????? #5???????????????????????
 
-  /** 沉淀一条路由事实（galaxy 结算时调用）。追加式（每次执行一条，供胜率
-   *  统计），有界截断（MAX_ROUTING_RECORDS，LRU 语义）。 */
+  /** ?????????galaxy ?????????????????????
+   *  ?????????MAX_ROUTING_RECORDS?LRU ???? */
   recordGalaxyRouting(record: Omit<GalaxyRoutingRecord, 'depositedAt'>): void {
-    const records = this.loadRoutingRecords()
-    records.push({ ...record, depositedAt: Date.now() })
-    const capped = records.slice(-MAX_ROUTING_RECORDS)
-    this.routingCache = capped
+    this.recordGalaxyRoutingBatch([record])
+  }
+
+  /**
+   * Record several routing facts with one cache update and one debounce reset.
+   * Galaxy normally deposits one fact per worker dimension, so batching avoids
+   * repeatedly scheduling the same background flush during a single run.
+   */
+  recordGalaxyRoutingBatch(records: readonly Omit<GalaxyRoutingRecord, 'depositedAt'>[]): void {
+    if (records.length === 0) return
+    const existing = this.loadRoutingRecords()
+    const depositedAt = Date.now()
+    for (let index = 0; index < records.length; index++) {
+      existing.push({ ...records[index]!, depositedAt: depositedAt + index })
+    }
+    this.routingCache = existing.slice(-MAX_ROUTING_RECORDS)
     this.routingDirty = true
     this.scheduleFlush()
   }
 
-  /** 召回同 taskShape 的历史路由记录（新→旧），供 proposal 胜率聚合。 */
+  /** ??? taskShape ?????????????? proposal ????? */
   recallGalaxyRouting(taskShape: string, topK = 20): GalaxyRoutingRecord[] {
     return this.loadRoutingRecords()
       .filter(r => r.taskShape === taskShape)
@@ -401,11 +420,11 @@ export class DomainKnowledgeStore {
         lock.release()
       }
     } catch {
-      // 同 writer-health gate：保留 dirty，下次 flush 重试
+      // ? writer-health gate??? dirty??? flush ??
     }
   }
 
-  // ── Persistence ──────────────────────────────────────────────
+  // ?? Persistence ??????????????????????????????????????????????
 
   private domainPath(domainId: string): string {
     const safeDomainId = sanitizeDomainId(domainId)
@@ -448,7 +467,7 @@ export class DomainKnowledgeStore {
       try {
         this.flushRoutingDirty()
       } catch {
-        // 路由记录同样保持 dirty，下次重试
+        // ???????? dirty?????
       }
     }, DEBOUNCE_MS)
   }

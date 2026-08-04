@@ -15,6 +15,7 @@ import { foldCode } from '../compact/code-fold.js'
 import { canUsePrewarmForRead, consumePrewarm } from '../agent/prewarm-file.js'
 import { canonicalPathKey } from '../path-format.js'
 import { OFFICE_EXTENSIONS, readOfficeFile } from './office-reader.js'
+import { buildFocusedReadView } from './focused-read.js'
 
 // Cache GitignoreFilter instances by cwd to avoid re-reading .gitignore on every call
 const gitignoreCache = new Map<string, { filter: Promise<GitignoreFilter>; ts: number }>()
@@ -40,21 +41,21 @@ function trimGitignoreCache(): void {
 // entries eagerly via invalidateReadHistory().
 interface ReadHistoryEntry {
   mtimeMs: number
-  /** stat().size of the whole file at read time — second staleness signal
+  /** stat().size of the whole file at read time ? second staleness signal
    *  alongside mtime, hardening against coarse-mtime filesystems (exFAT: 2s). */
   sizeBytes: number
   rawBytes: number
   modelBytes: number
   truncated: boolean
   recordedAt: number
-  /** ArtifactStore ID — set when artifactStore was active during the original read.
+  /** ArtifactStore ID ? set when artifactStore was active during the original read.
    * Lets the dedup path tell the model how to recover the full content via read_section
    * even if stale-round compaction has truncated the prior tool_result. */
   artifactId?: string
   /** Times a [read-ref] shortcut was served against this entry. When the model
    *  comes back for the SAME unchanged slice after already receiving a ref, the
    *  ref demonstrably didn't help (its "look above" target may have been pruned
-   *  from the request view) — degrade to a real read instead of looping. */
+   *  from the request view) ? degrade to a real read instead of looping. */
   refServed?: number
 }
 const readHistory = new Map<string, ReadHistoryEntry>()
@@ -65,7 +66,7 @@ const READ_HISTORY_MAX = 500
  * no offset/limit. Independent of readHistory (per-slice dedup). */
 interface FileReadHistoryEntry {
   mtimeMs: number
-  /** stat().size at read time — see ReadHistoryEntry.sizeBytes. */
+  /** stat().size at read time ? see ReadHistoryEntry.sizeBytes. */
   sizeBytes: number
   totalLines: number
   rawBytes: number
@@ -78,14 +79,14 @@ interface FileReadHistoryEntry {
 const fileReadHistory = new Map<string, FileReadHistoryEntry>()
 const FILE_READ_HISTORY_MAX = 200
 
-/** 表2 — last observed file state per session. Written by read_file, grep
+/** ?2 ? last observed file state per session. Written by read_file, grep
  *  registration, AND successful edits (edit_file/hash_edit/write_file). Read
  *  by the stale-file detection in the edit tools and read_section.
  *
- *  This is deliberately separate from readHistory/fileReadHistory (表1): 表1
+ *  This is deliberately separate from readHistory/fileReadHistory (?1): ?1
  *  means "content the model actually read" and is only ever written by read
- *  paths — edits DELETE its entries (invalidateReadHistory) so read-ref can
- *  never claim "unchanged" against pre-edit content. 表2 carries the old
+ *  paths ? edits DELETE its entries (invalidateReadHistory) so read-ref can
+ *  never claim "unchanged" against pre-edit content. ?2 carries the old
  *  refreshFileReadMtime duty: after our own successful edit we note the new
  *  mtime here so the next edit's staleness check doesn't false-positive on
  *  our own write (read-edit-stale loop prevention). */
@@ -97,7 +98,7 @@ const lastKnownFileState = new Map<string, KnownFileState>()
 const LAST_KNOWN_MAX = 500
 
 /** Consecutive edit_file "old_string not found" failures per file.
- *  ≥3 triggers a hard gate requiring read_file before further edits. */
+ *  ?3 triggers a hard gate requiring read_file before further edits. */
 const editFailCount = new Map<string, number>()
 
 export function incrementEditFailCount(canonicalPath: string): number {
@@ -153,7 +154,7 @@ let readRefCount = 0
  *  "modified externally" from "you edited this yourself earlier."
  *  Keyed by `${sessionId ?? ''}::${path}` so concurrent in-process sessions
  *  (fork/worker) don't see each other's edit marks.
- *  Intentionally NOT cleared on compaction — the agent should always know
+ *  Intentionally NOT cleared on compaction ? the agent should always know
  *  which files it has touched, even after long sessions. */
 const sessionFileEdits = new Set<string>()
 
@@ -172,14 +173,14 @@ export function wasFileEditedBySession(canonicalPath: string, sessionId?: string
 export function __resetSessionFileEditsForTests(): void {
   sessionFileEdits.clear()
 }
-// 键路径统一走 canonicalPathKey（win32 下分隔符归一 + lowercase）：Windows 上
-// D:\a / D:/a / d:/a 是同一文件，字符串键却是三个——读表漏命中事小，编辑后
-// invalidateReadHistory 的后缀匹配失手 → read-ref 拿旧内容说"未变"才是要害。
+// ?????? canonicalPathKey?win32 ?????? + lowercase??Windows ?
+// D:\a / D:/a / d:/a ???????????????????????????
+// invalidateReadHistory ??????? ? read-ref ?????"??"?????
 function readHistoryKey(cwd: string, canonicalPath: string, offset: number, limit: number | undefined, sessionId?: string): string {
   return `${sessionId ?? ''}::${canonicalPathKey(cwd)}::${canonicalPathKey(canonicalPath)}::${offset}::${limit ?? 'all'}`
 }
 
-/** Key for fileReadHistory / lastKnownFileState / sessionFileEdits — scoped by
+/** Key for fileReadHistory / lastKnownFileState / sessionFileEdits ? scoped by
  *  sessionId so concurrent sessions in the same cwd (fork/worker) don't see
  *  each other's "already read"/"already edited" state. */
 function fileHistoryKey(sessionId: string | undefined, canonicalPath: string): string {
@@ -202,7 +203,7 @@ function trimFileReadHistory(): void {
 
 /**
  * Returns true when a prior read of the same file (same offset/limit, or a full-file
- * read that subsumes this request) was recorded with a matching mtime AND size —
+ * read that subsumes this request) was recorded with a matching mtime AND size ?
  * meaning the file has NOT been modified since it was last read.
  */
 export function isUnchangedRepeatRead(
@@ -242,7 +243,7 @@ export function getFileReadMtime(canonicalPath: string, sessionId?: string): num
  *  Successor of the old refreshFileReadMtime: after a successful edit the
  *  caller notes the post-write mtime here so the NEXT edit's staleness check
  *  doesn't false-positive on our own write (read-edit-stale loop prevention).
- *  Writes 表2 only — never touches the read-dedup tables, so read-ref can
+ *  Writes ?2 only ? never touches the read-dedup tables, so read-ref can
  *  never be tricked into claiming pre-edit content is current. */
 export function noteFileObserved(canonicalPath: string, mtimeMs: number, sizeBytes: number, sessionId?: string): void {
   lastKnownFileState.set(fileHistoryKey(sessionId, canonicalPath), { mtimeMs, sizeBytes })
@@ -253,11 +254,11 @@ export function noteFileObserved(canonicalPath: string, mtimeMs: number, sizeByt
  *  after a successful edit_file/hash_edit/write_file: the on-disk content no
  *  longer matches what any session read, so "already read and unchanged"
  *  claims and artifact-backed slices for this path must die. Cross-session
- *  deletion is safe — those entries would fail the mtime+size check anyway. */
+ *  deletion is safe ? those entries would fail the mtime+size check anyway. */
 export function invalidateReadHistory(canonicalPath: string): void {
-  // canonicalPathKey 归一后再匹配：跨会话 file_changed 事件带来的路径可能与
-  // 本进程建键时的大小写/分隔符不同（另一进程、另一种 shell），不归一会静默
-  // 失效——正是 Windows 上 read-ref 中毒的复发通道。
+  // canonicalPathKey ?????????? file_changed ??????????
+  // ??????????/?????????????? shell????????
+  // ?????? Windows ? read-ref ????????
   const keyPath = canonicalPathKey(canonicalPath)
   const suffix = `::${keyPath}`
   for (const key of fileReadHistory.keys()) {
@@ -270,12 +271,12 @@ export function invalidateReadHistory(canonicalPath: string): void {
   }
 }
 
-/** Drop ALL read-dedup records (表1) for a session. Called after any message-
+/** Drop ALL read-dedup records (?1) for a session. Called after any message-
  *  history rewrite (compaction ladder, agent-diet, stale-round, heap micro-
- *  compact): the historical tool_results that read-ref points at ("回看上文")
+ *  compact): the historical tool_results that read-ref points at ("????")
  *  may have been deleted, summarized, or replaced with placeholders, so
- *  "already read" claims must die with them. 表2 (lastKnownFileState) and
- *  sessionFileEdits survive — they track FILE state, not history presence.
+ *  "already read" claims must die with them. ?2 (lastKnownFileState) and
+ *  sessionFileEdits survive ? they track FILE state, not history presence.
  *  Cost ceiling: one extra real read per file after a compaction that already
  *  rewrote history (prefix cache is broken at that point anyway). */
 export function invalidateSessionReadDedup(sessionId?: string): void {
@@ -299,7 +300,7 @@ export async function recordSuccessfulEdit(canonicalPath: string, sessionId?: st
   try {
     const s = await stat(canonicalPath)
     noteFileObserved(canonicalPath, s.mtimeMs, s.size, sessionId)
-  } catch { /* file vanished between write and stat — nothing to note */ }
+  } catch { /* file vanished between write and stat ? nothing to note */ }
 }
 
 /** Test-only: inject a last-known file state so stale detection can trigger
@@ -308,8 +309,8 @@ export function __setFileReadMtimeForTests(canonicalPath: string, mtimeMs: numbe
   lastKnownFileState.set(fileHistoryKey(sessionId, canonicalPath), { mtimeMs, sizeBytes: -1 })
 }
 
-/** Test-only: evict a single 表2 entry — simulates LAST_KNOWN_MAX trimming
- *  diverging from the dedup tables (表1), which trim independently. */
+/** Test-only: evict a single ?2 entry ? simulates LAST_KNOWN_MAX trimming
+ *  diverging from the dedup tables (?1), which trim independently. */
 export function __evictLastKnownForTests(canonicalPath: string, sessionId?: string): void {
   lastKnownFileState.delete(fileHistoryKey(sessionId, canonicalPath))
 }
@@ -360,6 +361,8 @@ function getGitignoreFilter(cwd: string): Promise<GitignoreFilter> {
 }
 
 const MAX_TOOL_INPUT_BYTES = 100 * 1024
+/** Focused reads may scan a larger source file, but never load unbounded data. */
+const MAX_FOCUS_SCAN_BYTES = 2 * 1024 * 1024
 const LOG_PREVIEW_LINES = 80
 
 /**
@@ -375,7 +378,7 @@ function applyFoldThenPartial(content: string, filePath: string, cap: ModelReadC
   return buildPartialView(content, filePath, cap.maxChars)
 }
 
-/** File extensions known to be binary — read_file rejects them with a clear error
+/** File extensions known to be binary ? read_file rejects them with a clear error
  *  instead of returning garbled UTF-8 to the model. */
 const BINARY_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svgz',
@@ -388,9 +391,9 @@ const BINARY_EXTENSIONS = new Set([
   '.db', '.sqlite', '.sqlite3',
 ])
 
-/** 图片文件 → MIME。这些扩展从 BINARY_EXTENSIONS 里分流：不再报 binary 错误，
- *  而是 base64 编码后经 ToolResult.images 通道返回——pipeline 按当前模型
- *  supportsVision 决定是否转发给模型（非视觉模型自动丢弃，行为与安全期一致）。 */
+/** ???? ? MIME?????? BINARY_EXTENSIONS ??????? binary ???
+ *  ?? base64 ???? ToolResult.images ??????pipeline ?????
+ *  supportsVision ?????????????????????????????? */
 const IMAGE_EXTENSIONS = new Map([
   ['.png', 'image/png'],
   ['.jpg', 'image/jpeg'],
@@ -400,13 +403,13 @@ const IMAGE_EXTENSIONS = new Map([
   ['.bmp', 'image/bmp'],
 ])
 
-/** 图片体积上限：对齐主流视觉 API 的 10MB 限制。 */
+/** ????????????? API ? 10MB ??? */
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 async function readImageFile(filePath: string, ext: string, sizeBytes: number) {
   if (sizeBytes > MAX_IMAGE_BYTES) {
     return {
-      content: `Error: image too large (${(sizeBytes / 1048576).toFixed(1)}MB，上限 10MB)。请先缩放/裁剪（如 sips -Z 1600 ${filePath} 或 magick ${filePath} -resize 1600x），或用 tesseract OCR 提取文字。`,
+      content: `Error: image too large (${(sizeBytes / 1048576).toFixed(1)}MB??? 10MB)?????/???? sips -Z 1600 ${filePath} ? magick ${filePath} -resize 1600x???? tesseract OCR ?????`,
       isError: true,
     }
   }
@@ -414,7 +417,7 @@ async function readImageFile(filePath: string, ext: string, sizeBytes: number) {
   const mime = IMAGE_EXTENSIONS.get(ext)!
   const dataUrl = `data:${mime};base64,${buf.toString('base64')}`
   return {
-    content: `read_file: ${filePath} 是图片（${mime}，${sizeBytes} bytes），已作为视觉附件附上——请直接查看图片内容作答（视觉模型可见；非视觉模型该附件会被自动丢弃）。`,
+    content: `read_file: ${filePath} ????${mime}?${sizeBytes} bytes????????????????????????????????????????????????`,
     images: [dataUrl],
   }
 }
@@ -433,11 +436,11 @@ function buildLogPreviewContent(filePath: string, content: string): string {
     `Preview boundaries: head offset=1 limit=${head.length}${tail.length > 0 ? `; tail offset=${tailStart} limit=${tail.length}` : ''}.`,
     `Next step: use read_file(file_path=..., offset=<known line>, limit<=200) for a specific range; use grep on this file for keywords/timestamps before reading middle ranges. Do not scan the whole project for this log.`,
     '',
-    `── head (L1-L${head.length}) ──`,
+    `?? head (L1-L${head.length}) ??`,
     ...head,
   ]
   if (omitted > 0) {
-    parts.push('', `... ${omitted} lines omitted ...`, '', `── tail (L${tailStart}-L${lines.length}) ──`, ...tail)
+    parts.push('', `... ${omitted} lines omitted ...`, '', `?? tail (L${tailStart}-L${lines.length}) ??`, ...tail)
   }
   return parts.join('\n')
 }
@@ -447,7 +450,7 @@ function buildFileUiOutput(raw: string, maxLines: number): string {
   const lines = raw.split('\n')
   const totalLines = lines.length
   if (totalLines <= maxLines) {
-    return lines.map((l, i) => `${String(i + 1).padStart(4, ' ')}│ ${l}`).join('\n')
+    return lines.map((l, i) => `${String(i + 1).padStart(4, ' ')}? ${l}`).join('\n')
   }
 
   const headLines = Math.ceil(maxLines * 0.6)
@@ -455,9 +458,9 @@ function buildFileUiOutput(raw: string, maxLines: number): string {
   const omitted = totalLines - headLines - tailLines
 
   const head = lines.slice(0, headLines)
-    .map((l, i) => `${String(i + 1).padStart(4, ' ')}│ ${l}`)
+    .map((l, i) => `${String(i + 1).padStart(4, ' ')}? ${l}`)
   const tail = lines.slice(-tailLines)
-    .map((l, i) => `${String(totalLines - tailLines + i + 1).padStart(4, ' ')}│ ${l}`)
+    .map((l, i) => `${String(totalLines - tailLines + i + 1).padStart(4, ' ')}? ${l}`)
 
   return [...head, `  ... ${omitted} lines omitted ...`, ...tail].join('\n')
 }
@@ -466,20 +469,24 @@ export interface ReadFilePayloadOptions {
   filePath: string
   offset?: number
   limit?: number
+  /** Task-oriented query. Returns a structural summary plus high-signal ranges. */
+  focus?: string
+  /** Maximum number of focused match windows to return. */
+  focusMaxMatches?: number
   /** Per-call model read cap. Defaults to {@link DEFAULT_MODEL_READ_CAP}. */
   modelCap?: ModelReadCap
   /**
    * Full file content already read by a higher layer (e.g. a prewarm cache
    * hit), skipping the `fs.readFile` inside this function. The content must be
    * the verbatim file bytes (same as `await readFile(filePath, 'utf-8')` would
-   * return) — path validation, gitignore, binary, and cap truncation still run.
+   * return) ? path validation, gitignore, binary, and cap truncation still run.
    */
   prefetchedContent?: string
   /**
    * When a no-range read overflows the cap, serve the fold-skeleton PARTIAL
    * view (navigable: teaches the model where to re-read with offset/limit)
    * instead of a blunt head/tail slice. Set by the tool layer only when a
-   * readCapOverride is active (worker sessions) — main sessions keep the
+   * readCapOverride is active (worker sessions) ? main sessions keep the
    * legacy head/tail behavior byte-for-byte.
    */
   preferFoldOnOverflow?: boolean
@@ -496,7 +503,7 @@ export interface ReadFilePayload {
  * The agent's own state dir (`<cwd>/.rivet/`) and design docs (`<cwd>/docs/superpowers/`)
  * are exempt from the gitignore read block. Plan drafts, specs, and analysis documents
  * are intentionally gitignored (to avoid polluting the source tree), but blocking reads
- * on them deadlocks the agent: write ok → submit rejected → read back refused → wedged
+ * on them deadlocks the agent: write ok ? submit rejected ? read back refused ? wedged
  * (session 91840816 for .rivet/plans/; session 5268cce4 for docs/superpowers/specs/).
  * The gitignore block exists to keep node_modules/build junk out, not the agent's
  * own working files or design documentation.
@@ -508,7 +515,7 @@ function isRivetStatePath(cwd: string, filePath: string): boolean {
     norm(filePath).startsWith(`${base}docs/superpowers/`)
 }
 
-/** Centralized safe file read — validates path, checks gitignore, applies offset/limit, truncates for model. */
+/** Centralized safe file read ? validates path, checks gitignore, applies offset/limit, truncates for model. */
 export async function readFilePayload(cwd: string, options: ReadFilePayloadOptions): Promise<ReadFilePayload> {
   const filePath = validatePath(cwd, options.filePath)
   let fileStat: Awaited<ReturnType<typeof stat>>
@@ -523,14 +530,14 @@ export async function readFilePayload(cwd: string, options: ReadFilePayloadOptio
     throw new Error(`File is gitignored (node_modules, build artifacts, etc.): ${filePath}`)
   }
 
-  // Reject binary files with a clear error — the tool description promises this.
+  // Reject binary files with a clear error ? the tool description promises this.
   // Common binary extensions are checked before reading to avoid returning garbled UTF-8.
   const ext = extname(filePath).toLowerCase()
 
   // Office documents: convert to plain text via platform-native tools
   if (OFFICE_EXTENSIONS.has(ext)) {
     const result = await readOfficeFile(filePath)
-    const officeHint = `\n\n── Office document (${ext}, converted via ${result.engine}) ──`
+    const officeHint = `\n\n?? Office document (${ext}, converted via ${result.engine}) ??`
     const cap = options.modelCap ?? DEFAULT_MODEL_READ_CAP
     return {
       canonicalPath: filePath,
@@ -546,9 +553,17 @@ export async function readFilePayload(cwd: string, options: ReadFilePayloadOptio
 
   const fileSize = fileStat.size
   const hasExplicitRange = options.offset !== undefined || options.limit !== undefined
+  const focus = typeof options.focus === 'string' ? options.focus.trim() : ''
+  const hasFocus = focus.length > 0 && !hasExplicitRange
   const policy = decideReadPolicy({ filePath, sizeBytes: fileSize, hasExplicitRange })
 
-  if (fileSize > MAX_TOOL_INPUT_BYTES && !hasExplicitRange) {
+  if (hasFocus && fileSize > MAX_FOCUS_SCAN_BYTES) {
+    throw new Error(
+      `Focused read refuses files over ${(MAX_FOCUS_SCAN_BYTES / 1024 / 1024).toFixed(0)}MB. Use grep or an explicit offset/limit range first.`,
+    )
+  }
+
+  if (fileSize > MAX_TOOL_INPUT_BYTES && !hasExplicitRange && !hasFocus) {
     if (policy.action === 'partial') {
       // Large source file: read and return PARTIAL view instead of hard error
       const content = options.prefetchedContent ?? await readFile(filePath, 'utf-8')
@@ -575,6 +590,22 @@ export async function readFilePayload(cwd: string, options: ReadFilePayloadOptio
 
   if (policy.action === 'reject-with-range' && !hasExplicitRange) {
     throw new Error(`${policy.reason}. Use offset and limit to read a specific range.`)
+  }
+
+  if (hasFocus) {
+    const focused = buildFocusedReadView({
+      filePath,
+      content,
+      focus,
+      maxChars: cap.maxChars,
+      maxMatches: options.focusMaxMatches,
+    })
+    return {
+      canonicalPath: filePath,
+      rawContent: content,
+      modelContent: focused.content,
+      uiContent: buildFileUiOutput(content, 80),
+    }
   }
 
   if (policy.action === 'preview' && !hasExplicitRange) {
@@ -624,11 +655,11 @@ export async function readFilePayload(cwd: string, options: ReadFilePayloadOptio
   // full-with-hint: append editing guidance for medium-sized files.
   // preferFoldOnOverflow (worker readCapOverride active): a no-range read that
   // overflows the tightened cap serves the fold skeleton (partial view with
-  // navigation) instead of a blunt head/tail slice — the skeleton teaches the
+  // navigation) instead of a blunt head/tail slice ? the skeleton teaches the
   // model WHERE to re-read with offset/limit, the slice doesn't. Gated on the
   // flag so main sessions keep legacy head/tail behavior byte-for-byte.
   // Guard: buildPartialView is line-based and keeps at least one line, so a
-  // single over-budget line (minified/one-liner) can blow past the cap —
+  // single over-budget line (minified/one-liner) can blow past the cap ?
   // fall back to char-exact head/tail truncation in that case. 20% slack
   // absorbs the navigation header (its HEADER_OVERHEAD underestimates long
   // paths) without letting the pathological single-line case through.
@@ -642,7 +673,7 @@ export async function readFilePayload(cwd: string, options: ReadFilePayloadOptio
     modelContent = truncateContent(content, cap.maxChars, cap.headChars, cap.tailChars)
   }
   const hint = policy.action === 'full-with-hint'
-    ? `\n\n── Note: this file is ${content.split('\n').length} lines. For editing, consider: grep to locate target → hash_edit with anchors. ──`
+    ? `\n\n?? Note: this file is ${content.split('\n').length} lines. For editing, consider: grep to locate target ? hash_edit with anchors. ??`
     : ''
 
   return {
@@ -656,26 +687,29 @@ export async function readFilePayload(cwd: string, options: ReadFilePayloadOptio
 export const READ_FILE_TOOL: Tool = {
   definition: {
     name: 'read_file',
-    description: `从文件系统读取文件，支持可选的行范围。
+    description: `???????????????????
 
-- 约 50,000 行以内的文件完整返回——不要自己切成小片分多次读
-- offset/limit 只用于已知子区间（如第 800-900 行），不要拿它当长文件的绕行手段
-- 超过约 2000 行的文件返回 PARTIAL 视图并附导航提示
-- 不要重读未变更的文件——此前结果仍在上下文里
-- file_paths 一次调用最多读 5 个文件
-- 图片文件（png / jpg / jpeg / gif / webp / bmp）会作为视觉附件返回——视觉模型可直接查看图片内容作答（如扫描件、截图、图表），无需先 OCR；非视觉模型该附件自动丢弃`,
+- ? 50,000 ????????????????????????
+- focus="..." ???????????????????????????????????????
+- offset/limit ??????????? 800-900 ????????????????
+- ??? 2000 ?????? PARTIAL ????????
+- ??????????????????????
+- file_paths ??????? 5 ???
+- ?????png / jpg / jpeg / gif / webp / bmp??????????????????????????????????????????? OCR?????????????`,
     input_schema: {
       type: 'object',
       properties: {
-        file_path: { type: 'string', description: '文件的绝对路径' },
+        file_path: { type: 'string', description: '???????' },
         file_paths: {
           type: 'array',
           items: { type: 'string' },
-          description: '一次调用读取多个文件。用于替代重复的 read_file 调用。每个文件单独成节。最多 5 个文件。',
+          description: '?????????????????? read_file ?????????????? 5 ????',
         },
 
-        offset: { type: 'integer', description: '起始读取行号（从 1 开始）' },
-        limit: { type: 'integer', description: '最多读取的行数' },
+        offset: { type: 'integer', description: '???????? 1 ???' },
+        limit: { type: 'integer', description: '???????' },
+        focus: { type: 'string', description: '?????????????????????' },
+        focus_max_matches: { type: 'integer', description: 'focus ???????????? 8?' },
       },
       required: ['file_path'],
     },
@@ -685,7 +719,9 @@ export const READ_FILE_TOOL: Tool = {
     // Multi-read branch: file_paths array
     const filePaths = params.input.file_paths as string[] | undefined
     if (filePaths && filePaths.length > 0) {
-      return await handleMultiRead(params, filePaths.slice(0, 5))
+      const focus = typeof params.input.focus === 'string' ? params.input.focus : undefined
+      const focusMaxMatches = typeof params.input.focus_max_matches === 'number' ? params.input.focus_max_matches : undefined
+      return await handleMultiRead(params, filePaths.slice(0, 5), focus, focusMaxMatches)
     }
 
     let payload: ReadFilePayload
@@ -703,6 +739,8 @@ export const READ_FILE_TOOL: Tool = {
     const filePath = params.input.file_path as string
     const offset = (params.input.offset as number) ?? 1
     const limit = params.input.limit as number | undefined
+    const focus = typeof params.input.focus === 'string' ? params.input.focus.trim() : ''
+    const focusedRead = focus.length > 0 && params.input.offset === undefined && params.input.limit === undefined
     let dedupKey: string | null = null
     let currentMtimeMs: number | null = null
     let currentSizeBytes: number | null = null
@@ -713,18 +751,20 @@ export const READ_FILE_TOOL: Tool = {
         const currentStat = await stat(canonical)
         currentMtimeMs = currentStat.mtimeMs
         currentSizeBytes = currentStat.size
-        dedupKey = readHistoryKey(params.cwd, canonical, offset, limit, params.sessionId)
-        const prior = readHistory.get(dedupKey)
-        if (prior && prior.mtimeMs === currentMtimeMs && prior.sizeBytes === currentSizeBytes && prior.artifactId) {
+        if (!focusedRead) {
+          dedupKey = readHistoryKey(params.cwd, canonical, offset, limit, params.sessionId)
+        }
+        const prior = focusedRead || !dedupKey ? undefined : readHistory.get(dedupKey)
+        if (!focusedRead && prior && prior.mtimeMs === currentMtimeMs && prior.sizeBytes === currentSizeBytes && prior.artifactId) {
           if (params.artifactStore) {
             const slice = await sliceFromArtifact(params.artifactStore, prior.artifactId, offset, limit)
             if (slice !== null) {
               debugLog(`[read-dedup] re-serve from artifact file=${canonical} offset=${offset} limit=${limit ?? 'all'}`)
-              // 表2 re-registration: dedup 表(表1) and lastKnownFileState(表2)
-              // trim independently — 表2 may have evicted this entry while 表1
+              // ?2 re-registration: dedup ?(?1) and lastKnownFileState(?2)
+              // trim independently ? ?2 may have evicted this entry while ?1
               // survives. Without this, "read the file first" guidance from the
               // edit/write staleness guards would loop forever (read short-
-              // circuits here and never refreshes 表2). We just statted the
+              // circuits here and never refreshes ?2). We just statted the
               // file, so the observation is current.
               noteFileObserved(canonical, currentMtimeMs, currentSizeBytes, params.sessionId)
               return { content: slice }
@@ -732,13 +772,13 @@ export const READ_FILE_TOOL: Tool = {
           }
           debugLog(`[read-dedup] artifact unreadable, falling through to normal read file=${canonical}`)
         }
-        const fullEntry = fileReadHistory.get(fileHistoryKey(params.sessionId, canonical))
-        if (fullEntry && fullEntry.mtimeMs === currentMtimeMs && fullEntry.sizeBytes === currentSizeBytes && fullEntry.artifactId && (offset !== 1 || limit !== undefined)) {
+        const fullEntry = focusedRead ? undefined : fileReadHistory.get(fileHistoryKey(params.sessionId, canonical))
+        if (!focusedRead && fullEntry && fullEntry.mtimeMs === currentMtimeMs && fullEntry.sizeBytes === currentSizeBytes && fullEntry.artifactId && (offset !== 1 || limit !== undefined)) {
           if (params.artifactStore) {
             const slice = await sliceFromArtifact(params.artifactStore, fullEntry.artifactId, offset, limit)
             if (slice !== null) {
               debugLog(`[read-dedup-file] re-serve slice from artifact file=${canonical} offset=${offset} limit=${limit ?? 'all'}`)
-              // 表2 re-registration — same eviction-divergence reasoning as above.
+              // ?2 re-registration ? same eviction-divergence reasoning as above.
               noteFileObserved(canonical, currentMtimeMs, currentSizeBytes, params.sessionId)
               return { content: slice }
             }
@@ -746,19 +786,19 @@ export const READ_FILE_TOOL: Tool = {
           debugLog(`[read-dedup-file] artifact unreadable, falling through file=${canonical}`)
         }
       }
-    } catch { /* fall through to real read; e.g. invalid path → let readFilePayload error normally */ }
+    } catch { /* fall through to real read; e.g. invalid path ? let readFilePayload error normally */ }
 
-    // ── 图片文件分流：base64 经 ToolResult.images 通道返回（pipeline 按
-    // supportsVision 决定是否转发；非视觉模型自动丢弃）。必须在 readFilePayload
-    // 的 binary 拒绝之前分流。file_paths 多读分支暂不走此路径。
+    // ?? ???????base64 ? ToolResult.images ?????pipeline ?
+    // supportsVision ????????????????????? readFilePayload
+    // ? binary ???????file_paths ???????????
     const imageExt = canonical ? extname(canonical).toLowerCase() : ''
     if (canonical && IMAGE_EXTENSIONS.has(imageExt)) {
       return await readImageFile(canonical, imageExt, currentSizeBytes ?? 0)
     }
 
-    // ── 重复读取检测 ──
-    // 检测本轮是否已读过同一文件且未变更，若是则在前端注入提醒。
-    const unchangedRepeat = (canonical && currentMtimeMs !== null && currentSizeBytes !== null && dedupKey)
+    // ?? ?????? ??
+    // ?????????????????????????????
+    const unchangedRepeat = (!focusedRead && canonical && currentMtimeMs !== null && currentSizeBytes !== null && dedupKey)
       ? isUnchangedRepeatRead(canonical, currentMtimeMs, currentSizeBytes, dedupKey, offset, limit, params.sessionId)
       : false
 
@@ -766,20 +806,20 @@ export const READ_FILE_TOOL: Tool = {
     if (unchangedRepeat) {
       const priorSame = readHistory.get(dedupKey!)
       const fullPrior = fileReadHistory.get(fileHistoryKey(params.sessionId, canonical!))
-      // 措辞注意：不要写「回看上文」——历史 tool_result 可能已被压缩/修剪，
-      // 该指引曾诱发回看无果→再读的循环。警告总是与本次全文一起返回，
-      // 直接指向随附内容即可。
+      // ?????????????????? tool_result ??????/???
+      // ???????????????????????????????
+      // ???????????
       if (priorSame && priorSame.mtimeMs === currentMtimeMs) {
-        repeatWarning = `\n── read-dedup ──\n⚠ 此文件本轮已读取过且未变更 (${priorSame.modelBytes} bytes, ${priorSame.truncated ? '已截断' : '完整'})。内容附在下方；后续请勿重复读取未变更的文件。\n── read-dedup ──`
+        repeatWarning = `\n?? read-dedup ??\n? ????????????? (${priorSame.modelBytes} bytes, ${priorSame.truncated ? '???' : '??'})???????????????????????\n?? read-dedup ??`
       } else if (fullPrior && fullPrior.mtimeMs === currentMtimeMs && offset === 1 && !limit) {
-        repeatWarning = `\n── read-dedup ──\n⚠ 此文件本轮已完整读取过且未变更 (${fullPrior.totalLines} lines, ${fullPrior.modelBytes} bytes)。内容附在下方；后续请勿重复读取未变更的文件。\n── read-dedup ──`
+        repeatWarning = `\n?? read-dedup ??\n? ??????????????? (${fullPrior.totalLines} lines, ${fullPrior.modelBytes} bytes)???????????????????????\n?? read-dedup ??`
       }
     }
 
-    // ── 重复读取引用化 (B2) ──
+    // ?? ??????? (B2) ??
     // When RIVET_READ_REF is enabled and this is an unchanged repeat read
     // of a non-trivial file, return a compact reference instead of
-    // re-emitting the full content — avoiding a cacheCreate on bytes the
+    // re-emitting the full content ? avoiding a cacheCreate on bytes the
     // model already has in its context.
     if (unchangedRepeat && isReadRefEnabled()) {
       const priorSame = readHistory.get(dedupKey!)
@@ -791,7 +831,7 @@ export const READ_FILE_TOOL: Tool = {
 
       // Degrade gate: if a ref was ALREADY served for this entry and the model
       // still came back for the same unchanged slice, the ref demonstrably
-      // didn't help — its "look above" target may have been pruned/masked out
+      // didn't help ? its "look above" target may have been pruned/masked out
       // of the request view (request-side prune never touches these tables).
       // Serve the real content instead of looping. The real read below
       // re-records fresh entries (refServed reset), so the ref gets one more
@@ -802,18 +842,18 @@ export const READ_FILE_TOOL: Tool = {
         debugLog(`[read-ref-degrade] file=${canonical} ref did not help, re-serving full content`)
         repeatWarning = null
       } else if (entryBytes > READ_REF_THRESHOLD) {
-        // relative() 而非 replace(cwd+'/')：Windows 下 canonical 是反斜杠路径，
-        // 字符串拼 '/' 永远不匹配 → 提示里泄漏完整绝对路径（且教模型复读它）。
+        // relative() ?? replace(cwd+'/')?Windows ? canonical ???????
+        // ???? '/' ????? ? ?????????????????????
         const relPath = relative(params.cwd, canonical!)
         const sizeHint = totalLines > 0
-          ? `${totalLines} 行，${entryBytes} bytes`
+          ? `${totalLines} ??${entryBytes} bytes`
           : `${entryBytes} bytes`
-        // 读盘优先：read_section 直接读磁盘、不依赖历史消息是否完整；
-        // 「回看上文」只在 tool_result 未被压缩/修剪时可靠，降为补充。
+        // ?????read_section ??????????????????
+        // ???????? tool_result ????/???????????
         const ref = [
-          `[read-ref] ${relPath} 本会话已读且未变（${sizeHint}）。`,
-          `需要具体区段：read_section(file_path="${relPath}", section="L{N}-L{M}")——直接读磁盘，不依赖上文。`,
-          `若上文的 tool_result 仍完整可见，回看即可；若已被压缩为占位符，用 read_section。`,
+          `[read-ref] ${relPath} ?????????${sizeHint}??`,
+          `???????read_section(file_path="${relPath}", section="L{N}-L{M}")??????????????`,
+          `???? tool_result ?????????????????????? read_section?`,
         ].join('\n')
         if (matchedSame) matchedSame.refServed = (matchedSame.refServed ?? 0) + 1
         if (matchedFull) matchedFull.refServed = (matchedFull.refServed ?? 0) + 1
@@ -828,19 +868,19 @@ export const READ_FILE_TOOL: Tool = {
         const totalSaved = params.readRefStats?.savedBytes ?? readRefSavedBytes
         const totalCount = params.readRefStats?.count ?? readRefCount
         debugLog(`[read-ref] file=${canonical} saved=${entryBytes} total-saved=${totalSaved} count=${totalCount}`)
-        // 表2 re-registration — 表1/表2 trim independently; without this a
-        // 表2-evicted entry can dead-loop the blind-overwrite guard ("read it
-        // first" → read-ref short-circuit → 表2 still empty → still refused).
+        // ?2 re-registration ? ?1/?2 trim independently; without this a
+        // ?2-evicted entry can dead-loop the blind-overwrite guard ("read it
+        // first" ? read-ref short-circuit ? ?2 still empty ? still refused).
         noteFileObserved(canonical!, currentMtimeMs!, currentSizeBytes!, params.sessionId)
         return { content: ref }
       }
-      // Small fragment — fall through to normal read to avoid wasted round-trips
+      // Small fragment ? fall through to normal read to avoid wasted round-trips
     }
 
     try {
       // Speculative prewarm hit: if a full-file read (no offset/limit) has a
       // matching prewarm entry (mtime-verified), skip the fs read and apply the
-      // current contextWindow's cap to the cached full content. Miss → fall
+      // current contextWindow's cap to the cached full content. Miss ? fall
       // through to the normal fs read below.
       let prefetchedContent: string | undefined
       if (params.prewarmCache && canonical && canUsePrewarmForRead(params.input)) {
@@ -852,8 +892,8 @@ export const READ_FILE_TOOL: Tool = {
       }
       // Explicit-range fidelity (2026-07-24): only forward offset/limit when
       // the model actually provided them. The old unconditional `offset`
-      // (defaulted to 1) made readFilePayload's hasExplicitRange永真 on this
-      // path — the entire decideReadPolicy layer (PARTIAL view for >80KB
+      // (defaulted to 1) made readFilePayload's hasExplicitRange?? on this
+      // path ? the entire decideReadPolicy layer (PARTIAL view for >80KB
       // source, log preview, >100KB guard) was dead wiring for single-file
       // tool reads, so a no-arg read of a 144KB file returned a 108K-char
       // slice straight into history.
@@ -861,6 +901,7 @@ export const READ_FILE_TOOL: Tool = {
         filePath,
         ...(params.input.offset !== undefined ? { offset } : {}),
         ...(params.input.limit !== undefined ? { limit } : {}),
+        ...(focusedRead ? { focus, focusMaxMatches: typeof params.input.focus_max_matches === 'number' ? params.input.focus_max_matches : undefined } : {}),
         modelCap: computedCap,
         prefetchedContent,
         preferFoldOnOverflow: params.readCapOverride !== undefined,
@@ -875,7 +916,7 @@ export const READ_FILE_TOOL: Tool = {
 
     const rawPath = await persistRawOutput(params.toolUseId, payload.rawContent)
 
-    // 表2: note the observed file state so edit-tool staleness checks work.
+    // ?2: note the observed file state so edit-tool staleness checks work.
     if (canonical && currentMtimeMs !== null && currentSizeBytes !== null) {
       noteFileObserved(canonical, currentMtimeMs, currentSizeBytes, params.sessionId)
     }
@@ -916,7 +957,7 @@ export const READ_FILE_TOOL: Tool = {
       // Why: every [artifact:X] reference is a "your content might be hidden"
       // signal that the model treats as truncation. If the raw content is below
       // pruneThresholds.minChars, prune will never replace it with a placeholder,
-      // so the artifact backup serves no purpose — and its presence makes the
+      // so the artifact backup serves no purpose ? and its presence makes the
       // model second-guess what it can see. Tianshu's post-mortem showed this
       // exact pattern: any [artifact:X] marker triggered "let me try a different
       // approach" workarounds even when the content was right there.
@@ -945,10 +986,10 @@ export const READ_FILE_TOOL: Tool = {
       })
       recordDedup(artifactId)
       recordFileDedup(artifactId)
-      // MODEL SEES FULL CODE — not just structural summary
+      // MODEL SEES FULL CODE ? not just structural summary
       // Agent needs actual source to construct edit_file old_string
       const summaryBlock = summary.trim()
-        ? `\n\n── Structural outline ──\n${summary.trim()}`
+        ? `\n\n?? Structural outline ??\n${summary.trim()}`
         : ''
       // Convention: [artifact:X] is always the LAST token in the content string.
       // prune.ts and stale-round.ts regex `/\[artifact:([A-Za-z0-9_-]+)]\s*$/`
@@ -962,7 +1003,7 @@ export const READ_FILE_TOOL: Tool = {
       }
     }
 
-    // No artifact store — record dedup without an artifactId.
+    // No artifact store ? record dedup without an artifactId.
     recordDedup()
     recordFileDedup()
     return {
@@ -979,7 +1020,12 @@ export const READ_FILE_TOOL: Tool = {
 
 /** Handle multi-file read: file_paths array. Reads up to 5 files, each with
  *  an independent per-file budget derived from the overall model read cap. */
-async function handleMultiRead(params: ToolCallParams, paths: string[]): Promise<import('./types.js').ToolResult> {
+async function handleMultiRead(
+  params: ToolCallParams,
+  paths: string[],
+  focus?: string,
+  focusMaxMatches?: number,
+): Promise<import('./types.js').ToolResult> {
   const computedCap = params.readCapOverride ?? computeModelReadCap({
     contextWindow: params.contextWindow,
     providerProfile: params.providerProfile,
@@ -998,9 +1044,14 @@ async function handleMultiRead(params: ToolCallParams, paths: string[]): Promise
     const trimmed = rawPath.trim()
     if (!trimmed) continue
     try {
-      const payload = await readFilePayload(params.cwd, { filePath: trimmed, modelCap: perFileCap, preferFoldOnOverflow: params.readCapOverride !== undefined })
-      const relPath = relative(params.cwd, payload.canonicalPath)
-      sections.push(`── ${relPath} ──\n${payload.modelContent}`)
+      const payload = await readFilePayload(params.cwd, {
+        filePath: trimmed,
+        ...(focus ? { focus, focusMaxMatches } : {}),
+        modelCap: perFileCap,
+        preferFoldOnOverflow: params.readCapOverride !== undefined,
+      })
+      const relPath = relative(params.cwd, payload.canonicalPath).replaceAll('\\', '/')
+      sections.push(`?? ${relPath} ??\n${payload.modelContent}`)
       totalBytes += payload.rawContent.length
 
       // Record file-level dedup for each file
@@ -1016,10 +1067,10 @@ async function handleMultiRead(params: ToolCallParams, paths: string[]): Promise
       noteFileObserved(payload.canonicalPath, currentStat.mtimeMs, currentStat.size, params.sessionId)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // trimmed 可能本来就是相对路径——只有以 cwd 开头时才转相对，避免 relative()
-      // 把无关路径变成一串 ../..。
+      // trimmed ??????????????? cwd ?????????? relative()
+      // ????????? ../..?
       const display = trimmed.startsWith(params.cwd) ? relative(params.cwd, trimmed) : trimmed
-      sections.push(`── ${display} ──\nError: ${msg}`)
+      sections.push(`?? ${display} ??\nError: ${msg}`)
       errors++
     }
   }
@@ -1031,4 +1082,3 @@ async function handleMultiRead(params: ToolCallParams, paths: string[]): Promise
     uiContent: `Read ${paths.length - errors}/${paths.length} files (${(totalBytes / 1024).toFixed(1)} KB total)`,
   }
 }
-

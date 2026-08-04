@@ -1,5 +1,5 @@
 /**
- * API Error Classifier — maps raw exceptions to structured recovery strategies.
+ * API Error Classifier ? maps raw exceptions to structured recovery strategies.
  *
  * Used by the retry engine (task 2) to decide whether, how, and when to retry.
  * Pure functions, no side effects.
@@ -80,7 +80,7 @@ function classifyByStatus(status: number): ClassifiedError | null {
       retryDelayMs: 2000,
       shouldReconnect: true,
       category: 'rate_limit',
-      userMessage: 'Rate limited — too many requests. Retrying after back-off.',
+      userMessage: 'Rate limited ? too many requests. Retrying after back-off.',
       maxRetries: 5,
     }
   }
@@ -109,7 +109,7 @@ function classifyByStatus(status: number): ClassifiedError | null {
     }
   }
 
-  // Request timeout (server timed out waiting for request) — transient, retryable
+  // Request timeout (server timed out waiting for request) ? transient, retryable
   if (status === 408) {
     return {
       retryable: true,
@@ -121,7 +121,7 @@ function classifyByStatus(status: number): ClassifiedError | null {
     }
   }
 
-  // Too Early (RFC 8470) — server unwilling to process, retryable after delay
+  // Too Early (RFC 8470) ? server unwilling to process, retryable after delay
   if (status === 425) {
     return {
       retryable: true,
@@ -133,7 +133,7 @@ function classifyByStatus(status: number): ClassifiedError | null {
     }
   }
 
-  // 413 Payload Too Large — two scenarios:
+  // 413 Payload Too Large ? two scenarios:
   //   a) Image-heavy payload: strip images and retry (doesn't consume budget)
   //   b) Genuine context overflow: not retryable
   // We default to image_strip because the retry engine upgrades to Fatal
@@ -144,7 +144,7 @@ function classifyByStatus(status: number): ClassifiedError | null {
       retryDelayMs: 0,
       shouldReconnect: false,
       category: 'image_strip',
-      userMessage: 'Payload too large — stripping images and retrying.',
+      userMessage: 'Payload too large ? stripping images and retrying.',
       maxRetries: 1,
       stripImages: true,
     }
@@ -194,12 +194,12 @@ function classifyByPattern(error: unknown): ClassifiedError {
   const name = error instanceof Error ? error.name : ''
   const message = error instanceof Error ? error.message : String(error ?? '')
   // undici buries the real network failure in err.cause ("fetch failed" alone
-  // matches nothing) — classify against the full cause chain, not just the top.
+  // matches nothing) ? classify against the full cause chain, not just the top.
   const causeDetail = fetchCauseDetail(error)
   const searchText = causeDetail ? `${message} | ${causeDetail}` : message
   const lower = searchText.toLowerCase()
 
-  // Connection reset / refused / unreachable — transport-level network failures.
+  // Connection reset / refused / unreachable ? transport-level network failures.
   // "fetch failed" without a recognizable cause still lands here: it is by
   // definition a pre-response network error (DNS/connect/TLS), never a server
   // verdict, so reconnect-and-retry is the right default.
@@ -233,6 +233,22 @@ function classifyByPattern(error: unknown): ClassifiedError {
     }
   }
 
+  // Some OpenAI-compatible gateways return provider overload as a structured
+  // error body without preserving the HTTP 503 status on the thrown Error.
+  // Keep these errors in the overloaded category so FallbackStreamClient can
+  // switch to a configured backup provider instead of treating them as an
+  // unknown, non-fallbackable failure.
+  if (/service[_\s-]*unavailable|too\s+busy|temporarily\s+unavailable|server\s+overload|overloaded|capacity/i.test(lower)) {
+    return {
+      retryable: true,
+      retryDelayMs: 3000,
+      shouldReconnect: true,
+      category: 'overloaded',
+      userMessage: 'Service is busy. Retrying or switching provider.',
+      maxRetries: 3,
+    }
+  }
+
   // Upstream stream closed before first payload (cliproxy / proxy errors)
   if (/empty_stream|upstream.*stream.*closed|stream.*closed.*before.*payload/i.test(lower)) {
     return {
@@ -245,7 +261,7 @@ function classifyByPattern(error: unknown): ClassifiedError {
     }
   }
 
-  // AbortError — user-initiated cancellation, never retry
+  // AbortError ? user-initiated cancellation, never retry
   if (name === 'AbortError') {
     return {
       retryable: false,
@@ -266,7 +282,7 @@ function classifyByPattern(error: unknown): ClassifiedError {
       retryDelayMs: 0,
       shouldReconnect: false,
       category: 'context_overflow',
-      userMessage: 'Context too long — reduce prompt size.',
+      userMessage: 'Context too long ? reduce prompt size.',
       maxRetries: 0,
     }
   }
@@ -283,7 +299,7 @@ function classifyByPattern(error: unknown): ClassifiedError {
     }
   }
 
-  // Fallback — unknown
+  // Fallback ? unknown
   return {
     retryable: true,
     retryDelayMs: 2000,
@@ -299,12 +315,12 @@ function classifyByPattern(error: unknown): ClassifiedError {
  *
  * Node's undici fetch throws `TypeError: fetch failed` with the actual network
  * failure (ECONNREFUSED / ENOTFOUND / ETIMEDOUT / TLS / proxy) buried in
- * `err.cause` — often nested one level deeper, or inside an AggregateError
+ * `err.cause` ? often nested one level deeper, or inside an AggregateError
  * (Happy Eyeballs makes one connect attempt per resolved address). Without
  * unwrapping, both the user-facing error line and pattern classification see
  * only the useless top-level message.
  *
- * Returns a ` ← `-joined chain of cause messages, or null when there is none.
+ * Returns a ` ? `-joined chain of cause messages, or null when there is none.
  */
 export function fetchCauseDetail(error: unknown): string | null {
   const parts: string[] = []
@@ -325,7 +341,7 @@ export function fetchCauseDetail(error: unknown): string | null {
       break
     }
   }
-  const detail = [...new Set(parts.filter(Boolean))].join(' ← ')
+  const detail = [...new Set(parts.filter(Boolean))].join(' ? ')
   return detail || null
 }
 
@@ -345,12 +361,12 @@ function extractRetryAfter(error: unknown): number | undefined {
 /**
  * Classify an API error into a structured recovery strategy.
  *
- * Priority: status code → error name → message pattern → fallback.
+ * Priority: status code ? error name ? message pattern ? fallback.
  */
 export function classifyApiError(error: unknown): ClassifiedError {
   // 0. Image processing errors (400/500 wrapping image rejection):
   //    Check before status-code classification so these bypass generic 4xx/5xx.
-  //    Pattern source: grok-build retry.rs — "Could not process image" (400),
+  //    Pattern source: grok-build retry.rs ? "Could not process image" (400),
   //    "upstream: 400 ... image" (500 wrap)
   const status = extractStatus(error)
   const msg = extractMessage(error)
@@ -364,7 +380,7 @@ export function classifyApiError(error: unknown): ClassifiedError {
       retryDelayMs: 0,
       shouldReconnect: false,
       category: 'image_strip',
-      userMessage: 'Image processing error — stripping images and retrying.',
+      userMessage: 'Image processing error ? stripping images and retrying.',
       maxRetries: 1,
       stripImages: true,
     }
@@ -388,10 +404,10 @@ export function classifyApiError(error: unknown): ClassifiedError {
 }
 
 /**
- * Parse Retry-After header value (RFC 7231 §7.1.3).
- * Numeric string → seconds × 1000.
- * HTTP-date string → delta from now in ms.
- * Unparseable → undefined.
+ * Parse Retry-After header value (RFC 7231 ?7.1.3).
+ * Numeric string ? seconds ? 1000.
+ * HTTP-date string ? delta from now in ms.
+ * Unparseable ? undefined.
  */
 export function parseRetryAfterMs(value: string): number | undefined {
   const parsed = parseFloat(value)

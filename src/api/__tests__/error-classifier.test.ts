@@ -189,6 +189,16 @@ describe('classifyApiError', () => {
     assert.equal(result.maxRetries, 3)
   })
 
+  it('classifies status-less service_unavailable/too busy errors as overloaded', () => {
+    const result = classifyApiError(new Error(
+      'OpenAI API error (service_unavailable_error): Service is too busy',
+    ))
+    assert.equal(result.category, 'overloaded')
+    assert.equal(result.retryable, true)
+    assert.equal(result.shouldReconnect, true)
+    assert.equal(result.maxRetries, 3)
+  })
+
   it('classifies TimeoutError by name as timeout', () => {
     const err = new Error('timeout exceeded')
     err.name = 'TimeoutError'
@@ -271,7 +281,7 @@ describe('classifyApiError', () => {
     assert.match(result.userMessage, /ENOTFOUND api\.deepseek\.com/)
   })
 
-  it('unwraps nested cause chains (fetch failed → SocketError → ECONNRESET)', () => {
+  it('unwraps nested cause chains (fetch failed ? SocketError ? ECONNRESET)', () => {
     const inner = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })
     const mid = new Error('other side closed', { cause: inner })
     const result = classifyApiError(new TypeError('fetch failed', { cause: mid }))
@@ -341,7 +351,7 @@ describe('classifyApiError', () => {
       'rate_limit', 'overloaded', 'server_error', 'timeout',
       'auth_error', 'client_error',
       'image_strip', 'stream_parse', 'unknown',
-      // 'context_overflow' is reserved — currently no status code triggers it
+      // 'context_overflow' is reserved ? currently no status code triggers it
       // directly (413 defaults to image_strip). Will be added when 413 message
       // disambiguation lands.
     ]

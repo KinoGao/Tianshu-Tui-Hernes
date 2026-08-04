@@ -1,10 +1,10 @@
 /**
- * RuntimeSessionManager — desktop-facing multi-session layer (M0.5).
+ * RuntimeSessionManager ? desktop-facing multi-session layer (M0.5).
  *
  * Owns N independent agent runs and turns their AgentCallbacks into a single
  * monotonic, replayable event log per session. Deliberately separate from
  * src/agent/session-registry.ts (that is the cross-session claims/events
- * registry) — these bridge, they do not merge.
+ * registry) ? these bridge, they do not merge.
  *
  * Invariants:
  *  - Every event carries a monotonic `seq`; `getEvents(since)` replays the tail,
@@ -12,7 +12,7 @@
  *  - A viewer unsubscribing NEVER aborts the run; only abort() does.
  *  - Approvals are requestId-keyed two-way interventions resolved out of
  *    band by answerIntervention() (B2). Intent direction notes are one-way,
- *    non-blocking timeline events (intent_note) — no pending state.
+ *    non-blocking timeline events (intent_note) ? no pending state.
  *  - Artifacts are surfaced from each session's own ArtifactStore, never shared
  *    across sessions (B4).
  */
@@ -106,7 +106,7 @@ export type _ApprovalModeInSync = Assert<Equals<ApprovalMode, WireApprovalMode>>
 export type _PlanModeStateInSync = Assert<Equals<PlanModeState, WirePlanModeState>>
 export type _AskModeStateInSync = Assert<Equals<AskModeState, WireAskModeState>>
 
-/** Structured approval outcome — routes surface `reason` instead of a blind 409. */
+/** Structured approval outcome ? routes surface `reason` instead of a blind 409. */
 export type PlanApprovalOutcome =
   | { ok: true }
   | {
@@ -124,8 +124,8 @@ export type PlanUpdateOutcome =
       reason: string
     }
 
-/** 工具调用参数摘要(worker 转录):优先 toolArgSummary 的领域摘要,
- *  未覆盖的工具回退原始 JSON 截断。展示用途,解析失败不抛。 */
+/** ????????(worker ??):?? toolArgSummary ?????,
+ *  ?????????? JSON ???????,??????? */
 function summarizeToolCallArgs(call: OaiToolCall | undefined): string | undefined {
   if (!call) return undefined
   const raw = call.function.arguments ?? ''
@@ -134,27 +134,27 @@ function summarizeToolCallArgs(call: OaiToolCall | undefined): string | undefine
     const summary = toolArgSummary(call.function.name, parsed)
     if (summary) return summary
   } catch {
-    // 非法 JSON——直接落原文截断
+    // ?? JSON?????????
   }
   return raw && raw !== '{}' ? raw.slice(0, 200) : undefined
 }
 
-/** PlusMenu — a selectable model across all configured providers. */
+/** PlusMenu ? a selectable model across all configured providers. */
 export interface ModelOption {
   id: string
   alias: string
   provider: string
   contextWindow?: number
-  /** 擅长场景 — 预设定义处填充，透传到桌面模型选择器。 */
+  /** ???? ? ??????????????????? */
   description?: string
 }
 
-/** PlusMenu — a model option annotated with whether it's the session's current. */
+/** PlusMenu ? a model option annotated with whether it's the session's current. */
 export interface ModelEntry extends ModelOption {
   current: boolean
 }
 
-/** PlusMenu — a skill's per-session enablement status. */
+/** PlusMenu ? a skill's per-session enablement status. */
 export interface SkillStatus {
   name: string
   description: string
@@ -164,11 +164,11 @@ export interface SkillStatus {
   editable?: boolean
 }
 
-/** Minimal agent surface the manager needs — decoupled from AgentLoop for tests. */
+/** Minimal agent surface the manager needs ? decoupled from AgentLoop for tests. */
 /** User-dispatched background worker request (from POST /sessions/:id/delegate). */
 export interface DelegateWorkerInput {
   objective: string
-  /** Worker role profile (code_scout / reviewer / patcher …). Defaults applied downstream. */
+  /** Worker role profile (code_scout / reviewer / patcher ?). Defaults applied downstream. */
   profile?: string
   /** Optional star-domain authority injected into the worker. */
   authority?: string
@@ -184,37 +184,37 @@ export interface DelegateActivityUpdate {
   parentToolId?: string
   profile?: string
   authority?: string
-  /** Why this authority was chosen（worker 命中理由，桌面镜像用）。 */
+  /** Why this authority was chosen?worker ???????????? */
   authorityReason?: string
   objective?: string
   status: string
   progressLine?: string
-  /** 该 worker 累计工具调用次数（运行中实时递增）。 */
+  /** ? worker ?????????????????? */
   toolUseCount?: number
-  /** 该 worker 累计 token 总数（turn 事件携带的累计快照）。 */
+  /** ? worker ?? token ???turn ??????????? */
   tokenCount?: number
-  /** 原始活动事件种类（桌面端 worker 活动镜像用；terminal 事件缺省）。 */
+  /** ???????????? worker ??????terminal ?????? */
   eventKind?: 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'turn' | 'retry' | 'lifecycle'
-  /** 原始事件内容：text/thinking 为 delta，tool_use/tool_result 为工具名。 */
+  /** ???????text/thinking ? delta?tool_use/tool_result ????? */
   eventDetail?: string
-  /** Terminal failure classification (blocked/failed 终态事件携带)。 */
+  /** Terminal failure classification (blocked/failed ??????)? */
   failureReason?: string
   model?: string
   provider?: string
   usage?: DelegationActivity['usage']
   artifactId?: string
   changedFiles?: string[]
-  /** Terminal digest text for the desktop "汇入主会话" adopt button. */
+  /** Terminal digest text for the desktop "?????" adopt button. */
   summary?: string
-  /** 用户契约投影（首条 running 事件携带）。 */
+  /** ????????? running ?????? */
   contract?: DelegationActivity['contract']
-  /** 终态 findings 计数（完整数组走 getWorkerLog pull）。 */
+  /** ?? findings ???????? getWorkerLog pull?? */
   findingsCount?: number
-  /** 终态第一条 finding claim。 */
+  /** ????? finding claim? */
   topFinding?: string
-  /** 终态 verification 摘要。 */
+  /** ?? verification ??? */
   verificationBrief?: DelegationActivity['verificationBrief']
-  /** 终态 evidenceStatus。 */
+  /** ?? evidenceStatus? */
   evidenceStatus?: string
 }
 
@@ -224,38 +224,38 @@ export interface ManagedAgent {
   listArtifacts(): Artifact[]
   readArtifact(id: string): Promise<string | null>
   /**
-   * S — live-switch the autonomy level. Mutates the agent's approval mode in
+   * S ? live-switch the autonomy level. Mutates the agent's approval mode in
    * place (read per-tool by the pipeline), so a mid-session toggle takes effect
    * on the next tool without rebuilding the agent / losing conversation state.
    * Optional so lightweight test doubles need not implement it.
    */
   setApprovalMode?(mode: ApprovalMode): void
   /**
-   * Plan mode — restrict the agent to read-only tools (planning) or release it
+   * Plan mode ? restrict the agent to read-only tools (planning) or release it
    * (off). Mirrors AgentLoop.enterPlanMode/exitPlanMode. Optional so lightweight
    * test doubles need not implement it.
    */
   enterPlanMode?(opts?: { planFilePath?: string }): void
   exitPlanMode?(): void
   /**
-   * Ask mode — restrict the agent to pure read-only Q&A tools (asking) or
+   * Ask mode ? restrict the agent to pure read-only Q&A tools (asking) or
    * release it (off). Mutually exclusive with Plan Mode. Optional so lightweight
    * test doubles need not implement it.
    */
   enterAskMode?(): void
   exitAskMode?(): void
-  /** 识图桥真实状态（active/source/detail）。UI 据此显示准确提示，而非只看
-   *  config 有没有 visionModel 键。Optional 以便轻量测试替身无需实现。 */
+  /** ????????active/source/detail??UI ?????????????
+   *  config ??? visionModel ??Optional ????????????? */
   getVisionBridge?(): { active: boolean; source: 'configured' | 'auto' | 'none'; detail?: string } | undefined
   /**
-   * Plan mode change notification — assigned by the session layer so agent-side
+   * Plan mode change notification ? assigned by the session layer so agent-side
    * transitions (e.g. the model calling plan action=enter_mode) surface as
    * plan_mode SSE events. Mirrors AgentLoop.onPlanModeChange. Optional so
    * lightweight test doubles need not implement it.
    */
   onPlanModeChange?: (state: PlanModeState) => void
   /**
-   * Ask mode change notification — assigned by the session layer so agent-side
+   * Ask mode change notification ? assigned by the session layer so agent-side
    * transitions surface as ask_mode SSE events.
    */
   onAskModeChange?: (state: AskModeState) => void
@@ -296,18 +296,18 @@ export interface ManagedAgent {
   /** Set the reasoning effort level (off/low/medium/high/max) or return to auto. */
   setReasoningEffort?(effort: import('../agent/auto-reasoning.js').ReasoningEffort | 'auto'): void
   /**
-   * Goal mode — attach/clear an autonomous-goal tracker. The tracker drives
+   * Goal mode ? attach/clear an autonomous-goal tracker. The tracker drives
    * cross-turn continuation via GoalContinuationController (assembled in
    * loop-factory). Mirrors AgentLoop.setGoalTracker. Optional for lightweight
    * doubles. Note: the caller MUST also update refs.goalTrackerRef.current so
    * the update_goal / deliver_task tool closures (which read refs, not the
-   * agent field) stay in sync — see RuntimeSessionManagerOptions.resolveGoalHandles.
+   * agent field) stay in sync ? see RuntimeSessionManagerOptions.resolveGoalHandles.
    */
   setGoalTracker?(tracker: import('../agent/goal-tracker.js').GoalTracker | null): void
   /** Current goal tracker (null when no goal is active). Mirrors AgentLoop.getGoalTracker. */
   getGoalTracker?(): import('../agent/goal-tracker.js').GoalTracker | null
   /**
-   * Cockpit snapshot — aggregated runtime state (safety/verify/context/model/
+   * Cockpit snapshot ? aggregated runtime state (safety/verify/context/model/
    * advisory) for the desktop cockpit panel. Built by the pure function
    * buildCockpitSnapshot (tui/cockpit/state.ts) reading agent in-memory state.
    * Returns null when the agent isn't built yet (idle/rehydrated session) or
@@ -319,7 +319,7 @@ export interface ManagedAgent {
   /**
    * Outcome of the boot-time LLM history restore (sidecar restart recovery).
    * Lets the session layer warn when the event log shows a prior conversation
-   * but the model context came back empty (corrupt/unreadable session file) —
+   * but the model context came back empty (corrupt/unreadable session file) ?
    * otherwise the user silently talks to a model that remembers nothing.
    * Optional so lightweight test doubles need not implement it.
    */
@@ -339,23 +339,23 @@ export interface ManagedAgent {
    */
   resetAppendixBaseline?(): void
   /**
-   * PlusMenu (domain) — pin a star domain (or null to disable). Mirrors
+   * PlusMenu (domain) ? pin a star domain (or null to disable). Mirrors
    * AgentLoop.setSessionDomain. Optional for lightweight test doubles.
    */
   setSessionDomain?(domain: ActiveStarDomain | null): void
-  /** PlusMenu (domain) — reset to Auto (next run auto-detects from input). */
+  /** PlusMenu (domain) ? reset to Auto (next run auto-detects from input). */
   resetSessionDomain?(): void
-  /** PlusMenu (domain) — read the current selection (Auto when undefined). */
+  /** PlusMenu (domain) ? read the current selection (Auto when undefined). */
   getSessionDomain?(): ActiveStarDomain | null | undefined
   /**
-   * PlusMenu (model) — rebuild this session's agent on a new model, preserving
+   * PlusMenu (model) ? rebuild this session's agent on a new model, preserving
    * the conversation (same SessionContext) and shared stores. Returns the
    * resolved model id, or null when the model id is unknown / unauthorized.
    * Optional for lightweight test doubles.
    */
   switchModel?(modelId: string): string | null
   /**
-   * PlusMenu (skills) — set the per-session disabled skill set. Filters the
+   * PlusMenu (skills) ? set the per-session disabled skill set. Filters the
    * discovery block so disabled skills are hidden from the model. Optional for
    * lightweight test doubles.
    */
@@ -365,21 +365,21 @@ export interface ManagedAgent {
   /** Model context window size (max tokens). */
   getContextWindow?(): number
   /**
-   * P0-2: 返回本会话 TodoStore 的当前清单。plan_task 成功后发 todo_state SSE 用。
-   * 多会话隔离——每个 session 独立的 TodoStore。Optional 以兼容 lightweight test doubles。
+   * P0-2: ????? TodoStore ??????plan_task ???? todo_state SSE ??
+   * ????????? session ??? TodoStore?Optional ??? lightweight test doubles?
    */
   getTodos?(): Array<{ id: string; content: string; status: string }>
   /**
-   * Wave L: 进程退出时释放 session 级资源（典型场景：sidecar runServe.close
-   * → shutdownAll）。具体实现负责调 coordinator.shutdown 等清 timer/in-flight
-   * worker。与 abort() 严格分离——abort 中止当前 turn 但保留 agent 可继续运行，
-   * shutdown 是终结性操作。Optional 以兼容 lightweight test doubles。
+   * Wave L: ??????? session ?????????sidecar runServe.close
+   * ? shutdownAll????????? coordinator.shutdown ?? timer/in-flight
+   * worker?? abort() ??????abort ???? turn ??? agent ??????
+   * shutdown ???????Optional ??? lightweight test doubles?
    */
-  shutdown?(): void
+  shutdown?(): void | boolean | Promise<void | boolean>
   /**
-   * I1: 直接召集议事会评审一个 artifact 中的 council-plan-json 草案。
-   * 由桌面 CouncilSurface 调用；实际实现持有 coordinator 与 artifactStore。
-   * Optional 以兼容 lightweight test doubles。
+   * I1: ??????????? artifact ?? council-plan-json ???
+   * ??? CouncilSurface ????????? coordinator ? artifactStore?
+   * Optional ??? lightweight test doubles?
    */
   conveneCouncil?(input: {
     artifactId: string
@@ -402,7 +402,7 @@ export interface ManagedAgent {
 
 /**
  * Builds the agent for a session. Receives the manager's own session id so the
- * agent's stores (artifacts/session-persist) align with the session — enabling
+ * agent's stores (artifacts/session-persist) align with the session ? enabling
  * future artifact recovery across restarts. The optional approvalMode overrides
  * the global config autonomy level for this session (S).
  */
@@ -413,7 +413,7 @@ export type AgentFactory = (
   /**
    * Preferred model for the initial build (prefix-cache affinity). A session
    * rebuilt after rehydrate must come back on the model its history was
-   * accumulated on — building on the default model and cross-switching later
+   * accumulated on ? building on the default model and cross-switching later
    * rebuilds the entire prefix cache. Factories may ignore it (test doubles)
    * or fall back to the default when the id no longer resolves.
    */
@@ -426,7 +426,7 @@ export type AgentFactory = (
  * and the sessionDir (for save/restore/delete of goal state) to wire goal mode.
  */
 export interface GoalHandles {
-  /** The RuntimeRefs.goalTrackerRef — same object the update_goal and
+  /** The RuntimeRefs.goalTrackerRef ? same object the update_goal and
    *  deliver_task tool closures close over. Mutating .current here keeps the
    *  tools in sync with the agent's own tracker field. */
   goalTrackerRef: { current: import('../agent/goal-tracker.js').GoalTracker | null }
@@ -451,7 +451,7 @@ export interface GoalSnapshot {
   successCriteria: string[]
   /** Last completion-judge verdict (null until the first judge run). Shape
    *  mirrors StoredGoalJudgeVerdict from goal-tracker (kept as a structural
-   *  type here to avoid a static import — the field is pass-through only). */
+   *  type here to avoid a static import ? the field is pass-through only). */
   lastVerdict?: {
     overall: 'verified' | 'rejected' | 'inconclusive'
     criteriaMet: number
@@ -465,7 +465,7 @@ export interface CreateSessionInput {
   cwd?: string
   title?: string
   prompt?: string
-  /** P1 — 显式指定关联的 Mission id。不传则按 title 自动 getOrCreate。 */
+  /** P1 ? ??????? Mission id????? title ?? getOrCreate? */
   missionId?: string
   approvalMode?: ApprovalMode
   /** Override the model for this session (takes priority over project/global defaults). */
@@ -475,14 +475,14 @@ export interface CreateSessionInput {
   /** Create an isolated git worktree for this session (parallel work without conflict). */
   isolatedWorktree?: boolean
   /**
-   * 无人值守运行（付费版 v1 · T2，auto-proceed 定时任务）：审批请求不挂起等人，
-   * 立即拒绝并 fail-closed 中止本次运行（中止原因入事件流 + 走查工件）。
+   * ?????????? v1 ? T2?auto-proceed ????????????????
+   * ????? fail-closed ??????????????? + ??????
    */
   unattended?: boolean
   /**
-   * P1b（安全）：客户端是否具备计划倒计时自动批准 UI。
-   * 仅 desktop/TUI 设置 true；vscode-extension 不设置（默认 false）→ sidecar
-   * 不武装 goal 模式倒计时定时器（fail-closed：无可见性即不自动批准）。
+   * P1b????????????????????? UI?
+   * ? desktop/TUI ?? true?vscode-extension ?????? false?? sidecar
+   * ??? goal ?????????fail-closed?????????????
    */
   planAutoApproveUi?: boolean
 }
@@ -514,36 +514,36 @@ export interface StorageReport {
 }
 
 /**
- * 尾部读的回传形状：`events` 已按内存环容量截断，其余字段承载被截头部里
- * 仍然需要的信息，让调用方不必为了它们索取全量。
+ * ?????????`events` ?????????????????????
+ * ???????????????????????
  */
 export interface EventsTail {
-  /** 尾部 maxEvents 条（日志更短时即全部）。 */
+  /** ?? maxEvents ???????????? */
   events: SessionEvent[]
-  /** 磁盘日志最早 seq（空日志为 0）。 */
+  /** ?????? seq????? 0?? */
   diskFirstSeq: number
-  /** 磁盘日志最大 seq（空日志为 0）。 */
+  /** ?????? seq????? 0?? */
   lastSeq: number
-  /** 全量日志出现过的 artifact id——去重集不完整会让旧 artifact 被重新公告。 */
+  /** ???????? artifact id??????????? artifact ?????? */
   artifactIds: string[]
-  /** 全量事件数（用于区分空日志与「有日志但全是坏行」）。 */
+  /** ?????????????????????????? */
   total: number
 }
 
 /**
  * Durable backing store for sessions (N1). Records are snapshotted; events are
  * append-only. Implementations must tolerate a corrupt trailing event line
- * (partial write) on load — never throw, just drop it.
+ * (partial write) on load ? never throw, just drop it.
  */
 export interface SessionPersistenceAdapter {
   saveRecord(record: SessionRecord): void
   appendEvent(sessionId: string, event: SessionEvent): void
-  /** Flush buffered writes to disk (batched adapters). Optional — no-op if absent. */
+  /** Flush buffered writes to disk (batched adapters). Optional ? no-op if absent. */
   flushSync?(): void
   loadAll(): PersistedSession[]
   /**
    * Lazy-boot support (optional). `loadRecords` reads ONLY the lightweight
-   * index.json snapshot per session — never the (potentially huge) event log —
+   * index.json snapshot per session ? never the (potentially huge) event log ?
    * so rehydrate is O(sessions) instead of O(total events ever). `loadEvents`
    * reads a single session's full log on demand (first open). Adapters that omit
    * both fall back to the eager `loadAll()` path (fine for tiny in-memory test
@@ -554,25 +554,25 @@ export interface SessionPersistenceAdapter {
   /**
    * Async event-log read for the reconnect-replay path (optional). Adapters
    * that implement it should do a non-blocking file read and keep JSON parsing
-   * off the main thread (worker / chunked) — a large log parsed inline starves
+   * off the main thread (worker / chunked) ? a large log parsed inline starves
    * SSE keepalives and turns one reconnect into a storm. Falls back to
    * `loadEvents` when absent.
    */
   loadEventsAsync?(sessionId: string): Promise<SessionEvent[]>
   /**
-   * 首开会话的尾部读（optional）。语义同 loadEventsAsync，但只回传内存环留得下
-   * 的 maxEvents 条——parse 在 worker 里不占主线程，跨线程搬运却与条数成正比，
-   * 而调用方拿到全量后本来就要丢掉环外的部分。缺失时退回 loadEventsAsync。
+   * ?????????optional????? loadEventsAsync???????????
+   * ? maxEvents ???parse ? worker ????????????????????
+   * ?????????????????????????? loadEventsAsync?
    *
-   * 被截头部里仍需带出的两样：`diskFirstSeq`（前端判断有无更早历史）与
-   * `artifactIds`（全量去重集，缺了会让旧 artifact 重放时被重新公告）。
+   * ?????????????`diskFirstSeq`?????????????
+   * `artifactIds`???????????? artifact ??????????
    */
   loadEventsTailAsync?(sessionId: string, maxEvents: number): Promise<EventsTail>
   /**
-   * 稀疏索引区间读（optional，冷通道分页加速）：返回 seq < before 的尾部
-   * 窗口（至少 minCount 条，或到日志开头）。实现方只读覆盖窗口的字节区间，
-   * 大日志分页不整本进内存；缺失时 getHistoryPage 退化为 loadEventsAsync
-   * 全量读。`atLogStart` = 窗口起点即日志开头；`firstSeq` = 磁盘最早 seq。
+   * ????????optional???????????? seq < before ???
+   * ????? minCount ?????????????????????????
+   * ??????????????? getHistoryPage ??? loadEventsAsync
+   * ????`atLogStart` = ??????????`firstSeq` = ???? seq?
    */
   loadEventsBefore?(sessionId: string, before: number, minCount: number): Promise<{
     events: SessionEvent[]
@@ -589,7 +589,7 @@ export interface SessionPersistenceAdapter {
   deleteSession?(sessionId: string): void
   /**
    * Persist a user-attached image as a standalone file so the event log only
-   * carries a small reference id (not the base64). Optional — adapters that
+   * carries a small reference id (not the base64). Optional ? adapters that
    * predate vision attachments may omit it. `base64` is the raw payload (no
    * data: prefix). Returns nothing; the caller already owns `imgId`.
    */
@@ -614,22 +614,22 @@ export interface RuntimeSessionManagerOptions {
   maxLoadedSessions?: number
   /** Auto-resolve a pending intervention after this many ms. 0 = never. Default 0. */
   approvalTimeoutMs?: number
-  /** C2 刹车 — watchdog 停滞续跑前的可取消倒计时窗口（ms）。Default 5000. */
+  /** C2 ?? ? watchdog ???????????????ms??Default 5000. */
   watchdogContinueDelayMs?: number
-  /** Goal 模式计划提交后的倒计时自动批准窗口（ms）——仅 goal 激活时武装，
-   *  窗口内用户任何参与即取消。0 = 关闭（纯手动审批）。Default 150000（2.5min，
-   *  serve.ts 以 RIVET_GOAL_PLAN_AUTO_APPROVE_MS 覆盖）。 */
+  /** Goal ??????????????????ms???? goal ??????
+   *  ?????????????0 = ??????????Default 150000?2.5min?
+   *  serve.ts ? RIVET_GOAL_PLAN_AUTO_APPROVE_MS ???? */
   goalPlanAutoApproveMs?: number
   /** Optional durable store. When set, sessions survive sidecar restarts. */
   persistence?: SessionPersistenceAdapter
   /**
-   * R1 — late-bound accessor for the shared cross-session registry. A getter
+   * R1 ? late-bound accessor for the shared cross-session registry. A getter
    * (not a value) because the registry's SQLite backend resolves async after the
    * server starts. Returns undefined when concurrency features are disabled.
    */
   getSessionRegistry?: () => SessionRegistry | undefined
   /**
-   * Goal mode — late-bound accessor for the per-session goal handles (the
+   * Goal mode ? late-bound accessor for the per-session goal handles (the
    * RuntimeRefs.goalTrackerRef that update_goal / deliver_task tool closures
    * read, plus the session dir for goal state persistence). A getter (not a
    * value) because the handles live in serve-agent's SessionStores, which are
@@ -638,47 +638,47 @@ export interface RuntimeSessionManagerOptions {
    * absent, the goal methods on this manager degrade to "feature unavailable".
    */
   resolveGoalHandles?: (sessionId: string) => GoalHandles | undefined
-  /** PlusMenu (review) — 会话级审查门 refs 迟绑定访问（与 resolveGoalHandles 同
-   *  模式：refs 活在 serve-agent 的 SessionStores 里，通用 manager 不可见）。
-   *  无 agent 构建时返回 undefined——override 仍会在 applySelections 时重放。 */
+  /** PlusMenu (review) ? ?????? refs ??????? resolveGoalHandles ?
+   *  ???refs ?? serve-agent ? SessionStores ???? manager ?????
+   *  ? agent ????? undefined??override ??? applySelections ???? */
   resolveReviewGateRef?: (sessionId: string) => { current: 'auto' | 'off' } | undefined
-  /** PlusMenu (review) — 配置默认档（review.skipAuto 派生），session 无 override
-   *  且 refs 未建时的 GET 兜底。 */
+  /** PlusMenu (review) ? ??????review.skipAuto ????session ? override
+   *  ? refs ???? GET ??? */
   defaultReviewGate?: 'auto' | 'off'
   /**
-   * PlusMenu (model) — enumerate selectable models across all configured
+   * PlusMenu (model) ? enumerate selectable models across all configured
    * providers. Injected by serve.ts (which owns the provider config). Absent in
-   * tests → the model picker returns an empty list.
+   * tests ? the model picker returns an empty list.
    */
   listModels?: () => ModelOption[]
   /**
-   * PlusMenu (model) — the default model id new sessions start on. Used for the
+   * PlusMenu (model) ? the default model id new sessions start on. Used for the
    * initial record.model and the picker's `current` flag.
    */
   defaultModelId?: string
-  /** PlusMenu (domain) — the default domain key new sessions start on. */
+  /** PlusMenu (domain) ? the default domain key new sessions start on. */
   defaultDomain?: string
   /**
    * Fallback model for one-click resume when the session's original model is
    * no longer available (user-configured, off by default). Resume is strictly
-   * model-affine — without this option an unavailable original model makes
+   * model-affine ? without this option an unavailable original model makes
    * resume fail closed (open-a-new-session guidance) instead of silently
    * running the history on the default model and rebuilding the prefix cache.
    */
   resumeFallbackModel?: string
   /**
-   * Phase 3 #9 — release a built agent after this long of session inactivity
+   * Phase 3 #9 ? release a built agent after this long of session inactivity
    * (0 disables). The agent is the heavy half of a session (AgentLoop, tool
    * registry, prompt engine, coordinator); once released the session also
    * becomes eligible for the event-log LRU. The next prompt rebuilds the agent
-   * with history restored from disk — same recovery path as a sidecar restart.
+   * with history restored from disk ? same recovery path as a sidecar restart.
    * Default 30 minutes.
    */
   idleAgentTtlMs?: number
   /**
-   * P1 任务身份化 — Mission 存储。注入（而非默认实例化）是有意的：
-   * 未接线时 Mission 关联整体跳过，现有测试带 title 建会话不会写真实
-   * `~/.rivet/missions/`。serve.ts 构造真实实例并同时接给 mission routes。
+   * P1 ????? ? Mission ???????????????????
+   * ???? Mission ???????????? title ????????
+   * `~/.rivet/missions/`?serve.ts ??????????? mission routes?
    */
   missionStore?: MissionStore
   /** Injectable timer surface for deterministic tool-result coalescing tests. */
@@ -702,14 +702,14 @@ interface PendingIntervention {
   kind: InterventionKind
   resolve: (value: ApprovalResult | boolean) => void
   timer?: ReturnType<typeof setTimeout>
-  /** Tool identity of the gated call — lets answerIntervention apply
+  /** Tool identity of the gated call ? lets answerIntervention apply
    *  tool-specific "remember" semantics (e.g. computer_use per-app grants). */
   toolName?: string
   /** Original (unredacted) tool input for remember handling. */
   toolInput?: Record<string, unknown>
 }
 
-/** E4 — pending client tool-landing delegation (mirrors PendingIntervention). */
+/** E4 ? pending client tool-landing delegation (mirrors PendingIntervention). */
 interface PendingDelegation {
   requestId: string
   kind: DelegateKind
@@ -734,7 +734,7 @@ interface InternalSession {
   record: SessionRecord
   /** Lazily built on first run; null for rehydrated/idle sessions. */
   agent: ManagedAgent | null
-  /** S — per-session autonomy override threaded into the agent on build. */
+  /** S ? per-session autonomy override threaded into the agent on build. */
   approvalMode?: ApprovalMode
   /** Per-session reasoning effort override. Applied to the agent on build and live-mutated mid-session. */
   reasoningEffort?: import('../agent/auto-reasoning.js').ReasoningEffort | 'auto'
@@ -742,15 +742,15 @@ interface InternalSession {
   /**
    * Whether `events` holds the full on-disk log. False for a rehydrated session
    * whose log hasn't been read yet (lazy boot) or one whose log was evicted to
-   * bound memory — ensureEvents() (re)loads from disk on first access.
+   * bound memory ? ensureEvents() (re)loads from disk on first access.
    */
   eventsLoaded: boolean
-  /** In-flight async log load — concurrent async opens share it (no double read). */
+  /** In-flight async log load ? concurrent async opens share it (no double read). */
   eventsLoadPromise?: Promise<void>
   /**
-   * 磁盘日志最早 seq（冷热双通道）：内存环截尾后 events[0].seq 会漂移，
-   * 但磁盘头部仍在——replay_window 元事件靠它告诉前端"还有更早的历史"。
-   * 新建会话恒为 1；rehydrate/懒加载在 adoptLoadedEvents 里从全量读回填。
+   * ?????? seq?????????????? events[0].seq ????
+   * ?????????replay_window ?????????"???????"?
+   * ?????? 1?rehydrate/???? adoptLoadedEvents ????????
    */
   diskFirstSeq?: number
   seq: number
@@ -761,18 +761,18 @@ interface InternalSession {
   /** Permanent-delete tombstone retained by queued callback closures. */
   tombstoned?: boolean
   pending: Map<string, PendingIntervention>
-  /** E4 — in-flight client landing delegations (keyed by requestId). */
+  /** E4 ? in-flight client landing delegations (keyed by requestId). */
   pendingDelegations: Map<string, PendingDelegation>
-  /** E4 — latest registered client capabilities (later registrant wins). */
+  /** E4 ? latest registered client capabilities (later registrant wins). */
   delegateCapabilities?: DelegateCapabilitySlot
   listeners: Set<(e: SessionEvent) => void>
   knownArtifacts: Set<string>
-  /** T3 — mid-run user guidance, drained into the agent at the next tool boundary. */
+  /** T3 ? mid-run user guidance, drained into the agent at the next tool boundary. */
   steer: SteerBuffer
   /**
-   * /handoff 登记的归档任务（桌面端 POST /sessions/:id/handoff）：交接 run 收尾时
-   * 把项目内 .rivet/HANDOFF.md 拷贝归档到会话目录 <id>.handoff.md——
-   * loadPrevHandoff 注入管线认的位置（与 TUI pendingHandoffCopy 同语义）。
+   * /handoff ??????????? POST /sessions/:id/handoff???? run ???
+   * ???? .rivet/HANDOFF.md ????????? <id>.handoff.md??
+   * loadPrevHandoff ?????????? TUI pendingHandoffCopy ?????
    */
   pendingHandoff?: { src: string; dest: string; sinceMs: number }
   /**
@@ -789,19 +789,19 @@ interface InternalSession {
    */
   rehydratedArtifacts?: ArtifactStore
   /**
-   * PlusMenu (domain) — live star-domain selection. Tri-state mirrors
+   * PlusMenu (domain) ? live star-domain selection. Tri-state mirrors
    * AgentLoop.getSessionDomain: undefined=Auto, null=no-persona (env kill switch
    * only), object=pinned. Applied
    * to the agent on ensureAgent (so lazy build is consistent) and after a model
    * rebuild (so the selection survives switchModel).
    */
   domainState: ActiveStarDomain | null | undefined
-  /** PlusMenu (skills) — per-session disabled skill names (in-memory). */
+  /** PlusMenu (skills) ? per-session disabled skill names (in-memory). */
   disabledSkills: Set<string>
-  /** PlusMenu (review) — 会话级审查门覆盖。undefined = 跟随配置默认
-   *  （refs.reviewGateRef 由 review.skipAuto 初始化）；用户经
-   *  POST /sessions/:id/review-gate 设置后成为权威值，agent 重建时
-   *  由 applySelections 重放到新 refs。 */
+  /** PlusMenu (review) ? ?????????undefined = ??????
+   *  ?refs.reviewGateRef ? review.skipAuto ????????
+   *  POST /sessions/:id/review-gate ?????????agent ???
+   *  ? applySelections ???? refs? */
   reviewGateOverride?: 'auto' | 'off'
   /**
    * Skills that failed to load from .rivet/skills at session create (e.g. a
@@ -821,45 +821,45 @@ interface InternalSession {
    * report consistent elapsed. Lazily created.
    */
   delegationStartedAt?: Map<string, number>
-  /** Watchdog stall 恢复状态机（与 TUI 共享实现），随 session 生命周期。 */
+  /** Watchdog stall ??????? TUI ??????? session ????? */
   watchdogPolicy?: WatchdogRecoveryPolicy
-  /** 最近一次 onAbort 携带的 reason（watchdog 家族判定用）。每次 run 起跑清空。 */
+  /** ???? onAbort ??? reason?watchdog ????????? run ????? */
   lastAbortReason?: string
-  /** onAbort 时刻是否有审批挂起——必须在此捕获，run().finally 的 rejectAllPending 会清掉 pending map。 */
+  /** onAbort ??????????????????run().finally ? rejectAllPending ??? pending map? */
   abortWhileApprovalPending?: boolean
-  /** 最近一次审批被拒的时刻（this.now() 读数），驱动 grace 窗口抑制。 */
+  /** ????????????this.now() ?????? grace ????? */
   lastApprovalDeniedAt?: number
-  /** 标记下一次 run 是 watchdog 自动续跑（跳过 recordUserSubmit，与 TUI 的
-   *  onSubmitCallback 直呼路径对齐——自动续跑不得重置 consecutive）。 */
+  /** ????? run ? watchdog ??????? recordUserSubmit?? TUI ?
+   *  onSubmitCallback ???????????????? consecutive?? */
   watchdogAutoResubmit?: boolean
-  /** 用户在 watchdog stall→setImmediate 续跑窗口内 abort → 置 true 抑制续跑。
-   *  abort() 对已停会话是空操作（status 已 aborted），不加此标记则窄窗口内
-   *  自动续跑会盖掉用户刚表达的「停」。run() 起跑时清。 */
+  /** ??? watchdog stall?setImmediate ????? abort ? ? true ?????
+   *  abort() ??????????status ? aborted????????????
+   *  ?????????????????run() ????? */
   watchdogRecoveryCancelled?: boolean
-  /** C2 刹车 — watchdog 续跑倒计时定时器。窗口内用户 abort / 新 prompt 取消。 */
+  /** C2 ?? ? watchdog ?????????????? abort / ? prompt ??? */
   watchdogContinueTimer?: NodeJS.Timeout
-  /** Goal 计划倒计时自动批准 — 定时器与目标 slug。窗口内用户任何参与
-   * （approve/reject/edit/prompt/steer/abort/显式取消）即取消。 */
+  /** Goal ????????? ? ?????? slug??????????
+   * ?approve/reject/edit/prompt/steer/abort/????????? */
   planAutoApproveTimer?: NodeJS.Timeout
   planAutoApproveSlug?: string
-  /** plan_draft 节流 — 最近一次发射时刻（this.now() 读数）。 */
+  /** plan_draft ?? ? ?????????this.now() ???? */
   planDraftLastEmit?: number
-  /** plan_draft 节流 — 尾沿定时器，保证窗口内最后一次写盘总能落一发事件。 */
+  /** plan_draft ?? ? ????????????????????????? */
   planDraftTimer?: unknown
   planDraftTimerGeneration?: number
-  /** 无人值守运行：审批请求 fail-closed 中止（付费版 v1 · T2）。 */
+  /** ??????????? fail-closed ?????? v1 ? T2?? */
   unattended?: boolean
-  /** P1b：客户端是否具备 plan 自动批准倒计时 UI。默认 false = fail-closed。 */
+  /** P1b???????? plan ??????? UI??? false = fail-closed? */
   planAutoApproveUi?: boolean
-  /** 无人值守中止原因（首个被拦截的审批），随 done/summary 上报。 */
+  /** ???????????????????? done/summary ??? */
   unattendedHaltReason?: string
-  /** 无人值守中止时缺授权的 app 名（结构化，供「补授权→重跑」修复闭环）。 */
+  /** ??????????? app ????????????????????? */
   unattendedHaltApp?: string
-  /** 流式 delta 合并缓冲（Wave 2）——见 bufferDelta()。 */
+  /** ?? delta ?????Wave 2???? bufferDelta()? */
   deltaBuf?: { type: 'text_delta' | 'thinking_delta'; text: string }
-  /** delta 合并窗口定时器。 */
+  /** delta ???????? */
   deltaTimer?: NodeJS.Timeout
-  /** 当前 delta run 是否已发出首个事件（首 token 立即落，后续走窗口）。 */
+  /** ?? delta run ??????????? token ??????????? */
   deltaRunActive?: boolean
   /** Contiguous streaming tool_result run; terminal results are never buffered. */
   toolResultStream?: { id: string; name: string; buffered: string; active: boolean }
@@ -868,31 +868,31 @@ interface InternalSession {
   toolResultClosed?: boolean
 }
 
-/** Tools that spawn worker agents — surfaced as delegation-tree nodes (N3). */
+/** Tools that spawn worker agents ? surfaced as delegation-tree nodes (N3). */
 const DELEGATION_TOOLS = new Set(['delegate_task', 'delegate_batch', 'team_orchestrate', 'council_convene', 'galaxy'])
 
-/** 审批拒绝后的 watchdog 续跑抑制窗口——与 TuiApp.APPROVAL_STALL_GRACE_MS 对齐：
- *  拒绝后立刻 stall 的自动 continue 只会重发同一个被拒调用（deny→continue→deny 环）。 */
+/** ?????? watchdog ????????? TuiApp.APPROVAL_STALL_GRACE_MS ???
+ *  ????? stall ??? continue ????????????deny?continue?deny ??? */
 const WATCHDOG_APPROVAL_GRACE_MS = 5_000
 
 /** Cap on concurrent user-dispatched background workers per session (guards the
  *  shared coordinator from being swamped). */
 const MAX_USER_BACKGROUND_WORKERS = 4
 
-/** plan_draft 事件节流窗口——agent 增量写草稿可能一轮多次落盘；250ms
- *  兼顾「起草中」亚秒刷新与 burst 合并。事件持久化仅 metadata；SSE live 帧可带正文。 */
+/** plan_draft ????????agent ??????????????250ms
+ *  ???????????? burst ????????? metadata?SSE live ?????? */
 const PLAN_DRAFT_THROTTLE_MS = 250
 
-/** plan_draft SSE 携带正文上限——超限只发失效信号，桌面回退 GET /plans。 */
+/** plan_draft SSE ????????????????????? GET /plans? */
 const PLAN_DRAFT_LIVE_CONTENT_MAX = 200_000
 
-/** Delta 合并窗口（Wave 2）——provider 逐 token 回调，每个 token 独立
- *  JSON.stringify + SSE write 太贵。窗口内的连续同类型 delta 合并成一条
- *  规范事件（单 seq，持久化/重放语义不变）。40ms ≈ 前端 10Hz 渲染节流的
- *  1/2.5，肉眼无感。 */
+/** Delta ?????Wave 2???provider ? token ????? token ??
+ *  JSON.stringify + SSE write ???????????? delta ?????
+ *  ?????? seq????/????????40ms ? ?? 10Hz ?????
+ *  1/2.5?????? */
 const DELTA_COALESCE_MS = 40
 
-/** 合并缓冲上限——超过即刻 flush，避免慢消费者场景下单事件过大。 */
+/** ???????????? flush???????????????? */
 const DELTA_COALESCE_MAX_CHARS = 2_048
 const TOOL_RESULT_COALESCE_MS = 40
 const TOOL_RESULT_COALESCE_BYTES = 2_048
@@ -910,22 +910,22 @@ function takeUtf8Prefix(text: string, maxBytes: number): { head: string; tail: s
 }
 
 
-/** Result of a user-dispatch request — lets the route map a precise status code. */
+/** Result of a user-dispatch request ? lets the route map a precise status code. */
 export type DelegateResult =
   | { ok: true; workerId: string }
   | { ok: false; reason: 'not_found' | 'invalid' | 'unsupported' | 'limit' }
 
-/** Result of a one-click resume — `switched` means the fallback model took
+/** Result of a one-click resume ? `switched` means the fallback model took
  *  over (UI must disclose that the prefix cache will be rebuilt). */
 export type ResumeRunResult =
   | { ok: true; model: string; switched: boolean }
   | { ok: false; code: 'not_found' | 'busy' | 'model_unavailable'; error: string }
 
-/** Injected user prompt for a resumed run — the model context was restored
+/** Injected user prompt for a resumed run ? the model context was restored
  *  from disk, so a short continuation instruction rides the existing history
- *  (appended at the tail → prefix-cache friendly). */
+ *  (appended at the tail ? prefix-cache friendly). */
 export const RESUME_PROMPT =
-  '[续跑] 上一轮执行被进程重启打断。请基于已有上下文继续完成中断前的任务；若中断点不明确，先回顾最近的工具输出与待办清单再继续。'
+  '[??] ???????????????????????????????????????????????????????????'
 
 /**
  * Parent-node objective for a delegation tool call. Prefer a top-level
@@ -949,14 +949,14 @@ export function extractObjective(input: Record<string, unknown>): string {
     }
     if (parts.length > 0) {
       const more = tasks.length > parts.length ? ` (+${tasks.length - parts.length} more)` : ''
-      return `${parts.join(' · ')}${more}`.slice(0, 200)
+      return `${parts.join(' ? ')}${more}`.slice(0, 200)
     }
   }
   return ''
 }
 
 /**
- * Scan an event log for approvals that were requested but never resolved —
+ * Scan an event log for approvals that were requested but never resolved ?
  * i.e. the run was interrupted (sidecar restart) while blocked on them.
  * Used by rehydrate() to close them out honestly instead of leaving a
  * dangling approval card in the replayed timeline.
@@ -975,7 +975,7 @@ function findOrphanedApprovals(events: SessionEvent[]): Array<{ requestId: strin
   return [...open.entries()].map(([requestId, toolName]) => ({ requestId, toolName }))
 }
 
-/** T2 — todo item as surfaced to the desktop (subset of the tool's schema). */
+/** T2 ? todo item as surfaced to the desktop (subset of the tool's schema). */
 interface TodoStateItem {
   id: string
   content: string
@@ -983,7 +983,7 @@ interface TodoStateItem {
 }
 
 /**
- * T2 — parse a `todo` write tool input into structured items.
+ * T2 ? parse a `todo` write tool input into structured items.
  *
  * We read the per-call input rather than the global TodoStore singleton on
  * purpose: the store is shared across all sidecar sessions, so its snapshot is
@@ -1027,11 +1027,11 @@ export class RuntimeSessionManager {
   private readonly defaultDomain?: string
   private readonly resumeFallbackModel?: string
   private readonly idleAgentTtlMs: number
-  /** Goal mode — late-bound per-session goal handles (refs + sessionDir). */
+  /** Goal mode ? late-bound per-session goal handles (refs + sessionDir). */
   private readonly resolveGoalHandles?: (sessionId: string) => GoalHandles | undefined
-  /** PlusMenu (review) — late-bound per-session review-gate ref accessor. */
+  /** PlusMenu (review) ? late-bound per-session review-gate ref accessor. */
   private readonly resolveReviewGateRef?: (sessionId: string) => { current: 'auto' | 'off' } | undefined
-  /** PlusMenu (review) — config-derived default when no override and no refs. */
+  /** PlusMenu (review) ? config-derived default when no override and no refs. */
   private readonly defaultReviewGate: 'auto' | 'off'
   private readonly toolResultScheduler: {
     setTimeout(callback: () => void, ms: number): unknown
@@ -1042,7 +1042,7 @@ export class RuntimeSessionManager {
     clearTimeout(handle: unknown): void
   }
   private readonly loadPlans: typeof storeListPlans
-  /** P1 任务身份化 — 可选 Mission 存储（未注入时 Mission 关联整体跳过）。 */
+  /** P1 ????? ? ?? Mission ??????? Mission ???????? */
   private readonly missionStore?: MissionStore
   private idleSweepTimer?: ReturnType<typeof setInterval>
   /** Per-session coordinator refs for worker steer/kill (set by main.ts after agent build). */
@@ -1053,8 +1053,8 @@ export class RuntimeSessionManager {
     this.defaultCwd = opts.defaultCwd ?? process.cwd()
     this.now = opts.now ?? Date.now
     this.idGenerator = opts.idGenerator ?? (() => randomId())
-    // RIVET_MAX_EVENTS：内存环容量旋钮（dev 调试/特殊部署）。环只约束
-    // 常驻内存与尾部回放窗口——被截头部经 getHistoryPage 从磁盘分页可达。
+    // RIVET_MAX_EVENTS?????????dev ??/??????????
+    // ?????????????????? getHistoryPage ????????
     const envMaxEvents = Number(process.env.RIVET_MAX_EVENTS)
     this.maxEvents = opts.maxEvents
       ?? (Number.isFinite(envMaxEvents) && envMaxEvents >= 100 ? Math.floor(envMaxEvents) : 5000)
@@ -1090,11 +1090,11 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Phase 3 #9 — release built agents of long-idle sessions so a day-long
+   * Phase 3 #9 ? release built agents of long-idle sessions so a day-long
    * sidecar doesn't accumulate one live AgentLoop per conversation ever opened.
    * Conservative gates: never touches a session that is running, holds pending
    * approvals, has user background workers or running jobs. Rebuild on the next
-   * prompt goes through ensureAgent → history restore, the same path a sidecar
+   * prompt goes through ensureAgent ? history restore, the same path a sidecar
    * restart uses (prefix cache is content-addressed, so byte-identical history
    * still hits).
    */
@@ -1117,13 +1117,30 @@ export class RuntimeSessionManager {
    *  worker handles). The lightweight record/events stay; ensureAgent rebuilds
    *  on demand. Caller guarantees the session is not running. */
   private releaseAgent(s: InternalSession): void {
-    if (!s.agent) return
-    try { s.agent.shutdown?.() } catch { /* best-effort */ }
+    let shutdownResult: void | boolean | Promise<void | boolean> | undefined
+    try { shutdownResult = s.agent?.shutdown?.() } catch { /* best-effort */ }
     s.agent = null
+    // A built agent may own claims even when the session has gone idle.  Wait
+    // for async coordinator cleanup before releasing them; otherwise a worker
+    // that ignored abort could race a new session during idle eviction.
+    if (shutdownResult && typeof (shutdownResult as Promise<void>).then === 'function') {
+      void Promise.resolve(shutdownResult).then(
+        (settled) => { if (settled !== false) this.releaseClaimsIfIdle(s) },
+        () => undefined,
+      )
+    } else if (shutdownResult !== false) {
+      this.releaseClaimsIfIdle(s)
+    }
+  }
+
+  /** Release claims only after the session has no active run settlement. */
+  private releaseClaimsIfIdle(s: InternalSession): void {
+    if (s.running || s.activeRunSettlement) return
+    try { this.getRegistry?.()?.releaseAllClaims(s.record.id) } catch { /* best-effort */ }
   }
 
   /**
-   * Phase 3 #9 — drop a session's heavy in-memory state entirely (agent, event
+   * Phase 3 #9 ? drop a session's heavy in-memory state entirely (agent, event
    * ring, background jobs). Used by the archive path: an archived session is
    * closed, so its jobs are terminated (mirrors hardDelete) and its log is
    * evicted; everything reloads lazily from disk if the session is reopened.
@@ -1133,7 +1150,7 @@ export class RuntimeSessionManager {
     this.releaseAgent(s)
     try { s.jobs?.killAll() } catch { /* best-effort */ }
     s.jobs = undefined
-    // Never drop unflushed coalesced deltas — they'd be lost from the replay.
+    // Never drop unflushed coalesced deltas ? they'd be lost from the replay.
     this.flushDeltaBuf(s)
     this.flushToolResultBuf(s)
     s.events = []
@@ -1151,8 +1168,8 @@ export class RuntimeSessionManager {
    */
   private rehydrate(): void {
     const p = this.persistence!
-    // Lazy boot: read only the lightweight index.json records — NOT the event
-    // logs — so a sidecar restart is O(sessions) instead of O(total events ever).
+    // Lazy boot: read only the lightweight index.json records ? NOT the event
+    // logs ? so a sidecar restart is O(sessions) instead of O(total events ever).
     // With dozens of long sessions the eager path read+parsed tens of MB of
     // events.jsonl synchronously on every launch (slow start + unbounded RAM);
     // here each session starts with an empty log that ensureEvents() fills on
@@ -1190,7 +1207,7 @@ export class RuntimeSessionManager {
         if (wasRunning) {
           // If the run died while blocked on approvals, close them out honestly:
           // read this ONE session's log (bounded: only crashed-with-pending
-          // sessions pay it — the pendingApprovals>0 gate keeps lazy boot lazy),
+          // sessions pay it ? the pendingApprovals>0 gate keeps lazy boot lazy),
           // find approval_required events with no matching approval_resolved,
           // and append 'sidecar-restart' resolutions so the replayed timeline
           // shows WHAT was pending instead of a dangling, unanswerable card.
@@ -1215,7 +1232,7 @@ export class RuntimeSessionManager {
             ...(orphans.length ? { interruptedApprovals: orphans } : {}),
           })
           // One-click resume entry (Phase 3). Carries the model/domain the run
-          // was on — resume is strictly affine to both (prefix-cache), enforced
+          // was on ? resume is strictly affine to both (prefix-cache), enforced
           // server-side by resumeRun().
           appendMarker('resume_offer', {
             model: rec.model ?? null,
@@ -1246,7 +1263,7 @@ export class RuntimeSessionManager {
           pendingApprovals: 0,
         },
         agent: null,
-        // 内存环上限与懒加载路径一致：只保留尾部 maxEvents 进内存。
+        // ??????????????????? maxEvents ????
         events: events.length > this.maxEvents ? events.slice(events.length - this.maxEvents) : events,
         diskFirstSeq: events[0]?.seq,
         eventsLoaded: true,
@@ -1261,7 +1278,7 @@ export class RuntimeSessionManager {
         ),
         steer: new SteerBuffer(),
         // Restore the live domain selection from the persisted key so a rebuilt
-        // agent re-applies it. Skills are in-memory only → start clean.
+        // agent re-applies it. Skills are in-memory only ? start clean.
         domainState: resolveDomainState(ps.record.domain ?? 'auto')?.state,
         disabledSkills: new Set(),
         skillLoadErrors: [],
@@ -1270,7 +1287,7 @@ export class RuntimeSessionManager {
       }
       this.sessions.set(session.record.id, session)
       if (wasRunning) {
-        // Close out approvals the crash left dangling (see lazy path above) —
+        // Close out approvals the crash left dangling (see lazy path above) ?
         // here the full log is already in memory, so scan it directly.
         const orphans = findOrphanedApprovals(events)
         for (const o of orphans) {
@@ -1282,7 +1299,7 @@ export class RuntimeSessionManager {
           reason: 'sidecar-restart',
           ...(orphans.length ? { interruptedApprovals: orphans } : {}),
         })
-        // One-click resume entry (Phase 3) — see the lazy path above.
+        // One-click resume entry (Phase 3) ? see the lazy path above.
         this.append(session, 'resume_offer', {
           model: ps.record.model ?? null,
           domain: ps.record.domain ?? 'auto',
@@ -1307,7 +1324,7 @@ export class RuntimeSessionManager {
         try {
           evs = loader.call(this.persistence, session.record.id)
         } catch (err) {
-          // Do NOT silently replay an empty history — record the failure so it
+          // Do NOT silently replay an empty history ? record the failure so it
           // surfaces as a visible error event below (a viewer that reconnects
           // into a blank timeline otherwise has no clue the log read failed).
           evs = []
@@ -1318,11 +1335,11 @@ export class RuntimeSessionManager {
       session.eventsLoaded = true
       if (loadError !== undefined) {
         this.append(session, 'error', {
-          error: `event log could not be read — history replay is incomplete (${loadError})`,
+          error: `event log could not be read ? history replay is incomplete (${loadError})`,
         })
       }
-      // 首开兜底对账：sidecar 重启 / abort 吞事件留下的「运行中」死节点在此
-      // 补终态——用户打开会话即自愈（仅空闲会话；running 的由 run 收尾对账）。
+      // ???????sidecar ?? / abort ????????????????
+      // ?????????????????????running ?? run ??????
       this.sweepStaleDelegationNodes(session, 'caller_aborted')
     }
     this.touchLoaded(session)
@@ -1333,24 +1350,24 @@ export class RuntimeSessionManager {
    *  async load paths). Caller still owns the eventsLoaded flag. */
   private adoptLoadedEvents(session: InternalSession, evs: SessionEvent[]): void {
     evs.sort((a, b) => a.seq - b.seq)
-    // knownArtifacts 在截断前从全量构建——即使 artifact 事件落在被截掉的
-    // 头部，去重集仍然完整（防止重放时重新公告旧 artifact）。
+    // knownArtifacts ????????????? artifact ????????
+    // ????????????????????? artifact??
     session.knownArtifacts = new Set(
       evs.filter((e) => e.type === 'artifact').map((e) => String(e.data.id)),
     )
-    // 截断前记录磁盘最早 seq——replay_window 据此告知前端头部是否被环截掉。
+    // ????????? seq??replay_window ???????????????
     if (evs.length > 0) session.diskFirstSeq = evs[0]!.seq
     const maxSeq = evs.length ? evs[evs.length - 1]!.seq : session.record.lastSeq
     session.seq = Math.max(session.seq, maxSeq)
-    // 内存环上限对懒加载路径同样生效：极长会话（磁盘日志 ≫ maxEvents）只
-    // 保留尾部进内存——与活跃会话超过环容量后的行为一致（append 已截尾），
-    // 客户端 since=0 重放本来就只拿得到环内尾部。磁盘 events.jsonl 不动，
-    // 仍是完整历史的 source of truth。
+    // ????????????????????????? ? maxEvents??
+    // ??????????????????????????append ?????
+    // ??? since=0 ???????????????? events.jsonl ???
+    // ??????? source of truth?
     session.events = evs.length > this.maxEvents ? evs.slice(evs.length - this.maxEvents) : evs
   }
 
-  /** adoptLoadedEvents 的尾部版：截断已在读取侧完成，被截头部的信息由
-   *  diskFirstSeq / artifactIds 带出，语义与全量路径逐字对齐。 */
+  /** adoptLoadedEvents ???????????????????????
+   *  diskFirstSeq / artifactIds ??????????????? */
   private adoptLoadedTail(session: InternalSession, tail: EventsTail): void {
     session.knownArtifacts = new Set(tail.artifactIds)
     if (tail.total > 0) session.diskFirstSeq = tail.diskFirstSeq
@@ -1366,12 +1383,12 @@ export class RuntimeSessionManager {
    * Guards:
    *  - concurrent async opens share one in-flight load (no double read);
    *  - if a sync ensureEvents() wins the race while we awaited, the stale disk
-   *    snapshot is discarded — the sync path may already have appended fresh
+   *    snapshot is discarded ? the sync path may already have appended fresh
    *    events that a blind overwrite would drop.
    */
   private async ensureEventsAsync(session: InternalSession): Promise<void> {
     if (!session.eventsLoaded) {
-      // 尾部读优先：只搬环内那部分过线程边界，代价与日志长度解耦。
+      // ?????????????????????????????
       const tailLoader = this.persistence?.loadEventsTailAsync
       const asyncLoader = this.persistence?.loadEventsAsync
       if (!tailLoader && !asyncLoader) {
@@ -1394,16 +1411,16 @@ export class RuntimeSessionManager {
             evs = []
             loadError = redactText((err as Error)?.message ?? String(err))
           }
-          if (session.eventsLoaded) return // sync load won the race — keep it
+          if (session.eventsLoaded) return // sync load won the race ? keep it
           if (tail) this.adoptLoadedTail(session, tail)
           else this.adoptLoadedEvents(session, evs)
           session.eventsLoaded = true
           if (loadError !== undefined) {
             this.append(session, 'error', {
-              error: `event log could not be read — history replay is incomplete (${loadError})`,
+              error: `event log could not be read ? history replay is incomplete (${loadError})`,
             })
           }
-          // 与 ensureEvents 同步路径相同的首开兜底对账。
+          // ? ensureEvents ??????????????
           this.sweepStaleDelegationNodes(session, 'caller_aborted')
         })().finally(() => {
           session.eventsLoadPromise = undefined
@@ -1415,7 +1432,7 @@ export class RuntimeSessionManager {
     this.evictLoadedBeyondCap()
   }
 
-  /** Async twin of getEvents — reconnect/replay entry point for HTTP routes. */
+  /** Async twin of getEvents ? reconnect/replay entry point for HTTP routes. */
   async getEventsAsync(id: string, since = 0): Promise<{ events: SessionEvent[]; lastSeq: number } | undefined> {
     const s = this.sessions.get(id)
     if (!s) return undefined
@@ -1427,9 +1444,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * 回放窗口元数据（冷热双通道）。/stream 在回放最前发出 replay_window
-   * 合成事件：diskFirstSeq < floorSeq ⇔ 内存环截掉了头部，前端据此显示
-   * 「加载更早的历史」入口。须在 getEventsAsync 之后调用（events 已加载）。
+   * ???????????????/stream ??????? replay_window
+   * ?????diskFirstSeq < floorSeq ? ???????????????
+   * ?????????????? getEventsAsync ?????events ?????
    */
   getReplayWindow(id: string): { floorSeq: number; diskFirstSeq: number; diskLastSeq: number } | undefined {
     const s = this.sessions.get(id)
@@ -1439,30 +1456,30 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * 冷通道历史分页：绕过内存环直读磁盘日志（复用 loadEventsAsync 的
-   * off-thread parse），返回 seq < before 的最后 ~limit 条，并向前扩展到
-   * 最近的 user 事件对齐 turn 边界——前端独立 fold 一页再前插的正确性
-   * 前提（见桌面探针 history-page-fold.test.ts）。纯读，不写环不写盘；
-   * 磁盘 events.jsonl 是完整历史的唯一 source of truth。
+   * ?????????????????????? loadEventsAsync ?
+   * off-thread parse???? seq < before ??? ~limit ????????
+   * ??? user ???? turn ???????? fold ?????????
+   * ???????? history-page-fold.test.ts????????????
+   * ?? events.jsonl ???????? source of truth?
    *
-   * seq 允许有洞（损坏行被持久化层丢弃）——分页只依赖单调性。
+   * seq ???????????????????????????
    */
   async getHistoryPage(id: string, before: number, limit: number): Promise<{
     events: SessionEvent[]
-    /** 磁盘日志最早 seq——events[0].seq 到达它即无更早页。 */
+    /** ?????? seq??events[0].seq ????????? */
     firstSeq: number
     lastSeq: number
   } | undefined> {
     const s = this.sessions.get(id)
     if (!s) return undefined
     const p = this.persistence
-    // 快路径（Phase 2）：稀疏索引字节区间读——大日志分页不整本进内存。
-    // turn 对齐可能需要比 limit 更早的事件（页首向前扩到最近 user 事件），
-    // 窗口不够对齐时按 4 倍扩窗重试；扩窗到顶仍不成 → 全量路径兜底。
+    // ????Phase 2?????????????????????????
+    // turn ??????? limit ?????????????? user ????
+    // ???????? 4 ????????????? ? ???????
     if (p?.loadEventsBefore) {
       try {
-        // +500：预留一个索引桶的对齐余量，常规 turn 尺寸（~100-200 事件）
-        // 下首次取窗即可完成 user 对齐，不用二次往返。
+        // +500???????????????? turn ???~100-200 ???
+        // ????????? user ??????????
         let want = Math.max(1, limit) + 500
         for (let attempt = 0; attempt < 4; attempt++) {
           const win = await p.loadEventsBefore.call(p, id, before, want)
@@ -1475,7 +1492,7 @@ export class RuntimeSessionManager {
           }
           want *= 4
         }
-      } catch { /* 索引路径失败 → 全量兜底 */ }
+      } catch { /* ?????? ? ???? */ }
     }
     let all: SessionEvent[]
     if (p?.loadEventsAsync) {
@@ -1483,28 +1500,28 @@ export class RuntimeSessionManager {
     } else if (p?.loadEvents) {
       try { all = p.loadEvents.call(p, id) } catch { all = [] }
     } else {
-      // ephemeral 模式（无持久化）：内存环即全量历史。
+      // ephemeral ??????????????????
       all = s.events
     }
     const firstSeq = all[0]?.seq ?? 0
     const head = all.filter((e) => e.seq < before)
     let start = Math.max(0, head.length - Math.max(1, limit))
-    // turn 边界对齐：页首必须是 user 事件（无则扩到日志开头）。对齐只向前
-    // 扩展，保证与上一页无缝衔接（下一次 before = 本页 events[0].seq）。
+    // turn ?????????? user ??????????????????
+    // ????????????????? before = ?? events[0].seq??
     while (start > 0 && head[start]!.type !== 'user') start--
     return { events: head.slice(start), firstSeq, lastSeq: s.seq }
   }
 
   /**
-   * 全历史事件读取（磁盘直读优先，Phase 2）——供 insights / getWorkerLog /
-   * listRewindPoints 等需要越过内存环截尾语义的消费者使用。这些消费者按
-   * 类型过滤全流（稀疏索引帮不上忙），直接走 loadEventsAsync 的 off-thread
-   * parse。ephemeral（无持久化）与磁盘读失败降级为环内容（可用性优先）。
+   * ???????????????Phase 2???? insights / getWorkerLog /
+   * listRewindPoints ?????????????????????????
+   * ???????????????????? loadEventsAsync ? off-thread
+   * parse?ephemeral??????????????????????????
    */
   async getAllEventsAsync(id: string): Promise<{ events: SessionEvent[]; lastSeq: number } | undefined> {
     const s = this.sessions.get(id)
     if (!s) return undefined
-    // 先冲掉 manager 级合并缓冲（delta/tool_result），保证磁盘含全部已 append。
+    // ??? manager ??????delta/tool_result?????????? append?
     this.flushDeltaBuf(s)
     this.flushToolResultBuf(s)
     const p = this.persistence
@@ -1521,13 +1538,13 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * 失败钻取(W2):单个 worker 的完整日志——活动流(会话 delegation 事件)
-   * + 终态结果(loadPersistedResult)+ 转录尾部(loadWorkerSession,
-   * 与 CLI worker-detail 同源 ~/.rivet/subagents/<orderId>.session.jsonl)。
-   * 返回 undefined = 会话不存在;三段数据均可独立为空(worker 无存档时)。
-   * `full` 模式(桌面「查看完整转录」):不截尾部 50 条,单条正文上限放宽,
-   * 工具调用帧带参数摘要(toolInput)。默认模式保持轻载荷。
-   * rounds:稳定 id 复用时的逐轮归档索引(L1),result 始终是最新一轮。
+   * ????(W2):?? worker ??????????(?? delegation ??)
+   * + ????(loadPersistedResult)+ ????(loadWorkerSession,
+   * ? CLI worker-detail ?? ~/.rivet/subagents/<orderId>.session.jsonl)?
+   * ?? undefined = ?????;??????????(worker ????)?
+   * `full` ??(??????????):???? 50 ?,????????,
+   * ??????????(toolInput)???????????
+   * rounds:?? id ??????????(L1),result ????????
    */
   async getWorkerLog(id: string, workerId: string, opts?: { full?: boolean }): Promise<{
     activity: string[]
@@ -1535,14 +1552,14 @@ export class RuntimeSessionManager {
     rounds: PersistedResultRound[]
     transcript: { role: string; text: string; toolName?: string; toolInput?: string }[]
     savedAt: number | null
-    /** true = 默认模式下转录尾部有被截断的更早消息(可用 full=1 拉全量)。 */
+    /** true = ??????????????????(?? full=1 ???)? */
     truncated: boolean
   } | undefined> {
     const s = this.sessions.get(id)
     if (!s) return undefined
     const full = opts?.full === true
-    // 活动日志:会话事件流中该 worker 的 progressLine / 文本增量 / 状态迁移。
-    // 全历史读取(Phase 2):磁盘直读越过内存环截尾,早于环底的 worker 活动可见。
+    // ????:??????? worker ? progressLine / ???? / ?????
+    // ?????(Phase 2):???????????,????? worker ?????
     const { events } = (await this.getAllEventsAsync(id)) ?? { events: [] as SessionEvent[] }
     const activity: string[] = []
     for (const e of events) {
@@ -1554,8 +1571,8 @@ export class RuntimeSessionManager {
       if (typeof line === 'string' && line) activity.push(line.slice(0, 300))
     }
     const result = loadPersistedResult(workerId)
-    // 运行中优先读内存活转录（coordinator per-order 注册）——saveWorkerSession
-    // 只在终态落盘，没有这条通道运行中的转录永远是空/陈旧的上一轮存档。
+    // ????????????coordinator per-order ?????saveWorkerSession
+    // ???????????????????????/?????????
     const liveMessages = this.coordinatorBySession.get(id)?.()?.getLiveWorkerMessages(workerId)
     const record = liveMessages && liveMessages.length > 0 ? null : loadWorkerSession(workerId)
     const messages = liveMessages && liveMessages.length > 0 ? liveMessages : (record?.messages ?? [])
@@ -1563,7 +1580,7 @@ export class RuntimeSessionManager {
     const textCap = full ? 4000 : 800
     const transcript = keep.map((m: OaiMessage) => ({
       role: m.role,
-      // 纯工具调用轮的 assistant.content 为 null——oaiMessageText 此时运行期为 null,必须兜底
+      // ??????? assistant.content ? null??oaiMessageText ?????? null,????
       text: (oaiMessageText(m) ?? '').slice(0, textCap),
       toolName: isAssistantWithTools(m) ? m.tool_calls[0]?.function.name : undefined,
       toolInput: isAssistantWithTools(m) ? summarizeToolCallArgs(m.tool_calls[0]) : undefined,
@@ -1590,7 +1607,7 @@ export class RuntimeSessionManager {
   /**
    * Drop event logs of idle LRU sessions to bound resident memory. Never unloads
    * a session that's live (agent built or running) or being watched (SSE
-   * listeners) — its in-memory log is the source of truth for in-flight appends
+   * listeners) ? its in-memory log is the source of truth for in-flight appends
    * and replay; those reload cleanly from disk once idle.
    */
   private evictLoadedBeyondCap(): void {
@@ -1695,7 +1712,7 @@ export class RuntimeSessionManager {
 
   /**
    * Remove a session from memory + disk + registry. Internal: callers enforce
-   * the archived/idle policy. Idempotent (missing id → false).
+   * the archived/idle policy. Idempotent (missing id ? false).
    */
   private hardDelete(id: string): boolean {
     const s = this.sessions.get(id)
@@ -1764,9 +1781,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Count running sessions sharing a working directory (VSW §6 adaptive policy).
+   * Count running sessions sharing a working directory (VSW ?6 adaptive policy).
    * `runningCount` alone is global and would misjudge sessions in different
-   * projects as concurrent (反证表). Paths are resolved before comparison so
+   * projects as concurrent (???). Paths are resolved before comparison so
    * relative/absolute forms of the same cwd match. `excludeSessionId` drops the
    * caller's own session, yielding "other concurrent sessions on this cwd".
    */
@@ -1798,7 +1815,7 @@ export class RuntimeSessionManager {
         // after the agent commits mid-task.
         baselineHead = revParseHead(wt.path)
       } catch {
-        // Worktree creation failed — fall back to shared cwd silently.
+        // Worktree creation failed ? fall back to shared cwd silently.
       }
     }
 
@@ -1812,14 +1829,14 @@ export class RuntimeSessionManager {
     let sessionDomain = this.defaultDomain ?? 'qiming'
     try {
       const projectConfig = loadConfig({ cwd })
-      // loadConfig 合并全局+项目层：取新鲜值（含 'auto'），设置页运行期改
-      // agent.defaultDomain 后新会话即生效，不用重启 sidecar；启动快照仅作
-      // config 加载失败时的回退。
+      // loadConfig ????+?????????? 'auto'?????????
+      // agent.defaultDomain ???????????? sidecar???????
+      // config ?????????
       const projectDomain = projectConfig.agent?.defaultDomain
       if (projectDomain) sessionDomain = projectDomain
       const projectProvider = projectConfig.provider.providers[projectConfig.provider.default]
       if (projectProvider?.models[0]?.id) sessionModel = projectProvider.models[0].id
-    } catch { /* project config load failure is non-fatal — fall back to global defaults */ }
+    } catch { /* project config load failure is non-fatal ? fall back to global defaults */ }
     if (input.model) sessionModel = input.model
     if (input.domain) sessionDomain = input.domain
 
@@ -1839,15 +1856,15 @@ export class RuntimeSessionManager {
         worktreeBranch,
         worktreePath,
         baselineHead,
-        // P1b：随 record 持久化，sidecar 重启/rehydrate 后由恢复路径读回——
-        // 否则重启后静默失去倒计时自动批准（fail-closed 但前后不一致）。
+        // P1b?? record ????sidecar ??/rehydrate ??????????
+        // ?????????????????fail-closed ????????
         ...(input.planAutoApproveUi === true ? { planAutoApproveUi: true } : {}),
       },
       agent: null,
       approvalMode: input.approvalMode,
       events: [],
-      // 新会话首个事件 seq=1；live 截尾（append splice）后 events[0] 会漂移，
-      // 此值保持 1 使 replay_window 仍能暴露"头部在磁盘"。
+      // ??????? seq=1?live ???append splice?? events[0] ????
+      // ???? 1 ? replay_window ????"?????"?
       diskFirstSeq: 1,
       eventsLoaded: true,
       seq: 0,
@@ -1866,9 +1883,9 @@ export class RuntimeSessionManager {
       unattended: input.unattended === true,
       planAutoApproveUi: input.planAutoApproveUi === true,
     }
-    // P1 — Mission 关联（显式路径）。projectId 用原项目根（input.cwd），
-    // 不用 worktree 变异后的 cwd——worktree 路径是临时的，projectId 会漂移。
-    // Best-effort：Mission 存储故障不阻断会话创建。
+    // P1 ? Mission ?????????projectId ??????input.cwd??
+    // ?? worktree ???? cwd??worktree ???????projectId ????
+    // Best-effort?Mission ????????????
     if (this.missionStore) {
       try {
         const projectCwd = input.cwd ?? this.defaultCwd
@@ -1880,19 +1897,19 @@ export class RuntimeSessionManager {
           session.record.missionId = mission.id
           this.missionStore.addSession(mission.id, id)
         }
-      } catch { /* non-fatal — 会话照常创建，桌面端回退 title/shortId */ }
+      } catch { /* non-fatal ? ???????????? title/shortId */ }
     }
     this.sessions.set(id, session)
     this.touchLoaded(session)
     this.persistRecord(session)
-    // 立即加载技能到共享 registry：技能列表查询（/skills）发生在用户发首条消息之前，
-    // 而 agent 是懒创建的（ensureAgent 在 run() 时才建）——若把 loadProjectSkills 只留
-    // 在 agent 创建路径（buildSessionStores），新会话的技能面板会显示空（0/0）直到首次
-    // 对话。这里在创建会话时即加载，幂等（registry 用 Map.set 覆盖）。
-    // importFromClaude 的文件复制由后续 agent 创建时的 buildSessionStores 补全（幂等）。
-    // 捕获 loadErrors：坏 frontmatter 的技能不再静默消失，UI 会显示原因。
-    try { session.skillLoadErrors = loadProjectSkills(cwd).errors } catch { /* non-fatal: 技能加载失败不阻断会话 */ }
-    // R1 — announce the session to the shared registry so its file claims are
+    // ????????? registry????????/skills??????????????
+    // ? agent ??????ensureAgent ? run() ???????? loadProjectSkills ??
+    // ? agent ?????buildSessionStores???????????????0/0?????
+    // ??????????????????registry ? Map.set ????
+    // importFromClaude ???????? agent ???? buildSessionStores ???????
+    // ?? loadErrors?? frontmatter ??????????UI ??????
+    try { session.skillLoadErrors = loadProjectSkills(cwd).errors } catch { /* non-fatal: ??????????? */ }
+    // R1 ? announce the session to the shared registry so its file claims are
     // attributed and reaped on crash. Best-effort: registry may be disabled.
     try { this.getRegistry?.()?.register(id, cwd, 'standalone') } catch { /* non-fatal */ }
     if (input.prompt && input.prompt.trim()) {
@@ -1908,37 +1925,37 @@ export class RuntimeSessionManager {
     const wasAutoResubmit = session.watchdogAutoResubmit === true
     session.watchdogAutoResubmit = false
     session.watchdogRecoveryCancelled = false
-    // C2 — 任何新 run（用户 prompt 或倒计时自身触发的 continue）都终结待续跑窗口。
+    // C2 ? ??? run??? prompt ????????? continue??????????
     if (session.watchdogContinueTimer) {
       clearTimeout(session.watchdogContinueTimer)
       session.watchdogContinueTimer = undefined
     }
-    // 用户新发 prompt = 对计划审批的参与——取消倒计时自动批准
+    // ???? prompt = ???????????????????
     this.cancelPlanAutoApprove(session, 'new-prompt')
     session.lastAbortReason = undefined
     session.abortWhileApprovalPending = false
     session.unattendedHaltReason = undefined
     session.unattendedHaltApp = undefined
-    // 结构化 halt 标记随新 run 清除（record 会随后续 persist 落盘）。
+    // ??? halt ???? run ???record ???? persist ????
     if (session.record.unattendedHalt) session.record.unattendedHalt = undefined
     session.watchdogPolicy ??= new WatchdogRecoveryPolicy()
-    // 用户主动提交恢复续跑预算；自动续跑注入的 'continue' 不算（与 TUI 的
-    // onSubmitCallback 直呼路径一致，否则 consecutive cap 形同虚设）。
+    // ???????????????????? 'continue' ???? TUI ?
+    // onSubmitCallback ????????? consecutive cap ??????
     if (!wasAutoResubmit) session.watchdogPolicy.recordUserSubmit()
-    // Materialize the on-disk log before appending — otherwise a reconnecting
+    // Materialize the on-disk log before appending ? otherwise a reconnecting
     // viewer (since=0) would replay only this run's events, not the history.
     this.ensureEvents(session)
     // Mark running before ensureAgent (may await dynamic serve-agent import) so a
     // second run() cannot race in while the module is still loading. User/status
-    // events are appended only after the agent exists — warnIfHistoryLost must
+    // events are appended only after the agent exists ? warnIfHistoryLost must
     // see the pre-prompt event log, not this turn's user echo.
     session.running = true
     session.toolResultClosed = false
-    // T3 — drop any guidance left from a previous run so it can't leak forward.
+    // T3 ? drop any guidance left from a previous run so it can't leak forward.
     session.steer.clear()
     session.record.status = 'running'
     session.record.error = undefined
-    // R1 — keep the registry heartbeat fresh while this session is active.
+    // R1 ? keep the registry heartbeat fresh while this session is active.
     try { this.getRegistry?.()?.heartbeat(id) } catch { /* non-fatal */ }
     this.touch(session)
 
@@ -1957,7 +1974,7 @@ export class RuntimeSessionManager {
     const ownsDurability = (): boolean => this.ownsSessionLifecycle(session, runGeneration)
 
     const startWithAgent = (agent: ManagedAgent) => {
-      // Abort/archive raced a dynamic serve-agent import — never start a turn.
+      // Abort/archive raced a dynamic serve-agent import ? never start a turn.
       if (!ownsDurability() || session.record.status === 'aborted') {
         if (!runSettlement.settled) {
           runSettlement.settled = true
@@ -1972,11 +1989,11 @@ export class RuntimeSessionManager {
         return
       }
       // Persist each attached image as a standalone file and echo only small
-      // reference ids into the event log — NOT the base64. This keeps events.jsonl
+      // reference ids into the event log ? NOT the base64. This keeps events.jsonl
       // (and its full replay/restore) tiny while the model still receives the data
       // URLs inline via agent.run below.
       const imageIds = this.persistImages(id, images)
-      // Snapshot "first user message" BEFORE appending — the auto-title hook
+      // Snapshot "first user message" BEFORE appending ? the auto-title hook
       // below needs to know whether this run is the conversation opener.
       const wasFirstUser = !session.events.some((e) => e.type === 'user')
       this.append(session, 'user', {
@@ -1988,14 +2005,14 @@ export class RuntimeSessionManager {
       this.append(session, 'status', { status: 'running' })
       // P2-B: emit a goal_state baseline snapshot on the first user message so
       // MissionProjector + GoalBar can cold-start from the event stream instead
-      // of relying on HTTP polling. No goalId/tracker yet — just an active empty
+      // of relying on HTTP polling. No goalId/tracker yet ? just an active empty
       // goal that moves the projector phase from 'draft' to 'executing'.
       if (wasFirstUser) {
         this.append(session, 'goal_state', this.baselineGoalSnapshot() as unknown as Record<string, unknown>)
       }
       this.persistRecord(session)
       // Auto-generate a session title from the first user message when none is
-      // set. Fire-and-forget — extraction never blocks the main run, and the
+      // set. Fire-and-forget ? extraction never blocks the main run, and the
       // hook double-checks `!record.title` after the await so a user who sets a
       // title manually during the ~1s extraction window is never overwritten.
       if (wasFirstUser && !session.record.title) {
@@ -2040,10 +2057,10 @@ export class RuntimeSessionManager {
             this.settleHandoffArchive(session)
             this.append(session, 'done', { status: session.record.status })
             this.persistRecord(session)
-            // 兜底对账：abort 路径上 worker 的终态 delegation 事件会被回调门禁
-            // 吞掉（见 sweepStaleDelegationNodes）。延迟一拍——coordinator 的
-            // abort 结算链是纯 promise，setImmediate 时 orderControllers 必已
-            // 清空，不会把仍在结算的 worker 误判为死亡。
+            // ?????abort ??? worker ??? delegation ????????
+            // ???? sweepStaleDelegationNodes????????coordinator ?
+            // abort ????? promise?setImmediate ? orderControllers ??
+            // ??????????? worker ??????
             const sweepReason = session.record.status === 'aborted' ? 'caller_aborted' : 'unknown'
             setImmediate(() => {
               if (this.sessions.get(id) !== session) return
@@ -2092,10 +2109,10 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * /handoff（桌面端入口）：登记归档任务后发起交接 run——agent 把交接文档写到
-   * 项目内 .rivet/HANDOFF.md（工作区内免审批），run 收尾时 settleHandoffArchive
-   * 拷贝归档到会话目录 <id>.handoff.md（loadPrevHandoff 注入管线认的位置，
-   * 与 TUI pendingHandoffCopy 同语义）。会话不存在/运行中返回 false（路由 409）。
+   * /handoff??????????????????? run??agent ???????
+   * ??? .rivet/HANDOFF.md??????????run ??? settleHandoffArchive
+   * ????????? <id>.handoff.md?loadPrevHandoff ?????????
+   * ? TUI pendingHandoffCopy ??????????/????? false??? 409??
    */
   requestHandoff(id: string, note?: string): { ok: boolean; error?: string } {
     const session = this.sessions.get(id)
@@ -2112,9 +2129,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * run 收尾时的 handoff 归档：交接 run 产出项目内文档后拷贝到会话目录
-   * <id>.handoff.md 并补一条 system 事件（新会话于是自动注入交接内容）。
-   * best-effort——拷贝失败不阻断 done 事件。
+   * run ???? handoff ????? run ???????????????
+   * <id>.handoff.md ???? system ??????????????????
+   * best-effort????????? done ???
    */
   private settleHandoffArchive(session: InternalSession): void {
     const pending = session.pendingHandoff
@@ -2122,34 +2139,34 @@ export class RuntimeSessionManager {
     session.pendingHandoff = undefined
     try {
       if (existsSync(pending.src) && statSync(pending.src).mtimeMs > pending.sinceMs) {
-        // dest 父目录在真实 agent 路径下由 SessionPersist 构造创建；但 best-effort
-        // 不依赖那个时序（懒构建/异常会话里可能尚无目录）。
+        // dest ?????? agent ???? SessionPersist ?????? best-effort
+        // ???????????/?????????????
         mkdirSync(dirname(pending.dest), { recursive: true })
         copyFileSync(pending.src, pending.dest)
         handoffRecoveries(session.record.cwd, session.record.id)
         this.append(session, 'handoff_archived', {
-          text: `✦ 交接文档已写入 ${pending.src} 并归档 ${pending.dest}——新会话将自动注入交接内容。`,
+          text: `? ??????? ${pending.src} ??? ${pending.dest}???????????????`,
           src: pending.src,
           dest: pending.dest,
         })
       }
-    } catch { /* best-effort：归档失败不阻断会话收尾 */ }
+    } catch { /* best-effort???????????? */ }
   }
 
   /**
    * One-click resume for a run interrupted by a sidecar restart (resume_offer).
    *
    * Cache-affinity contract (hard requirement): the resumed run MUST stay on
-   * the model and star domain the session was on before the restart — the
+   * the model and star domain the session was on before the restart ? the
    * conversation's prefix cache lives per model, and rebuilding it on a
    * different model costs more than the resume saves. Behavior ladder:
-   *  - original model available → resume on it (domain restored via
-   *    ensureAgent → applySelections from the persisted record.domain);
+   *  - original model available ? resume on it (domain restored via
+   *    ensureAgent ? applySelections from the persisted record.domain);
    *  - original model unavailable AND `resumeFallbackModel` is configured and
-   *    available → resume on the fallback with an explicit model_switched
+   *    available ? resume on the fallback with an explicit model_switched
    *    event (`switched: true` in the result lets the UI say "cache will be
    *    rebuilt");
-   *  - otherwise fail closed (`model_unavailable`) — the UI degrades to a
+   *  - otherwise fail closed (`model_unavailable`) ? the UI degrades to a
    *    "start a new session" entry. Never silently falls back to the default
    *    model.
    */
@@ -2159,7 +2176,7 @@ export class RuntimeSessionManager {
     if (session.running) return { ok: false, code: 'busy', error: 'Session is already running' }
     const original = session.record.model
     const available = this.listModelsFn?.()
-    // No injected model source (tests / minimal setups): trust the record —
+    // No injected model source (tests / minimal setups): trust the record ?
     // there is nothing to validate against, and the factory resolves it.
     const isAvailable = (m: string | undefined): m is string =>
       !!m && (!available || available.some((o) => o.id === m || o.alias === m))
@@ -2172,8 +2189,8 @@ export class RuntimeSessionManager {
           ok: false,
           code: 'model_unavailable',
           error: original
-            ? `原模型 ${original} 当前不可用，且未配置续跑兜底模型（agent.resumeFallbackModel）——请开新会话继续`
-            : '会话未记录原模型，无法保证缓存亲和——请开新会话继续',
+            ? `??? ${original} ?????????????????agent.resumeFallbackModel??????????`
+            : '??????????????????????????',
         }
       }
       target = fallback
@@ -2181,9 +2198,9 @@ export class RuntimeSessionManager {
     }
     if (switched) {
       if (session.agent) {
-        // Live agent on the wrong model — hot-swap it (emits model_switched).
+        // Live agent on the wrong model ? hot-swap it (emits model_switched).
         if (!(await this.switchModel(id, target!))) {
-          return { ok: false, code: 'model_unavailable', error: `兜底模型 ${target} 切换失败——请开新会话继续` }
+          return { ok: false, code: 'model_unavailable', error: `???? ${target} ?????????????` }
         }
       } else {
         // Agent not built yet: point the record at the fallback so ensureAgent
@@ -2201,7 +2218,7 @@ export class RuntimeSessionManager {
 
   /**
    * User-dispatched background subagent. Unlike run(), this does NOT set
-   * session.running — the worker runs in its own isolated sub-session with an
+   * session.running ? the worker runs in its own isolated sub-session with an
    * independent abort signal, so it coexists with the main turn and is not
    * killed by aborting the main conversation. Progress streams through the same
    * 'delegation' SSE channel (origin:'user') the viewer panel already consumes.
@@ -2266,7 +2283,7 @@ export class RuntimeSessionManager {
     if (session.agent) return session.agent
     this.ensureJobs(session)
     // Model affinity: a rehydrated session must come back on the model its
-    // record carries (prefix-cache lives per model) — not the default model.
+    // record carries (prefix-cache lives per model) ? not the default model.
     const created = this.createAgent(
       session.record.cwd,
       session.record.id,
@@ -2280,7 +2297,7 @@ export class RuntimeSessionManager {
       return agent
     }
     // Production serve factory returns a Promise (dynamic serve-agent import).
-    // Test doubles return a ManagedAgent synchronously — keep that path sync so
+    // Test doubles return a ManagedAgent synchronously ? keep that path sync so
     // existing tests don't need a microtask flush after every run().
     if (created && typeof (created as Promise<ManagedAgent>).then === 'function') {
       return (created as Promise<ManagedAgent>).then(finish)
@@ -2295,7 +2312,7 @@ export class RuntimeSessionManager {
   /**
    * Surface the "UI has history, model has none" divergence. A rehydrated
    * session replays its full event log to the viewer, but the model context is
-   * restored separately from the session .jsonl — if that read failed or came
+   * restored separately from the session .jsonl ? if that read failed or came
    * back empty while the event log clearly holds a prior conversation, warn in
    * the timeline instead of letting the user talk to an amnesiac model.
    * Best-effort: only fires when prior events are resident (run() calls
@@ -2309,8 +2326,8 @@ export class RuntimeSessionManager {
     if (!hadConversation) return
     this.append(session, 'phase', {
       phase: info.error
-        ? `⚠️ 历史上下文恢复失败（${redactText(info.error)}）——模型不记得此前的对话，界面历史仅供查看`
-        : '⚠️ 历史上下文为空——会话记录文件缺失或已损坏，模型不记得此前的对话，界面历史仅供查看',
+        ? `?? ??????????${redactText(info.error)}??????????????????????`
+        : '?? ?????????????????????????????????????????',
       historyRestore: { restored: info.restored, ...(info.error ? { error: redactText(info.error) } : {}) },
     })
   }
@@ -2341,9 +2358,9 @@ export class RuntimeSessionManager {
 
   /**
    * Re-apply the session's PlusMenu selections (star domain, disabled skills) to
-   * its live agent. Idempotent — called both after a lazy build (ensureAgent)
+   * its live agent. Idempotent ? called both after a lazy build (ensureAgent)
    * and after a model rebuild (switchModel) so the selections survive a fresh
-   * AgentLoop. A domainState of undefined means Auto → leave the agent's own
+   * AgentLoop. A domainState of undefined means Auto ? leave the agent's own
    * auto-detection untouched.
    */
   private applySelections(session: InternalSession): void {
@@ -2364,8 +2381,8 @@ export class RuntimeSessionManager {
     try {
       if (session.reasoningEffort !== undefined) agent.setReasoningEffort?.(session.reasoningEffort)
     } catch { /* non-fatal */ }
-    // 审查门 override 重放：switchModel 重建后 refs 是全新对象（回退到配置默认），
-    // 用户显式设置的 auto/off 必须重新写入，否则 Off 静默失效。
+    // ??? override ???switchModel ??? refs ???????????????
+    // ??????? auto/off ????????? Off ?????
     try {
       if (session.reviewGateOverride !== undefined) {
         const ref = this.resolveReviewGateRef?.(session.record.id)
@@ -2374,11 +2391,11 @@ export class RuntimeSessionManager {
     } catch { /* non-fatal */ }
     this.bindPlanModeChange(session, agent, session.lifecycleGeneration)
     this.bindAskModeChange(session, agent, session.lifecycleGeneration)
-    // Plan mode 是 AgentLoop 的内存态，record.planMode 是持久态。agent 重建
-    // （懒构建恢复会话 / switchModel）会丢内存态：工具门禁失效、
-    // getActivePlanFilePath 变 null → 桌面「起草中」实时视图断流。record 说
-    // planning 时补一次 enterPlanMode（新开草稿文件），恢复两条通道。
-    // onPlanModeChange 的同态守卫保证不会重复发 plan_mode SSE。
+    // Plan mode ? AgentLoop ?????record.planMode ?????agent ??
+    // ???????? / switchModel??????????????
+    // getActivePlanFilePath ? null ? ??????????????record ?
+    // planning ???? enterPlanMode????????????????
+    // onPlanModeChange ???????????? plan_mode SSE?
     if (session.record.planMode === 'planning') {
       try { agent.enterPlanMode?.() } catch { /* non-fatal */ }
     } else if (session.record.askMode === 'asking') {
@@ -2428,10 +2445,10 @@ export class RuntimeSessionManager {
     }
   }
 
-  // ── PlusMenu: star domain ─────────────────────────────────────
+  // ?? PlusMenu: star domain ?????????????????????????????????????
 
   /**
-   * PlusMenu — list the domain picker entries for this session (Auto /
+   * PlusMenu ? list the domain picker entries for this session (Auto /
    * built-in + custom domains) with the session's current selection flagged.
    * Returns undefined when the session is missing.
    */
@@ -2442,7 +2459,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * PlusMenu — set the session's star domain by selection key (auto | off |
+   * PlusMenu ? set the session's star domain by selection key (auto | off |
    * <domainId>). Updates the stored selection (applied on lazy build), live-
    * mutates an already-built agent, persists the key, and emits domain_changed.
    * Returns false when the session is missing or the key is unknown.
@@ -2464,10 +2481,10 @@ export class RuntimeSessionManager {
     return true
   }
 
-  // ── PlusMenu: model ───────────────────────────────────────────
+  // ?? PlusMenu: model ???????????????????????????????????????????
 
   /**
-   * PlusMenu — list selectable models for this session, flagging the current
+   * PlusMenu ? list selectable models for this session, flagging the current
    * one. Returns undefined when the session is missing. Empty when no provider
    * model source was injected (tests).
    */
@@ -2480,7 +2497,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * PlusMenu — hot-switch the session's model, preserving conversation history.
+   * PlusMenu ? hot-switch the session's model, preserving conversation history.
    * Refuses while the session is running (caller must abort first), rebuilds the
    * agent on the new model (same SessionContext), re-applies domain/skill
    * selections, persists record.model, and emits model_switched. Returns false
@@ -2497,7 +2514,7 @@ export class RuntimeSessionManager {
       return false
     }
     if (!resolved) return false
-    // The rebuild produced a fresh AgentLoop — re-bind per-session selections.
+    // The rebuild produced a fresh AgentLoop ? re-bind per-session selections.
     this.applySelections(session)
     session.record.model = resolved
     this.touch(session)
@@ -2506,12 +2523,12 @@ export class RuntimeSessionManager {
     return true
   }
 
-  // ── PlusMenu: review gate ─────────────────────────────────────
+  // ?? PlusMenu: review gate ?????????????????????????????????????
 
   /**
-   * PlusMenu (review) — 当前审查门模式。优先级：用户 override > live refs
-   * （配置初始化 + 可能已被翻转）> 配置默认。refs 未建（agent 未构建）时
-   * 由 override / defaultReviewGate 兜底。会话不存在返回 undefined。
+   * PlusMenu (review) ? ?????????????? override > live refs
+   * ?????? + ???????> ?????refs ???agent ?????
+   * ? override / defaultReviewGate ?????????? undefined?
    */
   getReviewGate(id: string): 'auto' | 'off' | undefined {
     const session = this.sessions.get(id)
@@ -2522,9 +2539,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * PlusMenu (review) — 设置会话审查门。写 override（权威）并现写 live refs
-   * （refs 未建时仅记 override，applySelections 在 agent 构建后重放）。
-   * 会话不存在返回 false。
+   * PlusMenu (review) ? ????????? override??????? live refs
+   * ?refs ????? override?applySelections ? agent ???????
+   * ??????? false?
    */
   setReviewGate(id: string, mode: 'auto' | 'off'): boolean {
     const session = this.sessions.get(id)
@@ -2533,14 +2550,14 @@ export class RuntimeSessionManager {
     try {
       const ref = this.resolveReviewGateRef?.(id)
       if (ref) ref.current = mode
-    } catch { /* non-fatal — override persists and replays on next build */ }
+    } catch { /* non-fatal ? override persists and replays on next build */ }
     return true
   }
 
-  // ── PlusMenu: skills ──────────────────────────────────────────
+  // ?? PlusMenu: skills ??????????????????????????????????????????
 
   /**
-   * PlusMenu — list every loaded skill with its per-session enablement status.
+   * PlusMenu ? list every loaded skill with its per-session enablement status.
    * Returns undefined when the session is missing.
    */
   listSkills(id: string): SkillStatus[] | undefined {
@@ -2553,7 +2570,7 @@ export class RuntimeSessionManager {
       enabled: !session.disabledSkills.has(s.name),
       // Editable when there's a backing file on disk (built-ins have none;
       // plugin skills point at the plugin dir, which the editor could open
-      // but we keep read-only for safety — users edit via the plugin's own flow).
+      // but we keep read-only for safety ? users edit via the plugin's own flow).
       editable: !!s.bodyPath && s.source !== 'builtin' && s.source !== 'plugin',
     }))
   }
@@ -2571,7 +2588,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * PlusMenu — enable/disable a skill for this session. Updates the disabled
+   * PlusMenu ? enable/disable a skill for this session. Updates the disabled
    * set, live-applies it to an already-built agent's discovery filter, and emits
    * skills_changed. Returns false when the session is missing.
    */
@@ -2587,7 +2604,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Skills install — list skills discoverable under .claude/skills that can be
+   * Skills install ? list skills discoverable under .claude/skills that can be
    * copied into this session's project .rivet/skills. Read-only; returns
    * undefined when the session is missing.
    */
@@ -2598,7 +2615,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Skills install — count skills already installed under .rivet/skills. Drives
+   * Skills install ? count skills already installed under .rivet/skills. Drives
    * the soft install cap in UIs. Returns undefined when the session is missing.
    */
   installedSkillCount(id: string): number | undefined {
@@ -2608,7 +2625,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Skills install — copy the named skills from .claude/skills into the project
+   * Skills install ? copy the named skills from .claude/skills into the project
    * .rivet/skills (idempotent; already-present ones are skipped). Intentionally
    * does NOT hot-load into the live registry or emit skills_changed: changing
    * the available-skill set mid-session shatters the prefix cache. The copied
@@ -2621,7 +2638,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Skills CRUD — read the full SKILL.md text for the editor. Returns null for
+   * Skills CRUD ? read the full SKILL.md text for the editor. Returns null for
    * built-in / plugin skills (no editable backing file) so the UI can show a
    * read-only notice. Returns undefined when the session is missing.
    */
@@ -2632,9 +2649,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Skills CRUD — write (create or overwrite) a skill. `scope: 'global'`
+   * Skills CRUD ? write (create or overwrite) a skill. `scope: 'global'`
    * writes to ~/.rivet/skills (reusable across projects); 'project' writes to
-   * <cwd>/.rivet/skills. Throws on malformed frontmatter (route layer → 400).
+   * <cwd>/.rivet/skills. Throws on malformed frontmatter (route layer ? 400).
    * Same no-hot-load contract as install: the change takes effect next session.
    * Returns undefined when the session is missing.
    */
@@ -2645,10 +2662,10 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Skills CRUD — uninstall a project-scoped skill (delete from .rivet/skills).
+   * Skills CRUD ? uninstall a project-scoped skill (delete from .rivet/skills).
    * Returns { removed: false } for built-in / plugin / global skills so the UI
    * can show "cannot remove from here". Does NOT hot-load or emit
-   * skills_changed — same contract as install. Returns undefined when the
+   * skills_changed ? same contract as install. Returns undefined when the
    * session is missing.
    */
   uninstallSkill(id: string, name: string): { removed: boolean; wasDir: boolean } | undefined {
@@ -2658,7 +2675,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * S — set the per-session autonomy level. Updates the stored override (so it
+   * S ? set the per-session autonomy level. Updates the stored override (so it
    * applies when the agent is first built) AND live-mutates an already-built
    * agent (so a mid-session toggle takes effect on the next tool, no rebuild).
    * Returns false when the session is missing. Persists the new mode onto the
@@ -2693,14 +2710,14 @@ export class RuntimeSessionManager {
     return true
   }
 
-  // ── Goal mode (autonomous cross-turn goal pursuit) ──────────────────
+  // ?? Goal mode (autonomous cross-turn goal pursuit) ??????????????????
   // Mirrors the CLI/headless goal flow (main.ts:357-416). The tracker drives
   // cross-turn continuation via GoalContinuationController (assembled in
   // loop-factory); update_goal / deliver_task tools read refs.goalTrackerRef,
   // so both the agent field AND refs.current MUST stay in sync.
   /**
    * Create + attach a goal tracker. Resolves success criteria asynchronously
-   * (fail-open — defaults to a generic template). Returns the initial state, or
+   * (fail-open ? defaults to a generic template). Returns the initial state, or
    * null when the session has no goal handles wired (test doubles / legacy
    * sidecar) or the session is missing.
    */
@@ -2727,7 +2744,7 @@ export class RuntimeSessionManager {
       ...(opts.maxJudgeRuns !== undefined ? { maxJudgeRuns: opts.maxJudgeRuns } : {}),
     })
     // Sync BOTH the agent field (drives GoalContinuationController) AND the refs
-    // slot (read by update_goal / deliver_task tool closures). Out of sync →
+    // slot (read by update_goal / deliver_task tool closures). Out of sync ?
     // tools see null while continuation runs, or vice versa.
     try { session.agent?.setGoalTracker?.(tracker) } catch { /* non-fatal */ }
     handles.goalTrackerRef.current = tracker
@@ -2738,7 +2755,7 @@ export class RuntimeSessionManager {
     return this.snapshotGoal(tracker)
   }
 
-  /** Pause / resume — mutate tracker state, persist, emit. */
+  /** Pause / resume ? mutate tracker state, persist, emit. */
   pauseGoal(id: string, reason?: string): GoalSnapshot | null {
     return this.mutateGoal(id, (t) => { t.pause(reason ?? 'user', 'user') })
   }
@@ -2746,12 +2763,12 @@ export class RuntimeSessionManager {
     return this.mutateGoal(id, (t) => { t.resume('user') })
   }
   /**
-   * Cancel is terminal — also clear the agent tracker + refs + persisted
+   * Cancel is terminal ? also clear the agent tracker + refs + persisted
    * state so a subsequent setGoal starts clean (aligns slash-commands.ts:1107).
    *
-   * Returns a Promise — the caller MUST await it before issuing setGoal on the
+   * Returns a Promise ? the caller MUST await it before issuing setGoal on the
    * same session. The persisted-state deletion is awaited here (not fire-and-
-   * forget) so a rapid cancel→setGoal sequence cannot race: without awaiting,
+   * forget) so a rapid cancel?setGoal sequence cannot race: without awaiting,
    * the dynamic-import delay + FS buffering could let the delete land AFTER a
    * new setGoal's saveGoalState, wiping the new goal's state file.
    */
@@ -2769,7 +2786,7 @@ export class RuntimeSessionManager {
       try {
         const { deleteGoalState } = await import('../agent/goal-persist.js')
         deleteGoalState(handles.sessionDir, id)
-      } catch { /* non-fatal — file may not exist */ }
+      } catch { /* non-fatal ? file may not exist */ }
     }
     this.append(session, 'goal_state', this.snapshotGoal(tracker) as unknown as Record<string, unknown>)
     return this.snapshotGoal(tracker)
@@ -2818,7 +2835,7 @@ export class RuntimeSessionManager {
 
   /**
    * P2-B: Baseline goal_state snapshot emitted on the first user message.
-   * No GoalTracker exists yet — this is a synthetic active-empty goal that
+   * No GoalTracker exists yet ? this is a synthetic active-empty goal that
    * lets MissionProjector transition from 'draft' to 'executing' phase.
    * Subsequent setGoal/extractCriteria calls will emit richer goal_state events.
    */
@@ -2847,13 +2864,13 @@ export class RuntimeSessionManager {
         const cheap = buildCheapClient(handles.cheapProfile, handles.allProviders as Parameters<typeof buildCheapClient>[1])
         if (cheap) completion = completionFromClient(cheap.client, cheap.model)
       }
-      if (!completion) return // no cheap client → leave generic criteria default
+      if (!completion) return // no cheap client ? leave generic criteria default
       const criteria = await extractGoalCriteria(goal, completion)
       tracker.setSuccessCriteria(criteria)
       const s = this.sessions.get(id)
       if (s) this.append(s, 'goal_state', this.snapshotGoal(tracker) as unknown as Record<string, unknown>)
     } catch {
-      // non-fatal — tracker keeps its generic default criteria
+      // non-fatal ? tracker keeps its generic default criteria
     }
   }
 
@@ -2875,7 +2892,7 @@ export class RuntimeSessionManager {
         handles.cheapProfile,
         handles.allProviders as Parameters<typeof buildCheapClient>[1],
       )
-      if (!cheap) return // provider not configured or no API key — leave title unset
+      if (!cheap) return // provider not configured or no API key ? leave title unset
       const title = await extractSessionTitle(
         firstMessage,
         completionFromClient(cheap.client, cheap.model, 256),
@@ -2886,16 +2903,16 @@ export class RuntimeSessionManager {
         this.attachImplicitMission(s, title)
       }
     } catch {
-      // non-fatal — title stays unset, UI keeps sessionId-slice fallback
+      // non-fatal ? title stays unset, UI keeps sessionId-slice fallback
     }
   }
 
   /**
-   * rev2 — 隐式 Mission：主流路径（sendPrompt 无标题）在 maybeAutoTitle
-   * 起标题成功时获得 Mission。恒新建不去重（自动标题撞名 ≠ 同一任务）。
-   * 双检 !record.missionId：显式路径已关联的不重复创建。
-   * 注：worktree 会话的 record.cwd 是 worktree 路径，projectId 会偏离项目
-   * 根——该组合（无标题 + isolatedWorktree）极少见，P1 接受。
+   * rev2 ? ?? Mission??????sendPrompt ????? maybeAutoTitle
+   * ???????? Mission?????????????? ? ??????
+   * ?? !record.missionId???????????????
+   * ??worktree ??? record.cwd ? worktree ???projectId ?????
+   * ?????????? + isolatedWorktree?????P1 ???
    */
   private attachImplicitMission(s: InternalSession, title: string): void {
     if (!this.missionStore || s.record.missionId) return
@@ -2904,11 +2921,11 @@ export class RuntimeSessionManager {
       this.missionStore.addSession(mission.id, s.record.id)
       s.record.missionId = mission.id
       this.persistRecord(s)
-    } catch { /* non-fatal — 标题已写入，仅 Mission 关联缺席 */ }
+    } catch { /* non-fatal ? ??????? Mission ???? */ }
   }
 
   /**
-   * Plan mode — toggle the session between read-only planning and normal
+   * Plan mode ? toggle the session between read-only planning and normal
    * execution. Building the agent eagerly here (ensureAgent) so the toggle binds
    * to the same instance a later run() reuses. Emits a `plan_mode` event so the
    * desktop can flip its mode chip / open the plan column. Returns false when the
@@ -2935,7 +2952,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Ask mode — toggle the session between pure read-only Q&A and normal
+   * Ask mode ? toggle the session between pure read-only Q&A and normal
    * execution. Mutually exclusive with Plan Mode. Emits `ask_mode` (and clears
    * plan_mode when entering). Returns false when the session is missing.
    */
@@ -2970,9 +2987,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Active plan-mode draft — the working document the agent writes while
+   * Active plan-mode draft ? the working document the agent writes while
    * planning. Drafts are NOT submitted plans (listPlans filters them); the
-   * desktop renders this as a live "起草中" view instead. Returns `undefined`
+   * desktop renders this as a live "???" view instead. Returns `undefined`
    * when the session is missing, `null` when it exists but is not planning
    * or has no readable draft. Title is the draft's H1, null while empty.
    */
@@ -2993,7 +3010,7 @@ export class RuntimeSessionManager {
 
   /**
    * Read a single plan's full content. Returns `undefined` when the session is
-   * missing and `null` when the session exists but the plan does not — letting
+   * missing and `null` when the session exists but the plan does not ? letting
    * the route distinguish 404 reasons.
    */
   async readPlan(id: string, slug: string): Promise<PlanDocument | null | undefined> {
@@ -3007,15 +3024,15 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Edit a submitted plan's markdown before approval (desktop plan editing —
-   * Cursor 3.0 parity: review → tweak the document → Build). Only `submitted`
+   * Edit a submitted plan's markdown before approval (desktop plan editing ?
+   * Cursor 3.0 parity: review ? tweak the document ? Build). Only `submitted`
    * plans are editable; approved/executed are historical records and rejected
    * are archived. Emits `plan_submitted` so viewers re-fetch the body.
    */
   async updatePlan(id: string, slug: string, content: string): Promise<PlanUpdateOutcome> {
     const session = this.sessions.get(id)
     if (!session) return { ok: false, code: 'session-missing', reason: 'Session not found' }
-    // 编辑计划 = 用户参与——取消倒计时自动批准
+    // ???? = ???????????????
     this.cancelPlanAutoApprove(session, 'edited')
     const trimmed = content.trim()
     if (!trimmed) return { ok: false, code: 'empty-content', reason: 'Plan content must not be empty' }
@@ -3053,13 +3070,13 @@ export class RuntimeSessionManager {
   async approvePlan(id: string, slug: string, selectedApproach?: string): Promise<PlanApprovalOutcome> {
     const session = this.sessions.get(id)
     if (!session) return { ok: false, code: 'session-missing', reason: 'Session not found' }
-    // 用户手动批准 = 参与——取消倒计时自动批准（自动批准定时器自身走清空后的
-    // 调用路径，此处为 no-op）。
+    // ?????? = ????????????????????????????
+    // ???????? no-op??
     this.cancelPlanAutoApprove(session, 'approved')
     if (session.running) {
-      return { ok: false, code: 'session-running', reason: 'Session is running — wait for the current turn to finish before Build' }
+      return { ok: false, code: 'session-running', reason: 'Session is running ? wait for the current turn to finish before Build' }
     }
-    // Validate the selected approach BEFORE mutating the plan file — approving
+    // Validate the selected approach BEFORE mutating the plan file ? approving
     // first would leave the file marked APPROVED even when the option is bogus.
     let resolvedApproach: string | undefined
     if (selectedApproach?.trim()) {
@@ -3071,7 +3088,7 @@ export class RuntimeSessionManager {
           return { ok: false, code: 'bad-approach', reason: `Unknown selectedApproach "${selectedApproach}"` }
         }
       } else {
-        // No recorded options — pass the user's text through as-is.
+        // No recorded options ? pass the user's text through as-is.
         resolvedApproach = selectedApproach.trim()
       }
     }
@@ -3102,16 +3119,16 @@ export class RuntimeSessionManager {
       })
     } catch { /* non-fatal */ }
     try { agent.exitPlanMode?.() } catch (err) {
-      debugLog('approvePlan: agent.exitPlanMode() failed — plan mode may not have exited', err instanceof Error ? err.message : String(err))
+      debugLog('approvePlan: agent.exitPlanMode() failed ? plan mode may not have exited', err instanceof Error ? err.message : String(err))
     }
-    // agent.onPlanModeChange 可能已镜像 record 并发过 plan_mode —— 条件补发防重复，
-    // 同时兜底不支持回调的轻量 double。
+    // agent.onPlanModeChange ????? record ??? plan_mode ?? ????????
+    // ???????????? double?
     if (session.record.planMode !== 'off') {
       session.record.planMode = 'off'
       this.append(session, 'plan_mode', { state: 'off' })
     }
-    // 批准终态也要发 plan_submitted——mission-projector 的 approved 离场转移与
-    // 各端审批卡清除都消费它（此前只有 reject/edit 路径发，approved 不可达）。
+    // ??????? plan_submitted??mission-projector ? approved ?????
+    // ???????????????? reject/edit ????approved ?????
     this.append(session, 'plan_submitted', { slug, title: approved.title, status: 'approved' })
     this.touch(session)
     this.persistRecord(session)
@@ -3122,7 +3139,7 @@ export class RuntimeSessionManager {
   /**
    * Reject a plan with optional feedback. Keeps the plan on disk (marked
    * rejected) and re-enters plan mode. Revision feedback routing depends on
-   * session state: idle → kick a revision turn immediately; running → queue
+   * session state: idle ? kick a revision turn immediately; running ? queue
    * through the steer buffer (injected at the next tool boundary), so mid-run
    * feedback is never silently dropped. Emits `plan_submitted` to refresh
    * viewers.
@@ -3130,7 +3147,7 @@ export class RuntimeSessionManager {
   async rejectPlan(id: string, slug: string, comment?: string): Promise<boolean> {
     const session = this.sessions.get(id)
     if (!session) return false
-    // 驳回 = 用户参与——取消倒计时自动批准
+    // ?? = ???????????????
     this.cancelPlanAutoApprove(session, 'rejected')
     let rejected: PlanDocument | null
     try {
@@ -3143,7 +3160,7 @@ export class RuntimeSessionManager {
     try {
       agent.enterPlanMode?.({ planFilePath: `.rivet/plans/${slug}.md` })
     } catch { /* non-fatal */ }
-    // 同 approvePlan：enterPlanMode 的 onPlanModeChange 回调可能已发过 plan_mode。
+    // ? approvePlan?enterPlanMode ? onPlanModeChange ??????? plan_mode?
     if (session.record.planMode !== 'planning') {
       session.record.planMode = 'planning'
       this.append(session, 'plan_mode', { state: 'planning' })
@@ -3156,7 +3173,7 @@ export class RuntimeSessionManager {
       const revisionPrompt = `User rejected the plan. Feedback:\n\n${note}\n\nRevise the plan in \`.rivet/plans/${slug}.md\`, then call plan action=submit again.`
       if (session.running) {
         // Mid-run rejection: the feedback rides the steer buffer (next tool
-        // boundary) instead of being dropped — the old code only handled idle.
+        // boundary) instead of being dropped ? the old code only handled idle.
         session.steer.push(revisionPrompt)
         this.append(session, 'steer_queued', { text: redactText(revisionPrompt) })
       } else {
@@ -3167,9 +3184,9 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * T3 — queue mid-run user guidance. Unlike run(), this does NOT start a turn:
+   * T3 ? queue mid-run user guidance. Unlike run(), this does NOT start a turn:
    * the text is buffered and injected at the next tool boundary (onSteerDrain).
-   * Only meaningful while running — an idle session has no turn to steer.
+   * Only meaningful while running ? an idle session has no turn to steer.
    *
    * Returns:
    *  - 'queued'    guidance accepted into the running session's buffer
@@ -3180,7 +3197,7 @@ export class RuntimeSessionManager {
     const session = this.sessions.get(id)
     if (!session) return 'not_found'
     if (!session.running) return 'idle'
-    // 插话 = 用户参与——取消倒计时自动批准
+    // ?? = ???????????????
     this.cancelPlanAutoApprove(session, 'steer')
     session.steer.push(text)
     // Echo into the event log so the thread reflects the queued guidance and
@@ -3190,19 +3207,19 @@ export class RuntimeSessionManager {
     return 'queued'
   }
 
-  /** 注册 session 的 coordinator 引用（main.ts 在 agent 构建后调用）。 */
+  /** ?? session ? coordinator ???main.ts ? agent ??????? */
   setCoordinatorRef(sessionId: string, ref: () => import('../agent/coordinator.js').DelegationCoordinator | undefined): void {
     this.coordinatorBySession.set(sessionId, ref)
   }
 
-  /** 注销 session 的 coordinator 引用（session 关闭时调用）。 */
+  /** ?? session ? coordinator ???session ??????? */
   clearCoordinatorRef(sessionId: string): void {
     this.coordinatorBySession.delete(sessionId)
   }
 
   /**
-   * 向指定 session 的某个在跑 worker 投递 steer 消息。
-   * 返回 null = session/coordinator 不存在；false = worker 不在跑；true = 已入队。
+   * ??? session ????? worker ?? steer ???
+   * ?? null = session/coordinator ????false = worker ????true = ????
    */
   steerWorker(sessionId: string, workerId: string, text: string): true | false | null {
     const getCoordinator = this.coordinatorBySession.get(sessionId)
@@ -3213,20 +3230,20 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * 终止指定 session 的某个在跑 worker（双轨：先 backgroundAborts，再 orderControllers）。
-   * 返回 null = session 不存在；false = worker 不在跑/未找到；true = 已终止。
+   * ???? session ????? worker????? backgroundAborts?? orderControllers??
+   * ?? null = session ????false = worker ???/????true = ????
    */
   killWorker(sessionId: string, workerId: string): true | false | null {
     const session = this.sessions.get(sessionId)
     if (!session) return null
-    // 轨 1：用户派发的后台 worker（backgroundAborts）
+    // ? 1???????? worker?backgroundAborts?
     const bgAbort = session.backgroundAborts?.get(workerId)
     if (bgAbort) {
       try { bgAbort.abort() } catch { /* already aborted */ }
       session.backgroundAborts?.delete(workerId)
       return true
     }
-    // 轨 2：agent 委派的 worker（orderControllers，通过 coordinator）
+    // ? 2?agent ??? worker?orderControllers??? coordinator?
     const getCoordinator = this.coordinatorBySession.get(sessionId)
     if (!getCoordinator) return false
     const coordinator = getCoordinator()
@@ -3234,7 +3251,7 @@ export class RuntimeSessionManager {
     return coordinator.killWorker(workerId)
   }
 
-  /** 检查指定 session 的某个 worker 是否在跑。 */
+  /** ???? session ??? worker ????? */
   isWorkerRunning(sessionId: string, workerId: string): boolean {
     const getCoordinator = this.coordinatorBySession.get(sessionId)
     if (!getCoordinator) return false
@@ -3244,13 +3261,13 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * 兜底对账：事件日志里仍标 running 的 delegation 节点，若地面真值
-   * （backgroundAborts / coordinator.orderControllers）判定其已不在跑，
-   * 补发终态事件闭环。worker 真实死亡与终态事件落盘本是两条路径——
-   * abort 时工具层补发的终态会被 onDelegationActivity 的 lifecycleGeneration
-   * 门禁吞掉，sidecar 重启时 rehydrate 也不补 delegation 终态——没有本对账，
-   * 子代理面板回放后永远显示「运行中」，kill 只能拿到 409。
-   * 只在会话空闲时调用（running 中的会话由 run 收尾统一对账）。
+   * ???????????? running ? delegation ????????
+   * ?backgroundAborts / coordinator.orderControllers?????????
+   * ?????????worker ???????????????????
+   * abort ??????????? onDelegationActivity ? lifecycleGeneration
+   * ?????sidecar ??? rehydrate ??? delegation ??????????
+   * ??????????????????kill ???? 409?
+   * ??????????running ????? run ????????
    */
   private sweepStaleDelegationNodes(session: InternalSession, failureReason: string): void {
     if (session.running) return
@@ -3268,7 +3285,7 @@ export class RuntimeSessionManager {
       if (status !== 'running') continue
       if (session.backgroundAborts?.has(workerId)) continue
       if (this.isWorkerRunning(session.record.id, workerId)) continue
-      // 让补发的终态事件带上真实的存活时长（否则 elapsedMs 会从 0 起算）。
+      // ???????????????????? elapsedMs ?? 0 ????
       const startedMap = session.delegationStartedAt ?? (session.delegationStartedAt = new Map())
       const ts = firstTs.get(workerId)
       if (ts !== undefined && !startedMap.has(workerId)) startedMap.set(workerId, ts)
@@ -3277,7 +3294,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * N2 — artifact feedback re-injection. Turns a human comment on an artifact
+   * N2 ? artifact feedback re-injection. Turns a human comment on an artifact
    * into a structured next-turn prompt so the agent revises in-context. Only
    * valid on an idle session (a finished turn); returns false while running.
    *
@@ -3304,14 +3321,14 @@ export class RuntimeSessionManager {
     if (comment.trim()) {
       parts.push(`Comment: ${comment}`)
     }
-    // 行级评论：每条带 <file>:<line> 锚点，让 agent 精确定位
+    // ???????? <file>:<line> ???? agent ????
     const lineRemarks = lines?.filter((l) => l.comment.trim()) ?? []
     if (lineRemarks.length > 0) {
       const rendered = lineRemarks
         .map((l) => {
           const lineRef = l.newLine ?? l.oldLine
           const loc = lineRef != null ? `${l.file}:${lineRef}` : l.file
-          return `${loc} — ${l.comment.trim()}`
+          return `${loc} ? ${l.comment.trim()}`
         })
         .join('\n')
       parts.push(`[LINE-LEVEL REVIEW]\n${rendered}`)
@@ -3321,7 +3338,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Start a run and resolve when it reaches a terminal state (N3 — used by the
+   * Start a run and resolve when it reaches a terminal state (N3 ? used by the
    * runtime pool so scheduled tasks can report a summary). Returns immediately
    * with a failed result if the session is missing or already busy.
    */
@@ -3346,13 +3363,13 @@ export class RuntimeSessionManager {
       status: s.record.status,
       summary: this.buildRunSummary(s),
       changedFiles: this.collectChangedFiles(s),
-      // 无人值守中止时缺授权的 app（结构化透传给 TaskRecord 修复闭环）。
+      // ??????????? app??????? TaskRecord ??????
       ...(s.unattendedHaltApp ? { haltedApp: s.unattendedHaltApp } : {}),
     }))
   }
 
   private buildRunSummary(session: InternalSession): string {
-    // 无人值守 fail-closed 中止：原因优先于末段 assistant 文本（可行动性更高）。
+    // ???? fail-closed ?????????? assistant ???????????
     if (session.unattendedHaltReason) {
       return `[unattended halt] ${session.unattendedHaltReason}`
     }
@@ -3457,9 +3474,9 @@ export class RuntimeSessionManager {
   getEvents(id: string, since = 0): { events: SessionEvent[]; lastSeq: number } | undefined {
     const s = this.sessions.get(id)
     if (!s) return undefined
-    // Reconnect/replay entry point — lazy-load the log from disk on first open.
+    // Reconnect/replay entry point ? lazy-load the log from disk on first open.
     this.ensureEvents(s)
-    // Poll/replay must see the freshest text — drain the delta window first.
+    // Poll/replay must see the freshest text ? drain the delta window first.
     this.flushDeltaBuf(s)
     this.flushToolResultBuf(s)
     const events = s.events.filter((e) => e.seq > since)
@@ -3494,7 +3511,7 @@ export class RuntimeSessionManager {
     // Is there actually anything to stop? Must be sampled before the timers
     // below are cleared. rehydrate() loads EVERY persisted session into memory,
     // so abortAll() (sidecar shutdown + the global POST /abort) walks all of
-    // them — without this gate each pass appended a `status: aborted` marker to
+    // them ? without this gate each pass appended a `status: aborted` marker to
     // and re-touched updatedAt on hundreds of long-finished sessions, flattening
     // the recency order every list in the UI sorts by.
     const abortable =
@@ -3512,29 +3529,29 @@ export class RuntimeSessionManager {
       this.cancelPlanDraftTimer(s)
       s.planDraftLastEmit = undefined
     }
-    // 窄窗口竞态修复：watchdog stall 后 finally → setImmediate 续跑之间，用户
-    // abort 对已停会话是空操作。设此标记让 setImmediate 守卫放弃续跑。
+    // ????????watchdog stall ? finally ? setImmediate ???????
+    // abort ??????????????? setImmediate ???????
     s.watchdogRecoveryCancelled = true
-    // C2 — 取消进行中的续跑倒计时（用户点了「取消」或 Esc）。
+    // C2 ? ????????????????????? Esc??
     if (s.watchdogContinueTimer) {
       clearTimeout(s.watchdogContinueTimer)
       s.watchdogContinueTimer = undefined
       this.append(s, 'watchdog_recovery', { cancelled: true })
     }
-    // abort = 用户参与——取消倒计时自动批准
+    // abort = ???????????????
     this.cancelPlanAutoApprove(s, 'aborted')
     s.agent?.abort()
     this.rejectAllPending(s, 'aborted')
-    // 兜底对账：abort 升代后 run finally 失去 durability 早退，worker 终态
-    // 事件又恰被回调门禁吞掉（见 sweepStaleDelegationNodes）——在此补发。
-    // 延迟一拍：run finally（microtask）先把 session.running 落为 false，
-    // coordinator 的结算链（纯 promise）也已清空 orderControllers。
+    // ?????abort ??? run finally ?? durability ???worker ??
+    // ????????????? sweepStaleDelegationNodes????????
+    // ?????run finally?microtask??? session.running ?? false?
+    // coordinator ?????? promise????? orderControllers?
     setImmediate(() => {
       if (this.sessions.get(id) !== s) return
       this.sweepStaleDelegationNodes(s, 'caller_aborted')
     })
     // Idle sessions keep their timestamps and their log stays clean. The
-    // in-memory suppression flag above still applies — a stall recovery waiting
+    // in-memory suppression flag above still applies ? a stall recovery waiting
     // on setImmediate is cancelled either way, it just no longer re-stamps a
     // session whose status is already 'aborted'. Returns true regardless: the
     // route reads false as "no such session" (404).
@@ -3551,18 +3568,30 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Wave L: 进程退出路径（runServe.close）触发——为每个 session 调
-   * agent.shutdown() 释放 coordinator/timer/in-flight worker 句柄。与
-   * abortAll() 分离：abortAll 仅中止当前 turn，shutdownAll 是终结性操作。
-   * best-effort：任一 session shutdown 抛错不影响其他。
+   * Wave L: ???????runServe.close???????? session ?
+   * agent.shutdown() ?? coordinator/timer/in-flight worker ????
+   * abortAll() ???abortAll ????? turn?shutdownAll ???????
+   * best-effort??? session shutdown ????????
    */
-  shutdownAll(): void {
+  shutdownAll(): Promise<void> {
     if (this.idleSweepTimer) {
       clearInterval(this.idleSweepTimer)
       this.idleSweepTimer = undefined
     }
+    const pending: Promise<void>[] = []
     for (const s of this.sessions.values()) {
-      try { s.agent?.shutdown?.() } catch { /* best-effort */ }
+      let shutdownResult: void | boolean | Promise<void | boolean> | undefined
+      try {
+        shutdownResult = s.agent?.shutdown?.()
+      } catch { /* best-effort */ }
+      const releaseIdleClaims = (settled?: void | boolean) => {
+        if (settled !== false) this.releaseClaimsIfIdle(s)
+      }
+      if (shutdownResult && typeof (shutdownResult as Promise<void>).then === 'function') {
+        pending.push(Promise.resolve(shutdownResult).then(releaseIdleClaims, () => undefined))
+      } else if (shutdownResult !== false) {
+        releaseIdleClaims()
+      }
       try { s.jobs?.killAll() } catch { /* best-effort */ }
       // Drain any coalescing delta window so the tail is never lost on exit.
       try { this.flushDeltaBuf(s) } catch { /* best-effort */ }
@@ -3570,12 +3599,13 @@ export class RuntimeSessionManager {
     }
     // Flush any buffered events to disk before exit.
     this.persistence?.flushSync?.()
+    return pending.length > 0 ? Promise.all(pending).then(() => undefined) : Promise.resolve()
   }
 
   /**
    * Archive (soft-close) a session: abort if running, mark `archived=true`, and
    * persist. The session is excluded from listSessions() but its data survives on
-   * disk (events.jsonl / artifacts) — rehydrate still restores it as archived.
+   * disk (events.jsonl / artifacts) ? rehydrate still restores it as archived.
    * Returns false when the session is missing or already archived.
    */
   archiveSession(id: string): boolean {
@@ -3601,13 +3631,13 @@ export class RuntimeSessionManager {
       try {
         const work = hasUnlandedWork(this.defaultCwd, s.record.worktreePath, s.record.worktreeBranch)
         if (work.dirty) {
-          // worktree remove --force discards uncommitted changes — snapshot them.
+          // worktree remove --force discards uncommitted changes ? snapshot them.
           commitAll(s.record.worktreePath, 'rivet: archive checkpoint', { noVerify: true })
         }
         const after = work.dirty || work.unmergedCommits > 0
           ? hasUnlandedWork(this.defaultCwd, s.record.worktreePath, s.record.worktreeBranch)
           : work
-        // Squash merge-back leaves branch commits unreachable from main —
+        // Squash merge-back leaves branch commits unreachable from main ?
         // the landedHead marker proves they were landed. A branch head that
         // hasn't moved past the last merge-back is safe to delete.
         const landed = Boolean(s.record.landedHead)
@@ -3623,7 +3653,7 @@ export class RuntimeSessionManager {
     s.toolResultClosed = true
     this.cancelToolResultBuf(s)
     this.persistRecord(s)
-    // Phase 3 #9 — an archived session must not keep its heavy state resident.
+    // Phase 3 #9 ? an archived session must not keep its heavy state resident.
     // If a run was just aborted above, its promise is still settling; run()'s
     // finally does the unload once the agent has actually let go.
     if (!wasRunning) this.unloadSession(s)
@@ -3697,7 +3727,7 @@ export class RuntimeSessionManager {
     const ctx = this.sessionGitContext(id)
     if (!ctx) return null
     const result = await getWorkingTreeFiles(ctx.cwd, ctx.baseRef, includeIgnored)
-    // The worktree owner marker is infrastructure, not user work — hide it.
+    // The worktree owner marker is infrastructure, not user work ? hide it.
     return { ...result, files: result.files.filter(f => f.path !== '.vsw-owner.json') }
   }
 
@@ -3709,7 +3739,7 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Full file content at the session's task baseline — the left pane of an
+   * Full file content at the session's task baseline ? the left pane of an
    * editor client's native two-pane diff (VS Code extension changes view).
    */
   async getSessionFileAtBase(id: string, path: string): Promise<{ exists: boolean; content: string } | null> {
@@ -3718,12 +3748,12 @@ export class RuntimeSessionManager {
     return getFileAtBase(ctx.cwd, path, ctx.baseRef)
   }
 
-  // ── Change landing (desktop Changes tab: Commit / Merge back / Create PR) ──
+  // ?? Change landing (desktop Changes tab: Commit / Merge back / Create PR) ??
 
   /**
    * Stage and commit everything in the session's cwd (worktree for isolated
    * sessions, shared cwd otherwise). Server-direct path of the dual-channel
-   * design — the "let the agent commit" path goes through a normal prompt.
+   * design ? the "let the agent commit" path goes through a normal prompt.
    */
   commitSessionChanges(id: string, message?: string): { ok: boolean; sha?: string; nothingToCommit?: boolean; error?: string } | null {
     const s = this.sessions.get(id)
@@ -3748,7 +3778,7 @@ export class RuntimeSessionManager {
     const s = this.sessions.get(id)
     if (!s) return null
     if (!s.record.worktreeBranch || !s.record.worktreePath) {
-      return { ok: false, error: 'not a worktree session — nothing to merge back' }
+      return { ok: false, error: 'not a worktree session ? nothing to merge back' }
     }
     // Sweep uncommitted work into the branch first (squash flattens it anyway).
     const checkpoint = commitAll(s.record.worktreePath, 'rivet: pre-merge checkpoint', { noVerify: true })
@@ -3758,7 +3788,7 @@ export class RuntimeSessionManager {
     if (result.ok) {
       // Squash merges leave the branch commits unreachable from main, so
       // rev-list alone can't prove "landed". Record the branch head at merge
-      // time — archive deletes the branch when it hasn't moved past this.
+      // time ? archive deletes the branch when it hasn't moved past this.
       s.record.landedHead = revParseHead(s.record.worktreePath)
       if (result.sha) this.append(s, 'landing', { action: 'merge_back', sha: result.sha, branch: s.record.worktreeBranch })
       this.touch(s)
@@ -3775,7 +3805,7 @@ export class RuntimeSessionManager {
     const s = this.sessions.get(id)
     if (!s) return null
     if (!s.record.worktreeBranch || !s.record.worktreePath) {
-      return { ok: false, error: 'not a worktree session — create PRs from an isolated worktree session' }
+      return { ok: false, error: 'not a worktree session ? create PRs from an isolated worktree session' }
     }
     const checkpoint = commitAll(s.record.worktreePath, 'rivet: pre-PR checkpoint', { noVerify: true })
     if (!checkpoint.ok) return { ok: false, error: `failed to checkpoint worktree: ${checkpoint.error}` }
@@ -3812,7 +3842,7 @@ export class RuntimeSessionManager {
   /**
    * Hot-inject MCP (or other late-discovered) tools into every session that
    * already has a live ManagedAgent. Sessions without an agent yet will pick
-   * tools up at ensureAgent → buildSessionStores via getAllTools(). Idempotent:
+   * tools up at ensureAgent ? buildSessionStores via getAllTools(). Idempotent:
    * ToolRegistry.register is Map.set overwrite.
    */
   injectMcpTools(tools: Tool[]): void {
@@ -3822,12 +3852,12 @@ export class RuntimeSessionManager {
       try {
         s.agent.registerExternalTools?.(tools)
       } catch {
-        /* best-effort per session — one failure must not block others */
+        /* best-effort per session ? one failure must not block others */
       }
     }
   }
 
-  // ── E4 client tool delegation ──────────────────────────────────────────
+  // ?? E4 client tool delegation ??????????????????????????????????????????
 
   /**
    * Register (or heartbeat) client landing capabilities. Later registrant
@@ -3863,7 +3893,7 @@ export class RuntimeSessionManager {
     if (!slot) return false
     if (clientId && slot.clientId !== clientId) return false
     s.delegateCapabilities = undefined
-    // Fail-back in-flight landings — client is gone.
+    // Fail-back in-flight landings ? client is gone.
     for (const [rid, pend] of [...s.pendingDelegations]) {
       s.pendingDelegations.delete(rid)
       if (pend.timer) clearTimeout(pend.timer)
@@ -3907,7 +3937,7 @@ export class RuntimeSessionManager {
   /**
    * Hang a landing step for the client. Returns null immediately when no live
    * capability matches (tool-pipeline fails back to local). Otherwise emits
-   * `tool_delegate` and waits for answerDelegation / timeout→null.
+   * `tool_delegate` and waits for answerDelegation / timeout?null.
    */
   private requestToolDelegate(
     session: InternalSession,
@@ -3934,7 +3964,7 @@ export class RuntimeSessionManager {
         resolve,
         timer: setTimeout(() => {
           if (!session.pendingDelegations.delete(requestId)) return
-          // Timeout → null (fail-back). NOT an error — agent never sees it.
+          // Timeout ? null (fail-back). NOT an error ? agent never sees it.
           resolve(null)
         }, timeoutMs),
       }
@@ -3952,13 +3982,13 @@ export class RuntimeSessionManager {
   /**
    * Resolve a pending approval. Returns false if the request is gone.
    * An optional `editedInput` lets the human tweak the tool input
-   * (e.g. per-hunk edit picks) before it runs — flows through ApprovalResult.
+   * (e.g. per-hunk edit picks) before it runs ? flows through ApprovalResult.
    * (Intent is now a non-blocking timeline note and has no pending state.)
    */
   /**
    * Label an approval that would widen the write/read boundary to a directory
    * outside the workspace, so the UI can offer "remember this directory". Absent
-   * for every other approval — the checkbox must not appear where remembering
+   * for every other approval ? the checkbox must not appear where remembering
    * has no meaning.
    */
   private pathGrantHint(
@@ -3995,7 +4025,7 @@ export class RuntimeSessionManager {
       result.editedInput = editedInput
     }
     // Out-of-workspace path approvals read this to persist the directory grant
-    // per-workspace. Computer Use keeps its own grant store (below) — the two
+    // per-workspace. Computer Use keeps its own grant store (below) ? the two
     // remember semantics are independent, so both consume the same flag.
     if (approved && remember === true) result.remember = true
     pend.resolve(result)
@@ -4010,7 +4040,7 @@ export class RuntimeSessionManager {
         try {
           grantComputerUseApp(app.trim())
           rememberedApp = app.trim()
-        } catch { /* grant persistence is best-effort — approval still resolves */ }
+        } catch { /* grant persistence is best-effort ? approval still resolves */ }
       }
     }
     this.recountApprovals(s)
@@ -4049,7 +4079,7 @@ export class RuntimeSessionManager {
   listArtifacts(id: string): Artifact[] | undefined {
     const s = this.sessions.get(id)
     if (!s) return undefined
-    // Rehydrated/idle sessions have no live agent — read the artifact log
+    // Rehydrated/idle sessions have no live agent ? read the artifact log
     // straight off disk (index + raw files survive a sidecar restart).
     if (!s.agent) return this.rehydratedArtifactStore(s).list()
     return s.agent.listArtifacts()
@@ -4091,9 +4121,9 @@ export class RuntimeSessionManager {
     // Collect user events (seq + ts + text) so we can map each user message to
     // both its submission time AND the seq of its originating `user` event. The
     // seq lets the UI anchor previews/forks on the exact `u-${seq}` block the
-    // rewind reducer will cut at — same anchor rewind() emits as anchorSeq.
-    // 全历史读取(Phase 2):磁盘直读越过内存环截尾——早于环底的 user 事件也能
-    // 拿到 seq/ts 锚点,不再退化为 timestamp=0 + 客户端文本启发。
+    // rewind reducer will cut at ? same anchor rewind() emits as anchorSeq.
+    // ?????(Phase 2):?????????????????? user ????
+    // ?? seq/ts ??,????? timestamp=0 + ????????
     const { events } = (await this.getAllEventsAsync(id)) ?? { events: [] as SessionEvent[] }
     const userEvents: { seq: number; ts: number; text: string }[] = []
     for (const e of events) {
@@ -4102,10 +4132,10 @@ export class RuntimeSessionManager {
       }
     }
     const entries: { index: number; content: string; timestamp: number; seq?: number }[] = []
-    // seq 锚点用子序列匹配:从游标起找首个文本相同的 user 事件。两个方向的
-    // 序数错位都能容忍——事件比消息多(压缩丢了早期消息)向前跳过;找不到
-    // (事件日志分叉/清理)则该条目退化为无 seq,游标不动,后续条目不受连带
-    // 污染。timestamp 保留历史行为:文本未命中时回退到序数配对的事件 ts。
+    // seq ????????:???????????? user ????????
+    // ????????????????(????????)????;???
+    // (??????/??)???????? seq,????,????????
+    // ???timestamp ??????:???????????????? ts?
     let cursor = 0
     let ordinal = 0
     for (let i = 0; i < msgs.length; i++) {
@@ -4131,7 +4161,7 @@ export class RuntimeSessionManager {
 
   /**
    * Rewind a session to a prior message index. Truncates the agent's message
-   * list, appends a `rewind` event to the event log (append-only — old events
+   * list, appends a `rewind` event to the event log (append-only ? old events
    * are NOT deleted, so reconnecting clients can see the rewind marker), and
    * optionally rolls back files via the existing checkpoint system.
    *
@@ -4173,7 +4203,7 @@ export class RuntimeSessionManager {
     s.record.status = 'idle'
     s.record.error = undefined
 
-    // Append rewind event (append-only — viewers see the marker).
+    // Append rewind event (append-only ? viewers see the marker).
     this.append(s, 'rewind', {
       messageIndex,
       prompt,
@@ -4209,7 +4239,7 @@ export class RuntimeSessionManager {
   /**
    * Preview the files a precise (per-message) code rewind would touch. Returns
    * `available: false` when the session has no live agent / FileHistory or no
-   * tracked edits after the boundary — the caller can then fall back to the
+   * tracked edits after the boundary ? the caller can then fall back to the
    * coarse checkpoint rollback (which also covers bash-driven changes).
    */
   previewFilesPrecise(
@@ -4249,13 +4279,13 @@ export class RuntimeSessionManager {
     return { success: true, filesChanged }
   }
 
-  // ── internals ─────────────────────────────────────────────────
+  // ?? internals ?????????????????????????????????????????????????
 
   /**
-   * T4 — emit a structured per-worker delegation update to the subagent panel.
+   * T4 ? emit a structured per-worker delegation update to the subagent panel.
    * Extracted from buildCallbacks so the idle user-dispatch path (delegate())
    * can reuse the exact same mapping/elapsed logic. Extra fields beyond the
-   * core status: `summary` (terminal digest for the "汇入主会话" adopt button),
+   * core status: `summary` (terminal digest for the "?????" adopt button),
    * `origin` ('user' marks a user-dispatched worker), plus the live-activity
    * passthrough (toolUseCount/tokenCount/eventKind/eventDetail) and terminal
    * `failureReason` so the desktop panel can render counters + failure labels.
@@ -4265,7 +4295,7 @@ export class RuntimeSessionManager {
     a: {
       workOrderId: string
       parentToolId?: string
-      /** 嵌套委派的父 worker order id（顶层委派缺省）。 */
+      /** ?????? worker order id????????? */
       parentWorkerId?: string
       profile?: string
       authority?: string
@@ -4302,12 +4332,12 @@ export class RuntimeSessionManager {
     this.append(session, 'delegation', {
       workerId: a.workOrderId,
       parentId: a.parentToolId,
-      // 嵌套委派的真实父 worker（parentId 是工具调用 id，只够挂到工具卡下；
-      // 层级树渲染要靠这个字段）。
+      // ???????? worker?parentId ????? id??????????
+      // ?????????????
       parentWorkerId: a.parentWorkerId,
       profile: a.profile,
-      // authority 与命中理由一并透传（此前 authority 接收后未转发，桌面端拿不到）；
-      // 桌面舰队面板显示 worker 星域/理由时直接可用。
+      // authority ???????????? authority ???????????????
+      // ???????? worker ??/????????
       authority: a.authority,
       authorityReason: a.authorityReason,
       objective: a.objective,
@@ -4327,7 +4357,7 @@ export class RuntimeSessionManager {
       changedFiles: a.changedFiles,
       summary: a.summary ? redactText(a.summary) : undefined,
       origin: a.origin,
-      // 契约投影 + 终态证据摘要（Phase 1 字段；完整 findings 走 getWorkerLog pull）。
+      // ???? + ???????Phase 1 ????? findings ? getWorkerLog pull??
       contract: a.contract,
       findingsCount: a.findingsCount,
       topFinding: a.topFinding ? redactText(a.topFinding) : undefined,
@@ -4339,10 +4369,10 @@ export class RuntimeSessionManager {
   private buildCallbacks(session: InternalSession): AgentCallbacks {
     const lifecycleGeneration = session.lifecycleGeneration
     const isActive = (): boolean => this.ownsSessionLifecycle(session, lifecycleGeneration)
-    // plan 工具 action=submit 的 toolId 登记（onToolUse 写入 / onToolResult 消费）。
-    // 携带 slug+title（onPlanSubmitted 同款 slugify 推导）：emitPlanSubmitted 直接
-    // 用确定 slug 发卡，不再从磁盘 plans[0] 顶替——多会话共享 cwd 时 plans[0]
-    // 可能是别会话的更新计划，审批卡因此发错/丢失（2026-07-25 修复）。
+    // plan ?? action=submit ? toolId ???onToolUse ?? / onToolResult ????
+    // ?? slug+title?onPlanSubmitted ?? slugify ????emitPlanSubmitted ??
+    // ??? slug ???????? plans[0] ????????? cwd ? plans[0]
+    // ???????????????????/???2026-07-25 ????
     const planSubmitToolIds = new Map<string, { slug: string; title: string }>()
     return {
       onTextDelta: (text) => {
@@ -4360,11 +4390,11 @@ export class RuntimeSessionManager {
       onToolUse: (toolId, name, input) => {
         if (!isActive()) return
         this.append(session, 'tool_use', { id: toolId, name, input: redactValue(input) })
-        // plan 工具 action=submit 的调用登记——onToolResult 没有 input，靠这里的
-        // toolId 集合在结果回调里精确识别"提交成功"，避免 plan 其它 action
-        //（enter_mode/close/list）误发 plan_submitted。title 一并登记：submit 的
-        // slug = slugify(title)（src/tools/plan.ts 同款推导），供 emitPlanSubmitted
-        // 发确定 slug 的卡。省略 plan 字段从草稿提交时 title 仍必填，推导恒成立。
+        // plan ?? action=submit ???????onToolResult ?? input?????
+        // toolId ????????????"????"??? plan ?? action
+        //?enter_mode/close/list??? plan_submitted?title ?????submit ?
+        // slug = slugify(title)?src/tools/plan.ts ??????? emitPlanSubmitted
+        // ??? slug ????? plan ???????? title ??????????
         if (name === 'plan' && (input as { action?: string } | null)?.action === 'submit') {
           const title = (input as { title?: unknown } | null)?.title
           if (typeof title === 'string' && title.trim()) {
@@ -4374,7 +4404,7 @@ export class RuntimeSessionManager {
           }
         }
         // N3: surface delegation as a tree node, derived from the tool stream
-        // (no core-loop rewrite — stays inside the server layer).
+        // (no core-loop rewrite ? stays inside the server layer).
         if (DELEGATION_TOOLS.has(name)) {
           this.append(session, 'delegation', {
             workerId: toolId,
@@ -4389,9 +4419,9 @@ export class RuntimeSessionManager {
           const items = extractTodoState(input)
           if (items) this.append(session, 'todo_state', { items })
         }
-        // 结构化提问卡片：ask_user_question 的 input 直接携带全部问题/选项，
-        // 在 tool_use 时机发 user_question SSE（工具本身只回占位符 + endTurn）。
-        // 答案不走新 API —— 桌面卡片把选择组装成普通用户消息回传。
+        // ????????ask_user_question ? input ????????/???
+        // ? tool_use ??? user_question SSE?????????? + endTurn??
+        // ????? API ?? ???????????????????
         if (name === 'ask_user_question') {
           const questions = parseAskUserQuestions(input)
           if (questions.length > 0) {
@@ -4412,8 +4442,8 @@ export class RuntimeSessionManager {
         // session. Reject both stream and terminal callbacks before watchdog,
         // persistence, delegation, plan, or artifact side effects.
         if (!isActive() || session.toolResultClosed) return
-        // 终态才计进度单元；isError === undefined 是流式 chunk（TUI 侧同款过滤，
-        // 否则单次长输出工具就能伪装稀疏 stall）。
+        // ?????????isError === undefined ??? chunk?TUI ??????
+        // ??????????????? stall??
         if (isError !== undefined) session.watchdogPolicy?.recordToolResult()
         const eventData = {
           id: toolId,
@@ -4424,7 +4454,7 @@ export class RuntimeSessionManager {
             : truncateUtf16Safe(redactText(result), 2000),
           // uiContent is the display override (e.g. ask_user_question renders the
           // question + numbered options here, not the model-facing placeholder).
-          // Team panel frames encode rich structured data — raise the cap to 8K
+          // Team panel frames encode rich structured data ? raise the cap to 8K
           // so multi-task wave DAGs aren't truncated before the desktop decodes them.
           ...(uiContent
             ? { uiContent: truncateUtf16Safe(redactText(uiContent), containsRegisteredFrame(uiContent) ? 8000 : 2000) }
@@ -4443,19 +4473,19 @@ export class RuntimeSessionManager {
             status: isError ? 'failed' : 'completed',
           })
         }
-        // Plan mode — a successful `plan action=submit` wrote a new .rivet/plans/*.md.
+        // Plan mode ? a successful `plan action=submit` wrote a new .rivet/plans/*.md.
         // Surface it as an event so the desktop's plan column refreshes live.
-        // （2026-07-24 断链修复：旧检查匹配已废弃的工具名 plan_submit，合并后的
-        // 工具名为 plan、靠 onToolUse 登记的 toolId 精确识别 submit action。）
+        // ?2026-07-24 ????????????????? plan_submit?????
+        // ???? plan?? onToolUse ??? toolId ???? submit action??
         const submittedPlan = planSubmitToolIds.get(toolId)
         planSubmitToolIds.delete(toolId)
         if (!isError && submittedPlan) {
           void this.emitPlanSubmitted(session, lifecycleGeneration, submittedPlan)
         }
-        // Plan mode — while planning, write_file/edit_file can only touch the
+        // Plan mode ? while planning, write_file/edit_file can only touch the
         // active draft (checkPlanMode gates every other path), so a successful
         // final write means the draft grew. Emit a throttled invalidation
-        // signal — this replaces the desktop's 2s draft polling as the primary
+        // signal ? this replaces the desktop's 2s draft polling as the primary
         // liveness channel (polling stays as a degraded fallback).
         if (
           isError === false
@@ -4464,7 +4494,7 @@ export class RuntimeSessionManager {
         ) {
           this.schedulePlanDraftEvent(session, lifecycleGeneration)
         }
-        // P0-2: plan_task 成功写入了 todos → 发 todo_state 让桌面 TodoDock 刷新
+        // P0-2: plan_task ????? todos ? ? todo_state ??? TodoDock ??
         if (name === 'plan_task' && isError === false) {
           const items = session.agent?.getTodos?.()
           if (items && items.length > 0) this.append(session, 'todo_state', { items })
@@ -4483,7 +4513,7 @@ export class RuntimeSessionManager {
       onAbort: (reason) => {
         if (!isActive()) return
         session.lastAbortReason = reason
-        // 在 finally 的 rejectAllPending 清场之前捕获审批挂起态。
+        // ? finally ? rejectAllPending ????????????
         session.abortWhileApprovalPending =
           [...session.pending.values()].some((p) => p.kind === 'approval')
         if (session.record.status === 'running') session.record.status = 'aborted'
@@ -4497,8 +4527,8 @@ export class RuntimeSessionManager {
         session.record.currentPhase = phase
         this.append(session, 'phase', { phase, ...(detail ?? {}) })
       },
-      // R5 — structured course-correction → its own event so the desktop can
-      // render a "改道" card inline (selective externalization of star-domain).
+      // R5 ? structured course-correction ? its own event so the desktop can
+      // render a "??" card inline (selective externalization of star-domain).
       onDecisionShift: (shift: DecisionShift) => {
         if (!isActive()) return
         this.append(session, 'decision_shift', {
@@ -4511,19 +4541,19 @@ export class RuntimeSessionManager {
       },
       onApprovalRequired: (toolId, name, input) =>
         this.requestApproval(session, lifecycleGeneration, toolId, name, input),
-      // E4 — client landing delegation (mirrors onApprovalRequired injection).
+      // E4 ? client landing delegation (mirrors onApprovalRequired injection).
       onToolDelegate: (kind, payload) =>
         this.requestToolDelegate(session, lifecycleGeneration, kind, payload),
       onIntentNote: (intent) => {
         if (!isActive()) return
         this.emitIntentNote(session, intent)
       },
-      // T3 — drain mid-run user guidance at the tool boundary (the agent appends
+      // T3 ? drain mid-run user guidance at the tool boundary (the agent appends
       // it to the last tool_result; see tool-execution.ts). The buffer is fed by
       // POST /sessions/:id/steer while the session is running.
       onSteerDrain: () => isActive() ? session.steer.drain() : null,
-      // C3 — 自治档检查点：cruise 暂停（paused=true，桌面渲染确认卡片）；
-      // unleashed 无此回调（无刹车无播报）。digest 为进度摘要。
+      // C3 ? ???????cruise ???paused=true???????????
+      // unleashed ?????????????digest ??????
       onAutonomyCheckpoint: (info) => {
         if (!isActive()) return
         this.append(session, 'autonomy_checkpoint', {
@@ -4532,7 +4562,7 @@ export class RuntimeSessionManager {
           paused: info.paused,
         })
       },
-      // T4 — structured per-worker delegation status/progress → subagent panel.
+      // T4 ? structured per-worker delegation status/progress ? subagent panel.
       // Keyed by workOrderId (distinct from the spawning tool id, which is the
       // delegation-tree parent). Emitted alongside the existing text stream.
       onDelegationActivity: (a) => {
@@ -4552,28 +4582,28 @@ export class RuntimeSessionManager {
     if (!this.ownsSessionLifecycle(session, lifecycleGeneration)) {
       return Promise.resolve({ approved: false })
     }
-    // 无人值守（auto-proceed 定时任务）：审批请求不挂起等人 — fail-closed。
-    // 立即拒绝该工具调用，把中止原因写进事件流，并中止本次运行（绝不静默
-    // 跳过、也不无限期等待）。走查工件经 agent 侧 postTool 记录同一拒绝。
+    // ?????auto-proceed ??????????????? ? fail-closed?
+    // ?????????????????????????????????
+    // ????????????????? agent ? postTool ???????
     if (session.unattended) {
       const requestId = toolId || randomId()
       const appName = typeof input.app === 'string' && input.app ? input.app : undefined
       const app = appName ? ` (app: ${appName})` : ''
       const reason = `unattended run blocked on approval: ${name}${app}`
       session.unattendedHaltReason ??= reason
-      // 结构化留存缺授权的 app 名：修复闭环（补授权 → 一键重跑）不用解析文本。
+      // ????????? app ?????????? ? ????????????
       if (session.unattendedHaltApp === undefined && appName) session.unattendedHaltApp = appName
-      // record.error 让会话列表/桌面通知不用扒事件流就能拿到中止原因。
+      // record.error ?????/???????????????????
       session.record.error ??= reason
-      // 结构化标记：让侧栏/Inbox 不解析 error 文本就能识别"无人值守停机"
-      // 并区别于一般失败（Wave 4 halt 可见化的数据源）。
+      // ?????????/Inbox ??? error ??????"??????"
+      // ?????????Wave 4 halt ?????????
       session.record.unattendedHalt ??= { reason, ...(appName ? { app: appName } : {}) }
       this.append(session, 'approval_required', { requestId, toolName: name, input: redactValue(input) })
       this.append(session, 'approval_resolved', { requestId, decision: 'unattended_blocked' })
       this.append(session, 'unattended_halt', { requestId, toolName: name, reason })
       session.lastApprovalDeniedAt = this.now()
       this.persistRecord(session)
-      // 拒绝先返回（让 agent 收到 deny 的 tool_result 并被走查记录），下一拍中止运行。
+      // ??????? agent ?? deny ? tool_result ????????????????
       setImmediate(() => {
         if (this.ownsSessionLifecycle(session, lifecycleGeneration)) {
           this.abort(session.record.id)
@@ -4615,7 +4645,7 @@ export class RuntimeSessionManager {
         input: redactValue(input),
         ...(pathGrant ? { pathGrant } : {}),
       })
-      // Persist the pendingApprovals count NOW — if the sidecar dies while
+      // Persist the pendingApprovals count NOW ? if the sidecar dies while
       // blocked on this approval, rehydrate() uses the on-disk count as the
       // gate for scanning the log and closing the approval out honestly.
       this.persistRecord(session)
@@ -4623,17 +4653,17 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Goal 模式计划倒计时自动批准（2026-07-24，C2 watchdog 刹车同构）。
-   * 计划提交待批时若 goal 激活：发 plan_auto_approve_pending（含 deadlineMs）并
-   * 开可取消定时器——goal 是用户显式选择的自治场景，被不可见的审批门卡死与
-   * 自治初衷相悖；非 goal 会话不武装（approval 是质量门，保持纯手动审批）。
-   * 窗口内用户任何参与（approve/reject/edit/prompt/steer/abort/显式路由）即取消。
+   * Goal ????????????2026-07-24?C2 watchdog ??????
+   * ???????? goal ???? plan_auto_approve_pending?? deadlineMs??
+   * ?????????goal ????????????????????????
+   * ???????? goal ??????approval ??????????????
+   * ??????????approve/reject/edit/prompt/steer/abort/?????????
    */
   private maybeArmPlanAutoApprove(session: InternalSession, slug: string): void {
     const delayMs = this.goalPlanAutoApproveMs
     if (delayMs <= 0) return
     if (!this.isGoalActive(session)) return
-    // P1b fail-closed：客户端无自动批准倒计时 UI 时不武装定时器
+    // P1b fail-closed???????????? UI ???????
     if (!session.planAutoApproveUi) return
     this.cancelPlanAutoApprove(session, 'superseded')
     const deadlineMs = this.now() + delayMs
@@ -4643,7 +4673,7 @@ export class RuntimeSessionManager {
       session.planAutoApproveTimer = undefined
       session.planAutoApproveSlug = undefined
       if (!this.ownsSessionDurability(session)) return
-      // 触发前复核守卫：期间用户可能已驱动新 run / 归档 / 取消 goal。
+      // ?????????????????? run / ?? / ?? goal?
       if (session.running || session.record.archived) return
       if (!this.isGoalActive(session)) return
       void this.approvePlan(session.record.id, slug).then((outcome) => {
@@ -4656,7 +4686,7 @@ export class RuntimeSessionManager {
     session.planAutoApproveTimer = timer
   }
 
-  /** 取消倒计时自动批准（有 slug 才发事件——避免对未武装会话发空 cancel）。 */
+  /** ??????????? slug ???????????????? cancel?? */
   private cancelPlanAutoApprove(session: InternalSession, reason: string): void {
     const slug = session.planAutoApproveSlug
     if (session.planAutoApproveTimer) clearTimeout(session.planAutoApproveTimer)
@@ -4665,7 +4695,7 @@ export class RuntimeSessionManager {
     if (slug) this.append(session, 'plan_auto_approve_cancelled', { slug, reason })
   }
 
-  /** 显式取消路由（桌面「查看计划」按钮）：用户对计划表现出参与即停止自动批准。 */
+  /** ????????????????????????????????????? */
   cancelPlanAutoApproveForUser(id: string): boolean {
     const session = this.sessions.get(id)
     if (!session) return false
@@ -4681,14 +4711,14 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Watchdog stall 自动恢复（桌面端对齐 TUI v3）：run settle 后判定是否注入
-   * 'continue'。必须经 setImmediate 延迟——给排队中的用户 HTTP 动作（run/archive）
-   * 让路，执行前复核会话仍处 aborted 且无人抢跑（TUI「让位守卫」的桌面对应物）。
+   * Watchdog stall ?????????? TUI v3??run settle ???????
+   * 'continue'???? setImmediate ??????????? HTTP ???run/archive?
+   * ???????????? aborted ??????TUI??????????????
    *
-   * C2 刹车：决定续跑后不再立即重发——先追加带 pendingAutoContinue+delayMs 的
-   * watchdog_recovery 事件（桌面渲染倒计时卡片），倒计时结束复核守卫再续跑。
-   * 窗口内用户 abort（置 watchdogRecoveryCancelled）或发新 prompt（run() 清
-   * 定时器）都能取消——「Loop 续跑刹不住」的修复点。
+   * C2 ???????????????????? pendingAutoContinue+delayMs ?
+   * watchdog_recovery ???????????????????????????
+   * ????? abort?? watchdogRecoveryCancelled???? prompt?run() ?
+   * ???????????Loop ???????????
    */
   private maybeWatchdogAutoContinue(session: InternalSession): void {
     const reason = session.lastAbortReason
@@ -4700,8 +4730,8 @@ export class RuntimeSessionManager {
           && this.now() - session.lastApprovalDeniedAt < WATCHDOG_APPROVAL_GRACE_MS)
     setImmediate(() => {
       if (!this.ownsSessionDurability(session)) return
-      // 让位守卫：用户已重新驱动（running）、状态被改（非 aborted）、已归档，
-      // 或用户在窄窗口内 abort 过 → 放弃续跑。
+      // ?????????????running???????? aborted??????
+      // ???????? abort ? ? ?????
       if (session.running || session.record.status !== 'aborted' || session.record.archived) return
       if (session.watchdogRecoveryCancelled) return
       const decision = policy.onStall({ suppressed })
@@ -4717,7 +4747,7 @@ export class RuntimeSessionManager {
       const timer = setTimeout(() => {
         session.watchdogContinueTimer = undefined
         if (!this.ownsSessionDurability(session)) return
-        // 倒计时后复核同一组守卫——期间用户可能已 abort / 提交新 prompt / 归档。
+        // ???????????????????? abort / ??? prompt / ???
         if (session.running || session.record.status !== 'aborted' || session.record.archived) return
         if (session.watchdogRecoveryCancelled) return
         session.watchdogAutoResubmit = true
@@ -4730,7 +4760,7 @@ export class RuntimeSessionManager {
 
   /**
    * Non-blocking direction note: append a passive timeline event and return.
-   * The agent never waits — there is no pending Promise/timer. The user steers
+   * The agent never waits ? there is no pending Promise/timer. The user steers
    * by typing (POST /sessions/:id/steer) if they want to change direction.
    */
   private emitIntentNote(session: InternalSession, intent: IntentPreview): void {
@@ -4766,7 +4796,7 @@ export class RuntimeSessionManager {
   /**
    * After a plan_submit tool result, emit a `plan_submitted` event for the plan
    * that was JUST submitted. The slug comes from the onToolUse registration
-   * (slugify(title), same derivation as the submit tool) — never `plans[0]`:
+   * (slugify(title), same derivation as the submit tool) ? never `plans[0]`:
    * with several sessions sharing one cwd, the newest plan on disk may belong
    * to another session (or be an older APPROVED one), which used to send the
    * wrong card or no card at all (desktop clears non-submitted cards), leaving
@@ -4787,8 +4817,8 @@ export class RuntimeSessionManager {
       if (!this.ownsSessionLifecycle(session, lifecycleGeneration)) return
       const knownHit = known?.slug ? plans.find((p) => p.slug === known.slug) : undefined
       if (known?.slug && !knownHit) {
-        // 登记的 slug 未落盘（极端：写入被外部撤销）——按成功提交的事实发卡，
-        // 标题用登记值，状态按 submitted（与工具回执一致）。
+        // ??? slug ????????????????????????????
+        // ?????????? submitted??????????
         this.append(session, 'plan_submitted', { slug: known.slug, title: known.title, status: 'submitted' })
         this.maybeArmPlanAutoApprove(session, known.slug)
         return
@@ -4800,11 +4830,11 @@ export class RuntimeSessionManager {
           title: target.title,
           status: target.status,
         })
-        // goal 激活时武装倒计时自动批准（非 goal 会话纯手动审批）
+        // goal ?????????????? goal ????????
         if (target.status === 'submitted') this.maybeArmPlanAutoApprove(session, target.slug)
       }
     } catch {
-      // non-fatal — the desktop can still poll GET /plans
+      // non-fatal ? the desktop can still poll GET /plans
     }
   }
 
@@ -4848,7 +4878,7 @@ export class RuntimeSessionManager {
    * Emit the `plan_draft` signal. Persistence / in-memory ring store metadata
    * only (path/title/size) so events.jsonl stays small. Connected SSE listeners
    * receive the same seq with `content` attached when the draft is under
-   * PLAN_DRAFT_LIVE_CONTENT_MAX — desktop PlanPanel can paint without GET.
+   * PLAN_DRAFT_LIVE_CONTENT_MAX ? desktop PlanPanel can paint without GET.
    */
   private async emitPlanDraft(session: InternalSession, lifecycleGeneration: number): Promise<void> {
     if (!this.ownsSessionLifecycle(session, lifecycleGeneration)) return
@@ -4868,7 +4898,7 @@ export class RuntimeSessionManager {
           : meta
       this.append(session, 'plan_draft', live, { persistData: meta })
     } catch {
-      // non-fatal — the desktop's fallback poll still refreshes the draft
+      // non-fatal ? the desktop's fallback poll still refreshes the draft
     }
   }
 
@@ -4895,10 +4925,10 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * Delta 合并（Wave 2）：provider 逐 token 回调 → 窗口内合并成一条规范事件。
-   * 首个 delta（每个 run 起始 / 非 delta 事件之后）立即落，保首 token 延迟；
-   * 后续进入 40ms / 2KB 窗口。类型切换（text↔thinking）先 flush 保序。
-   * 合并后的事件是唯一事件——单 seq、同一条持久化 + fan-out 路径，重放语义不变。
+   * Delta ???Wave 2??provider ? token ?? ? ?????????????
+   * ?? delta??? run ?? / ? delta ??????????? token ???
+   * ???? 40ms / 2KB ????????text?thinking?? flush ???
+   * ?????????????? seq??????? + fan-out ??????????
    */
   private bufferDelta(session: InternalSession, type: 'text_delta' | 'thinking_delta', text: string): void {
     if (!text || !this.ownsSessionDurability(session)) return
@@ -4926,7 +4956,7 @@ export class RuntimeSessionManager {
     }
   }
 
-  /** 把残留的 delta 缓冲落成事件。幂等；空缓冲为 no-op。 */
+  /** ???? delta ?????????????? no-op? */
   private flushDeltaBuf(session: InternalSession): void {
     if (session.deltaTimer) {
       clearTimeout(session.deltaTimer)
@@ -4960,9 +4990,9 @@ export class RuntimeSessionManager {
     if (!stream.active) {
       stream.active = true
       const first = takeUtf8Prefix(result, TOOL_RESULT_COALESCE_BYTES)
-      // partial: true 标记流式进度 chunk（区别于终态 result）。SSE 层 isError
-      // 恒为布尔，事件流必须自描述，否则客户端把每个 chunk 当独立结果渲染
-      //（delegate_batch 十几行重复工具行的成因）。终态 append 不带此字段。
+      // partial: true ?????? chunk?????? result??SSE ? isError
+      // ?????????????????????? chunk ???????
+      //?delegate_batch ??????????????? append ??????
       this.appendRaw(session, 'tool_result', { id, name, isError: false, partial: true, result: first.head })
       stream.buffered = first.tail
     } else {
@@ -5021,11 +5051,11 @@ export class RuntimeSessionManager {
   }
 
   /**
-   * 统一事件入口。非 delta 事件先冲掉 delta 缓冲再落自身，保证事件顺序——
-   * abort（收尾 append status，L abort()）、turn 完成、错误路径全部自动覆盖，
-   * 无需在各中断触发点单独挂钩子。
+   * ???????? delta ????? delta ???????????????
+   * abort??? append status?L abort()??turn ??????????????
+   * ???????????????
    *
-   * `opts.persistData` — when set, the in-memory ring + events.jsonl store this
+   * `opts.persistData` ? when set, the in-memory ring + events.jsonl store this
    * payload while SSE listeners receive `data` (e.g. plan_draft live content).
    */
   private append(
@@ -5084,7 +5114,7 @@ export class RuntimeSessionManager {
     try {
       this.persistence.saveRecord({ ...session.record })
     } catch {
-      // non-fatal — events.jsonl is the source of truth for replay
+      // non-fatal ? events.jsonl is the source of truth for replay
     }
   }
 
@@ -5104,7 +5134,7 @@ export class RuntimeSessionManager {
         this.persistence.saveImage(sessionId, imgId, parsed.base64, parsed.mime)
         ids.push(imgId)
       } catch {
-        // non-fatal — skip this thumbnail, keep the rest
+        // non-fatal ? skip this thumbnail, keep the rest
       }
     }
     return ids
@@ -5136,9 +5166,9 @@ function parseImageDataUrl(url: string): { mime: string; base64: string } | null
 /**
  * Resolve a star-domain selection KEY into the live tri-state + canonical key +
  * display label. Mirrors AgentLoop.getSessionDomain semantics:
- *  - 'auto' → state undefined (per-message auto-detect)
- *  - 'off'  → legacy alias, resolves to auto (state undefined)
- *  - <id>   → the ActiveStarDomain, when the id is a known domain
+ *  - 'auto' ? state undefined (per-message auto-detect)
+ *  - 'off'  ? legacy alias, resolves to auto (state undefined)
+ *  - <id>   ? the ActiveStarDomain, when the id is a known domain
  * Returns null for an unknown key so callers can 400/return false.
  */
 function resolveDomainState(
@@ -5159,8 +5189,8 @@ function resolveDomainState(
 
 function resolveDomainPersona(key: string | undefined): { glyph: string; accent: 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'dim' } {
   // 'off' removed; treat legacy value as Auto for persona rendering.
-  if (key === 'auto' || key === 'off' || key === undefined) return { glyph: '⚙', accent: 'primary' }
+  if (key === 'auto' || key === 'off' || key === undefined) return { glyph: '?', accent: 'primary' }
   const d = starDomainRegistry.get(key)
-  if (!d) return { glyph: '⚙', accent: 'primary' }
+  if (!d) return { glyph: '?', accent: 'primary' }
   return { glyph: d.uiPersona.glyph, accent: d.uiPersona.accent }
 }

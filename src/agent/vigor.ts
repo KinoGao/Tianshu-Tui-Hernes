@@ -22,7 +22,7 @@ export interface VigorUpdateInput {
   toolSuccess: boolean
   sensorium: Sensorium
   predictionAcc?: PredictionAccumulator
-  /** Failure classification — enables vigor to distinguish semantic failures
+  /** Failure classification ? enables vigor to distinguish semantic failures
    *  (type_error, assertion) from environment issues (timeout, api_error).
    *  When absent, treats failure as generic (weight = 1.0). */
   failureClass?: FailureClass
@@ -30,11 +30,11 @@ export interface VigorUpdateInput {
 
 const DEFAULT_HISTORY_LIMIT = 10
 const TONIC_ALPHA = 0.15
-/** Vigor mean above this band is "sustained success" — not rigidity. */
+/** Vigor mean above this band is "sustained success" ? not rigidity. */
 const RIGIDITY_HIGH_BAND = 0.75
 
 /**
- * Failure class → phasic weight mapping.
+ * Failure class ? phasic weight mapping.
  *
  * Semantic failures (type_error, assertion) indicate cognitive prediction errors
  * and should produce full phasic penalty. Environment issues (timeout, api_error)
@@ -43,24 +43,25 @@ const RIGIDITY_HIGH_BAND = 0.75
  * Weight 1.0 = full penalty, 0.5 = half penalty, 0.2 = minimal penalty.
  */
 const FAILURE_CLASS_PHASIC_WEIGHT: ReadonlyMap<FailureClass, number> = new Map<FailureClass, number>([
-  // Environment / transient issues — not agent's fault
+  // Environment / transient issues ? not agent's fault
   ['timeout', 0.5],
   ['api_error', 0.5],
   ['flaky', 0.5],
-  // Environment missing — external dependency issue
+  // Environment missing ? external dependency issue
   ['missing_dep', 0.2],
+  ['runtime_gate', 0.2],
   ['permission_denied', 0.2],
   ['env_missing', 0.2],
-  // Semantic failures — agent's cognitive error
+  // Semantic failures ? agent's cognitive error
   ['type_error', 1.0],
   ['assertion', 1.0],
   ['syntax_error', 1.0],
   ['module_resolution', 1.0],
-  // TDD RED is expected — test-first discipline should not be penalized
+  // TDD RED is expected ? test-first discipline should not be penalized
   ['test_red', 0.0],
-  // 反幻影探针脱靶（A5/M3）：证实"不存在"是有效信息收集，轻罚保留信号
+  // ????????A5/M3????"???"??????????????
   ['probe_miss', 0.3],
-  // Other — default full penalty
+  // Other ? default full penalty
   ['snapshot', 1.0],
   ['format_error', 1.0],
   ['context_window_exceeded', 0.5],
@@ -118,7 +119,7 @@ export function createVigorState(overrides: Partial<VigorState> = {}): VigorStat
  * loop: prediction error changes energy, while Sensorium still owns strategy.
  *
  * When failureClass is provided, the phasic penalty is scaled by the failure
- * class weight — environment issues (timeout, api_error) produce reduced penalty,
+ * class weight ? environment issues (timeout, api_error) produce reduced penalty,
  * while semantic failures (type_error, assertion) produce full penalty.
  */
 export function updateVigor(prev: VigorState, input: VigorUpdateInput): VigorState {
@@ -127,10 +128,10 @@ export function updateVigor(prev: VigorState, input: VigorUpdateInput): VigorSta
   const rawPhasic = actual - predicted
 
   // Scale phasic by failure class weight:
-  // - Semantic failures (type_error, assertion) → weight 1.0 → full penalty
-  // - Environment issues (timeout, api_error) → weight 0.5 → half penalty
-  // - Missing deps (missing_dep, permission_denied) → weight 0.2 → minimal penalty
-  // - No failureClass → weight 1.0 → full penalty (backward compatible)
+  // - Semantic failures (type_error, assertion) ? weight 1.0 ? full penalty
+  // - Environment issues (timeout, api_error) ? weight 0.5 ? half penalty
+  // - Missing deps (missing_dep, permission_denied) ? weight 0.2 ? minimal penalty
+  // - No failureClass ? weight 1.0 ? full penalty (backward compatible)
   const phasicWeight = input.failureClass
     ? (FAILURE_CLASS_PHASIC_WEIGHT.get(input.failureClass) ?? 1.0)
     : 1.0
@@ -162,7 +163,7 @@ export function updateVigor(prev: VigorState, input: VigorUpdateInput): VigorSta
 /**
  * HRV analogue: pathologically constant vigor means the runtime may be rigid.
  *
- * Flat-high plateaus (sustained success, mean > HIGH_BAND) are excluded —
+ * Flat-high plateaus (sustained success, mean > HIGH_BAND) are excluded ?
  * only flat-low/mid plateaus (true stagnation) trigger rigidity.
  */
 export function detectRigidity(history: number[], windowSize = DEFAULT_HISTORY_LIMIT, threshold = 0.05): boolean {
@@ -184,11 +185,11 @@ export function modulateStrategyByVigor(
   let adjusted: StrategyProfile = { ...strategy }
 
   // Only raise commit threshold when vigor (the composite signal) is low.
-  // phasic < -0.5 was removed: a single tool failure (phasic ≈ -0.5) is
+  // phasic < -0.5 was removed: a single tool failure (phasic ? -0.5) is
   // normal workflow noise (TDD gate, test RED, env flake), not a confidence
   // crisis. phasic already contributes to vigor via the composite formula;
   // double-counting it here made every transient failure trigger intent
-  // warnings ("我对当前方向把握偏低") during legitimate work.
+  // warnings ("??????????") during legitimate work.
   if (vigor.vigor < 0.3) {
     adjusted = {
       ...adjusted,

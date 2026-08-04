@@ -1,5 +1,5 @@
 /**
- * Semantic index — file-level BM25 index with incremental updates.
+ * Semantic index ? file-level BM25 index with incremental updates.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
@@ -10,11 +10,12 @@ import { chunkByDefinitions } from './chunker-treesitter.js'
 import { VectorIndex, type VectorIndexSnapshot } from './vector-index.js'
 import { reciprocalRankFusion } from './hybrid-search.js'
 import { type EmbeddingProvider, NullEmbeddingProvider } from './embedding-provider.js'
+import { rankSearchCandidates } from './search-salience.js'
 
 /** Cap on chunks embedded in one pass to bound first-search latency/cost. */
 const MAX_EMBED_CHUNKS = 4000
 
-/** isStale() verdict cache window — in-process workers call semantic_search at
+/** isStale() verdict cache window ? in-process workers call semantic_search at
  *  high frequency on the same event loop; avoid a full-repo rescan per call. */
 export const STALE_CHECK_TTL_MS = 30_000
 
@@ -40,7 +41,7 @@ export interface SemanticIndexSnapshot {
   fileHashes: Record<string, string>
   chunkCount: number
   builtAt: number
-  /** Lightweight chunk refs for cold-start restore (excludes terms — regenerated from text). */
+  /** Lightweight chunk refs for cold-start restore (excludes terms ? regenerated from text). */
   chunks?: Array<{ file: string; startLine: number; endLine: number; text: string }>
 }
 
@@ -97,7 +98,7 @@ export class SemanticIndex {
         }
       }
     } catch {
-      // Corrupt snapshot — rebuild on first ensureSemanticIndex call
+      // Corrupt snapshot ? rebuild on first ensureSemanticIndex call
     }
   }
 
@@ -163,13 +164,13 @@ export class SemanticIndex {
 
     walk(this.cwd)
     this.persistMeta()
-    // Index just synced with disk — record an accurate fresh verdict.
+    // Index just synced with disk ? record an accurate fresh verdict.
     this.staleCache = { at: Date.now(), stale: false }
     return { indexed, skipped }
   }
 
   /** Check if the index is stale by comparing file hashes against the current filesystem.
-   *  The verdict is cached for staleTtlMs — workers may call this on every search. */
+   *  The verdict is cached for staleTtlMs ? workers may call this on every search. */
   isStale(): boolean {
     const now = Date.now()
     if (this.staleCache && now - this.staleCache.at < this.staleTtlMs) return this.staleCache.stale
@@ -178,7 +179,7 @@ export class SemanticIndex {
     return stale
   }
 
-  /** Full filesystem scan backing isStale() — synchronous, like its caller. */
+  /** Full filesystem scan backing isStale() ? synchronous, like its caller. */
   private scanIsStale(): boolean {
     // Quick count check: new files added since last index
     let diskCount = 0
@@ -200,7 +201,7 @@ export class SemanticIndex {
         }
       }
       walk(this.cwd)
-    } catch { /* count failure → fall through to hash check */ }
+    } catch { /* count failure ? fall through to hash check */ }
     if (diskCount > this.fileHashes.size) return true
 
     for (const [relPath, storedHash] of this.fileHashes) {
@@ -307,7 +308,7 @@ export class SemanticIndex {
     }
 
     this.persistMeta()
-    // Index just synced with disk — record an accurate fresh verdict.
+    // Index just synced with disk ? record an accurate fresh verdict.
     this.staleCache = { at: Date.now(), stale: false }
     return { reindexed, removed: toRemove.length, fallbackRebuild: false }
   }
@@ -318,7 +319,7 @@ export class SemanticIndex {
   }
 
   search(query: string, limit = 10) {
-    return this.index.search(query, limit)
+    return rankSearchCandidates(this.index.search(query, Math.max(limit * 3, 20)), query, limit)
   }
 
   /** True when a usable embedding provider is wired in. */
@@ -334,7 +335,7 @@ export class SemanticIndex {
       const snapshot = JSON.parse(readFileSync(path, 'utf-8')) as VectorIndexSnapshot
       // Only adopt vectors produced by the SAME provider/model.
       this.vectors.loadSnapshot(snapshot, this.provider.id)
-    } catch { /* corrupt → re-embed lazily */ }
+    } catch { /* corrupt ? re-embed lazily */ }
   }
 
   private persistVectors(): void {
@@ -348,7 +349,7 @@ export class SemanticIndex {
 
   /**
    * Embed any chunks missing a vector (lazy, batched, persisted). A network or
-   * provider failure is swallowed — the vector layer simply stays partial and
+   * provider failure is swallowed ? the vector layer simply stays partial and
    * search degrades to BM25. Returns the number of chunks embedded.
    */
   async ensureVectors(): Promise<number> {
@@ -377,18 +378,18 @@ export class SemanticIndex {
 
   /**
    * Hybrid semantic search: fuse BM25 and vector rankings via RRF. Falls back
-   * to pure BM25 when no embedding provider is available or embedding fails —
+   * to pure BM25 when no embedding provider is available or embedding fails ?
    * so this is always at least as good as the lexical path.
    */
   async searchHybrid(query: string, limit = 10): Promise<{ hits: SearchHit[]; backend: 'bm25' | 'hybrid' }> {
     const bm25Hits = this.index.search(query, Math.max(limit, 20))
-    if (!this.provider.isAvailable()) return { hits: bm25Hits.slice(0, limit), backend: 'bm25' }
+    if (!this.provider.isAvailable()) return { hits: rankSearchCandidates(bm25Hits, query, limit), backend: 'bm25' }
 
     try {
       if (this.vectorsDirty || this.vectors.size === 0) await this.ensureVectors()
       const [queryVec] = await this.provider.embed([query])
       if (!queryVec || queryVec.length === 0 || this.vectors.size === 0) {
-        return { hits: bm25Hits.slice(0, limit), backend: 'bm25' }
+        return { hits: rankSearchCandidates(bm25Hits, query, limit), backend: 'bm25' }
       }
       const vectorHits = this.vectors.search(queryVec, Math.max(limit, 20))
 
@@ -415,9 +416,9 @@ export class SemanticIndex {
         if (hit) hits.push({ ...hit, score: f.rrfScore })
         if (hits.length >= limit) break
       }
-      return { hits, backend: 'hybrid' }
+      return { hits: rankSearchCandidates(hits, query, limit), backend: 'hybrid' }
     } catch {
-      return { hits: bm25Hits.slice(0, limit), backend: 'bm25' }
+      return { hits: rankSearchCandidates(bm25Hits, query, limit), backend: 'bm25' }
     }
   }
 
@@ -426,7 +427,7 @@ export class SemanticIndex {
   }
 
   persistMeta(): void {
-    // Persisted state may differ from a previously cached verdict — invalidate.
+    // Persisted state may differ from a previously cached verdict ? invalidate.
     this.staleCache = null
     const dir = join(this.cwd, '.rivet')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
@@ -455,7 +456,7 @@ export function getSemanticIndex(cwd: string, provider?: EmbeddingProvider): Sem
 
 export function ensureSemanticIndex(cwd: string, provider?: EmbeddingProvider): SemanticIndex {
   const idx = getSemanticIndex(cwd, provider)
-  // Cold start with persisted snapshot: chunks loaded from disk → skip rebuild.
+  // Cold start with persisted snapshot: chunks loaded from disk ? skip rebuild.
   // Only rebuild when index is truly empty (never built) or stale (files changed).
   if (idx.chunkCount === 0) idx.rebuild()
   else if (idx.isStale()) idx.incrementalUpdate()

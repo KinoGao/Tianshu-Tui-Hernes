@@ -86,6 +86,7 @@ import { PressureMonitor } from '../context/pressure-monitor.js'
 import { createFsWatcher } from '../context/fs-watcher.js'
 import type { FsWatcherState } from '../context/fs-watcher.js'
 import { type CognitivePhaseSnapshot } from '../context/cognitive-ledger.js'
+import { buildRuntimeSelfModel } from './runtime-self-model.js'
 import { CacheAdvisor } from '../cache/advisor.js'
 import type { RecallMetricsSummary } from '../cache/recall-metrics.js'
 import { createSycophancyTrap, type SycophancyTrap } from './sycophancy-trap.js'
@@ -140,7 +141,7 @@ export type { ApprovalMode, AgentConfig, AgentCallbacks }
 
 /**
  * Build the tiny approved-plan pointer block injected into the dynamic appendix.
- * Carries only slug/title/path — NOT the plan body, which stays the single
+ * Carries only slug/title/path ? NOT the plan body, which stays the single
  * source of truth on disk at `.rivet/plans/<slug>.md`. The agent reads it on
  * demand and tracks steps via the existing todo mechanism.
  */
@@ -150,24 +151,24 @@ export function formatActivePlanPointer(plan: { slug: string; title: string; sel
   const slug = esc(plan.slug)
   const title = esc(plan.title)
   const approach = plan.selectedApproach
-    ? `已选方案: ${esc(plan.selectedApproach)}。只执行此方案，勿执行未选中的备选。 `
+    ? `????: ${esc(plan.selectedApproach)}?????????????????? `
     : ''
-  return `<active-plan slug="${slug}" title="${title}" path=".rivet/plans/${slug}.md">${approach}已批准,正在执行此方案。完整步骤见该文件,需要时用 read_file 查看;开工前先用 todo 列出有序步骤跟踪进度,完成后 plan_close。</active-plan>`
+  return `<active-plan slug="${slug}" title="${title}" path=".rivet/plans/${slug}.md">${approach}???,????????????????,???? read_file ??;????? todo ??????????,??? plan_close?</active-plan>`
 }
 
 
 
 /** Debounce before an idle compaction pass fires after a turn settles.
- *  60s：典型「读完回答→打下一条」节奏在 20–60s 内，过短的 debounce 会让快速
- *  追问频繁 abort 进行中的 LLM 压缩（浪费已花的压缩 tokens）；真正离开的场景
- *  60s 后依然远早于用户回来。可用 RIVET_IDLE_COMPACTION_MS 覆盖。 */
+ *  60s????????????????? 20?60s ????? debounce ????
+ *  ???? abort ???? LLM ?????????? tokens?????????
+ *  60s ????????????? RIVET_IDLE_COMPACTION_MS ??? */
 const IDLE_COMPACTION_DELAY_MS = 60_000
 
 export class AgentLoop {
     session!: SessionContext;
     config!: AgentConfig;
-  /** Agent 创建时间——shutdown 自动 handoff 据此判断会话内是否已手动交接
-   *  （/handoff 或人工编辑的文档 mtime 晚于它 → 结构化摘要不覆盖）。 */
+  /** Agent ??????shutdown ?? handoff ??????????????
+   *  ?/handoff ???????? mtime ??? ? ?????????? */
   readonly createdAtMs = Date.now()
   abortController: AbortController | null = null
   /** Turn heartbeat watchdog reference (set in initializeRun, cleared on stop). */
@@ -175,7 +176,7 @@ export class AgentLoop {
   /** True when the current abort was triggered by the hard-stall watchdog
    *  (not user Esc/Ctrl+C). Read by the UI to render a distinct message. */
   _watchdogAborted = false
-  /** Count of user interrupts within the current turn (中#5). */
+  /** Count of user interrupts within the current turn (?#5). */
   _turnInterruptCount = 0
   /**
    * Pending-abort latch: set by abort() so an interrupt fired during the
@@ -185,12 +186,12 @@ export class AgentLoop {
   _pendingAbort = false
   cwd: string
   evidence: EvidenceTracker
-  /** 证据义务状态机（evidence-driven reasoning loop）——与 evidence 同寿命。 */
+  /** ????????evidence-driven reasoning loop???? evidence ???? */
   obligations: ObligationTracker
-  /** 证据防火墙 Phase 2：external-claim tracker getter（hook 装配时回写；
-   *  hook 被禁用时保持 undefined → deliver 门禁 fail-open）。 */
+  /** ????? Phase 2?external-claim tracker getter?hook ??????
+   *  hook ?????? undefined ? deliver ?? fail-open?? */
   externalClaimTracker?: () => import('./hooks/external-claim-tracking-hook.js').ClaimTracker
-  /** Obligation final gate 遥测（auto-continue 触发/误触发/诚实受阻计数，postSession 落 meta）。 */
+  /** Obligation final gate ???auto-continue ??/???/???????postSession ? meta?? */
   obligationGateStats = { continued: 0, misfires: 0, honestBlocked: 0, suppressed: 0 }
   compactFailures: CompactCircuitBreakerState = { consecutiveFailures: 0 }
   recentToolHistory: ToolHistoryEntry[] = []
@@ -229,30 +230,30 @@ export class AgentLoop {
   lastPrewarmAt = 0
   private lastCacheDiagnostic: string | null = null
   latestRisk: import('./approval-risk.js').RiskAssessment = { level: 'none', reasons: [], suggestedAction: 'No additional approval required.' }
-  /** Latest per-turn free-energy signals — consumed by coordinator EFE worker routing. */
+  /** Latest per-turn free-energy signals ? consumed by coordinator EFE worker routing. */
   latestPolicySignals?: { efe: EFEComponents; sensorium: Sensorium }
   planModeState: PlanModeState = 'off'
   /** Relative path to the active plan file (draft or revision target). Writable in plan mode. */
   activePlanFilePath: string | null = null
-  /** Ask Mode — pure read-only Q&A; mutually exclusive with planModeState. */
+  /** Ask Mode ? pure read-only Q&A; mutually exclusive with planModeState. */
   askModeState: AskModeState = 'off'
-  /** 主动 plan mode 建议的 one-shot 记忆：已建议过的 contract id（选「直接执行」后不复问）。 */
+  /** ?? plan mode ??? one-shot ???????? contract id?????????????? */
   planModeSuggestedContracts = new Set<string>()
-  /** 「请声明验收面」的 one-shot 记忆：已催过的 contract id。义务块每轮都在
-   *  渲染 `next=user_acceptance` 作被动通道，advisory 只负责响一次，不逐轮催。 */
+  /** ????????? one-shot ??????? contract id????????
+   *  ?? `next=user_acceptance` ??????advisory ???????????? */
   readonly acceptanceAdvisedContracts = new Set<string>()
-  /** W3：A 前置对齐 advisory 已触发过的契约 key（collab:align:<contractId>）——
-   *  每契约至多一次，澄清（新契约）后可再次触发。 */
+  /** W3?A ???? advisory ??????? key?collab:align:<contractId>???
+   *  ?????????????????????? */
   collabAlignFiredContracts = new Set<string>()
-  /** Plan mode 状态变更通知 — server 层订阅后转发 plan_mode SSE（桌面切 Plan tab）。
-   *  覆盖模型自主 enter_mode 的场景：session-manager 自己触发的切换它已经知道，
-   *  工具触发的切换只能靠这条回调出圈。agent 创建后由外部回填。 */
+  /** Plan mode ?????? ? server ?????? plan_mode SSE???? Plan tab??
+   *  ?????? enter_mode ????session-manager ?????????????
+   *  ?????????????????agent ????????? */
   onPlanModeChange?: (state: PlanModeState) => void
-  /** Ask mode 状态变更通知 — server 层订阅后转发 ask_mode SSE。 */
+  /** Ask mode ?????? ? server ?????? ask_mode SSE? */
   onAskModeChange?: (state: AskModeState) => void
-  /** TUI 回调：计划提交待审批时弹出审批面板（替代手动输入 /plan-approve）。 */
+  /** TUI ???????????????????????? /plan-approve?? */
   onPlanApprovalRequested?: (info: import('../tools/types.js').PlanSubmittedInfo) => void
-  /** TUI 回调：agent 向用户提问含选项时弹出选择面板（替代手动输入选项编号）。 */
+  /** TUI ???agent ???????????????????????????? */
   onAskUserQuestionRequested?: (info: import('../tools/types.js').AskUserQuestionInfo) => void
   decisions: string[] = []
   trajectory = new TrajectoryRecorder()
@@ -280,30 +281,30 @@ export class AgentLoop {
     }
     return this._sessionNumericId
   }
-  /** U6: most recent convergence-detector result — consumed by the replan loop's
+  /** U6: most recent convergence-detector result ? consumed by the replan loop's
    *  detectDeviation (blocked/stalled signals). Null until first convergence check. */
   latestConvergenceResult: ConvergenceResult | null = null
-  /** P2 阴阳调度：本 turn 的 structure-flow 控制快照（EFE 就绪时每次
-   *  runConvergenceCheck 重算；EFE 缺失 = null → 一切消费方走旧行为）。
-   *  只读事实，供 convergence 软阈值 / plan advisory / tdd 投影消费。 */
+  /** P2 ?????? turn ? structure-flow ?????EFE ?????
+   *  runConvergenceCheck ???EFE ?? = null ? ???????????
+   *  ?????? convergence ??? / plan advisory / tdd ????? */
   latestStructureFlow: StructureFlowSnapshot | null = null
-  /** P3 认知帧：本 turn 边界的只读事实帧（每次 runConvergenceCheck 重装配，
-   *  恒产出——EFE 缺失时以 quality 标记而非置 null）。structure-flow 输入
-   *  由它投影导出（单一装配点）；Wave 3 起同时作为回放遥测的记录源。 */
+  /** P3 ????? turn ??????????? runConvergenceCheck ????
+   *  ?????EFE ???? quality ????? null??structure-flow ??
+   *  ??????????????Wave 3 ?????????????? */
   latestCognitiveFrame: CognitiveFrame | null = null
-  /** P2 plan advisory 去重键（session 级 one-shot）。用户干预与 plan
-   *  生命周期（enter/exit）时清空，允许在新语境下重新建议。 */
+  /** P2 plan advisory ????session ? one-shot??????? plan
+   *  ?????enter/exit????????????????? */
   readonly structureFlowPlanAdvisoryKeys = new Set<string>()
   /** Most recent structured stop-reason (why the last turn loop ended). */
   latestStopReason: StopReason | null = null
-  /** Fix 1 — convergence emission cooldown with backoff. The L2 side-effects
-   *  (改道 card via onDecisionShift, convergence-warning phase change, and the
+  /** Fix 1 ? convergence emission cooldown with backoff. The L2 side-effects
+   *  (?? card via onDecisionShift, convergence-warning phase change, and the
    *  advisory nudge) are throttled so a persistent stuck-state does NOT re-emit
-   *  the same "改道" card every single turn.
+   *  the same "??" card every single turn.
    *
    *  Backoff (incident 9266c3a7): the old fixed 3-turn cooldown re-emitted the
    *  same advisory ~50 times in a 154-turn session. Now the cooldown for the
-   *  SAME message variant doubles each consecutive emission (3→6→12→24…),
+   *  SAME message variant doubles each consecutive emission (3?6?12?24?),
    *  resetting to base when the variant changes, level escalates, or the agent
    *  produces a productive tool (edit/bash/test) since the last emit.
    *
@@ -311,80 +312,80 @@ export class AgentLoop {
    *  type changes. Mirrors the cooldown discipline in kick-hook.ts. */
   private readonly convergenceEmitBaseCooldownTurns = 3
   private convergenceEmitCooldownTurns = 3
-  /** Consecutive emit count for the current message variant — drives both the
-   *  backoff multiplier and the "第 N 次提醒" prefix in the injected message. */
+  /** Consecutive emit count for the current message variant ? drives both the
+   *  backoff multiplier and the "? N ???" prefix in the injected message. */
   private convergenceEmitRepeatCount = 0
   private lastConvergenceEmitTurn = -Infinity
   private lastConvergenceEmitLevel = 0
   private lastConvergenceMsgKey = ''
-  /** 上次发射时的验证失败流水 — 第四突破条件（流水加深 → 提前发射）的基线。 */
+  /** ???????????? ? ??????????? ? ????????? */
   private lastConvergenceEmitVerifyFailStreak = 0
-  /** 上次发射时的收敛 score — 冷却期内 score 显著下降（>0.15）时打破冷却。 */
+  /** ???????? score ? ???? score ?????>0.15??????? */
   private lastConvergenceEmitScore = 1.0
-  /** B1c/M4（2026-07-23 信号互扰治理）：L2+ 警告后连续产出 N 轮 → 清
-   *  priorWarningAtL2Plus 旧账。此前台账只有用户干预会清——纯自主长跑中
-   *  一旦 L2 发射,几十轮产出之后的任何跌分都能拿陈旧警告直接 L3 熔断。 */
+  /** B1c/M4?2026-07-23 ????????L2+ ??????? N ? ? ?
+   *  priorWarningAtL2Plus ???????????????????????
+   *  ?? L2 ??,????????????????????? L3 ??? */
   private readonly convergenceWarningClearProductiveTurns = 5
   private turnHadProductiveTool = false
   private productiveTurnStreak = 0
-  /** W1（20b9714e 复盘）：阶段相对轮数基线。phaseClass 变更时重置，收敛文案
-   *  用 turn - phaseStartTurn 而非会话全局轮数——消灭"连续 90 轮未收敛"这类
-   *  会话越长越吓人的假数字。 */
+  /** W1?20b9714e ?????????????phaseClass ??????????
+   *  ? turn - phaseStartTurn ????????????"?? 90 ????"??
+   *  ???????????? */
   private phaseStartTurn = 0
   private lastConvergencePhaseClass = ''
-  /** 近 10 次收敛检查时的 todo 完成数采样（进度信标数据源，10 = 最大信号窗口）。 */
+  /** ? 10 ??????? todo ??????????????10 = ???????? */
   private todoCompletedSamples: number[] = []
   /** Rolling score history from recent convergence checks (most recent last).
    *  Maintained as a sliding window of at most 20 entries. Passed to
    *  evaluateConvergence for L3 scoreAbort decline-trend detection. */
   convergenceScoreHistory: number[] = []
-  /** 解耦修复：CCR/kick 的让位判据。旧判据 latestConvergenceResult.shouldKick
-   *  在卡住期间恒为 true，而发射被 3 轮冷却节流——冷却静默期 CCR 也被整轮压制
-   *  （守护链路静音栈的一环）。新判据只在 convergence **真实发射**过 advisory 的
-   *  相邻轮让位（避免同轮双重提醒），其余轮 CCR 正常参与。 */
+  /** ?????CCR/kick ????????? latestConvergenceResult.shouldKick
+   *  ??????? true????? 3 ???????????? CCR ??????
+   *  ?????????????????? convergence **????**? advisory ?
+   *  ??????????????????? CCR ????? */
   wasConvergenceEmittedRecently(): boolean {
     return this.session.getTurnCount() - this.lastConvergenceEmitTurn <= 1
   }
-  /** CVM-vector（v3.1 计划）：最近一次 convergence 检查的 phaseClass。
-   *  '' = 本会话尚未跑过 convergence 检查（未到 perception 不分类）。 */
+  /** CVM-vector?v3.1 ???????? convergence ??? phaseClass?
+   *  '' = ??????? convergence ????? perception ????? */
   getConvergencePhaseClass(): string {
     return this.lastConvergencePhaseClass
   }
-  /** CVM-vector 干预路由：mode 闸门（RIVET_CVM_VECTOR，缺省 shadow）+
-   *  session 级 evaluator（冷却状态内聚）。shadow 只落 telemetry 绝不 submit——
-   *  该纪律由 turn-step-producer 的唯一接线点执行。 */
+  /** CVM-vector ?????mode ???RIVET_CVM_VECTOR??? shadow?+
+   *  session ? evaluator?????????shadow ?? telemetry ?? submit??
+   *  ???? turn-step-producer ????????? */
   readonly cvmVector: { mode: CvmVectorMode; evaluator: ReturnType<typeof createCvmVectorEvaluator> } = {
     mode: cvmVectorMode(),
     evaluator: createCvmVectorEvaluator(),
   }
-  /** anchor-break-scout 已在本 session 派发过视角侦察（CV2 让位判据）。
-   *  scout 是 opt-in（antiAnchoring），默认会话恒 false。 */
+  /** anchor-break-scout ??? session ????????CV2 ??????
+   *  scout ? opt-in?antiAnchoring??????? false? */
   anchorScoutOwned = false
-  /** PAL 攻坚层（计划 v2）：会话级案件容器。attack_case 工具与
-   *  problem-attack-hook 共享同一实例；所有状态迁移经纯 reducer 单入口。 */
+  /** PAL ?????? v2??????????attack_case ???
+   *  problem-attack-hook ??????????????? reducer ???? */
   readonly problemAttack = new ProblemAttackStore()
-  /** Phase 0 观测 — guardian（CCR / 改道 / kick）触发计数。会话内累计，
-   *  随遥测与 session meta 落盘，让"守护链路被静音"从体感问题变成数据问题。 */
+  /** Phase 0 ?? ? guardian?CCR / ?? / kick????????????
+   *  ???? session meta ????"???????"???????????? */
   readonly guardianActivity: {
     ccr: number
     shifts: Record<string, number>
     advisoriesRendered: number
     advisoriesDropped: number
-    /** P1a 核销闭环：expect 谓词判定为采纳/忽略的累计数 */
+    /** P1a ?????expect ???????/?????? */
     advisoriesAdopted: number
     advisoriesIgnored: number
-    /** Holdout 反事实组：被静默扣留的累计数（cockpit advisory 面板消费） */
+    /** Holdout ???????????????cockpit advisory ????? */
     advisoriesHeldOut: number
-    /** Wave 1：SR 通道提交数 + 被 SessionContext cap 丢弃数 */
+    /** Wave 1?SR ????? + ? SessionContext cap ??? */
     advisoriesSrSubmitted: number
     advisoriesSrDropped: number
   } = { ccr: 0, shifts: {}, advisoriesRendered: 0, advisoriesDropped: 0, advisoriesAdopted: 0, advisoriesIgnored: 0, advisoriesHeldOut: 0, advisoriesSrSubmitted: 0, advisoriesSrDropped: 0 }
   private lastGuardianMetaFingerprint = ''
-  /** 记录一次结构化改道发射（source: 'kick' | 'convergence' | …）。 */
+  /** ????????????source: 'kick' | 'convergence' | ??? */
   recordDecisionShift(source: string): void {
     this.guardianActivity.shifts[source] = (this.guardianActivity.shifts[source] ?? 0) + 1
   }
-  /** 累计 advisory 投递账本（来自 AdvisoryBus.drainLedger）。 */
+  /** ?? advisory ??????? AdvisoryBus.drainLedger?? */
   recordAdvisoryLedger(delta: { rendered: number; dropped: number; heldOut?: number; srSubmitted?: number; srDropped?: number }): void {
     this.guardianActivity.advisoriesRendered += delta.rendered
     this.guardianActivity.advisoriesDropped += delta.dropped
@@ -392,20 +393,20 @@ export class AgentLoop {
     this.guardianActivity.advisoriesSrSubmitted += delta.srSubmitted ?? 0
     this.guardianActivity.advisoriesSrDropped += delta.srDropped ?? 0
   }
-  /** P1a：核销判定后同步会话累计采纳/忽略（来自 AdvisoryReadback.getTotals）。 */
+  /** P1a??????????????/????? AdvisoryReadback.getTotals?? */
   recordAdvisoryOutcomes(totals: { adopted: number; ignored: number }): void {
     this.guardianActivity.advisoriesAdopted = totals.adopted
     this.guardianActivity.advisoriesIgnored = totals.ignored
-    // P1：advisory 被忽略 ≥ 2 → 通知 destructive-gate 开窗
+    // P1?advisory ??? ? 2 ? ?? destructive-gate ??
     if (totals.ignored >= 2) {
       this.destructiveGate.noteAdvisoryPressure()
     }
   }
 
   /**
-   * B：把会话内效能计数的**增量**合并写回跨会话信息素文件。
-   * 差分基线在 lastEfficacyFlush——每 20 轮 + postSession 各调一次,
-   * 重复调用安全(零增量直接跳过)。失败不致命(信息素是尽力而为)。
+   * B??????????**??**?????????????
+   * ????? lastEfficacyFlush??? 20 ? + postSession ????,
+   * ??????(???????)??????(????????)?
    */
   flushAdvisoryEfficacy(): void {
     try {
@@ -428,15 +429,15 @@ export class AgentLoop {
         })
       }
       if (deltas.size > 0) this.advisoryEfficacyStore.mergeAndSave(deltas)
-    } catch { /* 尽力而为——写回失败不影响会话 */ }
+    } catch { /* ??????????????? */ }
   }
   /**
-   * 记录并落盘一次结构化停止原因。此前 StopReason 只进 debugLog/遥测——
-   * 不开 RIVET_DEBUG 时事后无法回答"这个 run 是谁停的"（护栏熔断 / 用户
-   * 中断 / 流错误 / 自然收尾不可区分）。现在同步写进 session meta，
-   * 每次 run 结束覆盖上一条。写失败不致命（观测辅助，永不阻断）。
+   * ????????????????? StopReason ?? debugLog/????
+   * ?? RIVET_DEBUG ???????"?? run ????"????? / ??
+   * ?? / ??? / ???????????????? session meta?
+   * ?? run ??????????????????????????
    */
-  /** Obligation final gate 遥测计数（turn-orchestrator 回调；postSession 落 meta）。 */
+  /** Obligation final gate ?????turn-orchestrator ???postSession ? meta?? */
   recordObligationGateEvent(event: 'continued' | 'misfire' | 'honest_blocked' | 'suppressed'): void {
     if (event === 'continued') this.obligationGateStats.continued += 1
     else if (event === 'misfire') this.obligationGateStats.misfires += 1
@@ -459,9 +460,9 @@ export class AgentLoop {
           t: Date.now(),
         },
       })
-    } catch { /* meta 摘要是观测辅助 — 永不阻断 */ }
+    } catch { /* meta ??????? ? ???? */ }
   }
-  /** 把 guardian 活动摘要写进 session meta（仅在计数变化时写，原子写、失败不致命）。 */
+  /** ? guardian ?????? session meta????????????????????? */
   flushGuardianMeta(): void {
     if (!this.persist) return
     const ga = this.guardianActivity
@@ -479,31 +480,31 @@ export class AgentLoop {
           advisoriesIgnored: ga.advisoriesIgnored,
         },
       })
-    } catch { /* meta 摘要是观测辅助 — 永不阻断 turn */ }
+    } catch { /* meta ??????? ? ???? turn */ }
   }
   /** Goal tracker for autonomous long-running tasks. Owned by AgentLoop so that
    *  doom-loop threshold selection (getDoomLoopLevel) and goal-active checks
    *  (isGoalActive) read LOCAL state instead of reaching back into the
-   *  orchestrator — breaking the former orchestrator→loop→orchestrator cycle.
+   *  orchestrator ? breaking the former orchestrator?loop?orchestrator cycle.
    *  The orchestrator reads it via the deps.getGoalTracker getter. */
   private goalTracker: import('./goal-tracker.js').GoalTracker | null = null
   /** U6: autonomous plan execution trace. Created per task (initializeRun), steps
    *  seeded from the first todo write (capturePlanSteps), advanced per tool-turn,
    *  and checked for deviation at each turn boundary. Null outside task context. */
   planTrace: PlanExecutionTrace | null = null
-  /** U6: last replan correction injected as a system-reminder — dedup guard so a
+  /** U6: last replan correction injected as a system-reminder ? dedup guard so a
    *  persistent deviation doesn't spam an identical nudge every turn. */
   lastReplanInjection = ''
-  /** Session-local affordance adaptations — per-session, never mutates global registry */
+  /** Session-local affordance adaptations ? per-session, never mutates global registry */
   sessionAffordanceAdaptations: Record<string, import('./affordance.js').BaseAffordance> = {}
   /** Previous anchor graph hash for HEARTH INV-5 intra-session drift detection. */
   prevAnchorGraphHash: string | null = null
   /** Previous turn's streamed assistant text for dedup-guard P5. */
   prevStreamedText: string | null = null
-  /** W2 被拦不弃守护：本 turn 被闸门拦截的事件 kind 列表（pipeline onGateBlocked
-   *  累计，gate-block-guard hook postTurn drain 清零）。 */
+  /** W2 ???????? turn ???????? kind ???pipeline onGateBlocked
+   *  ???gate-block-guard hook postTurn drain ???? */
   gateBlockedKinds: string[] = []
-  /** P1b: TDD gate 同 target 被拦计数 — session 级累计，≥3 触发 advisory */
+  /** P1b: TDD gate ? target ???? ? session ?????3 ?? advisory */
   tddBlockedTargets = new Map<string, number>()
   pressureMonitor: PressureMonitor
   sycophancyTrap: SycophancyTrap = createSycophancyTrap()
@@ -516,7 +517,7 @@ export class AgentLoop {
   intent: TurnIntentController
   contextInjection: ContextInjectionController
   compaction: CompactionController
-  // P2-6 breadcrumb state — lifted from createTurnStreamController closure
+  // P2-6 breadcrumb state ? lifted from createTurnStreamController closure
   // to instance scope so it survives TurnStreamController recreation at each
   // user-message boundary (turn-step-producer.ts:122). Without this, the diff
   // against cumulative engine counters resets every segment, causing false
@@ -528,7 +529,7 @@ export class AgentLoop {
   prevTokenEfficiency: number | undefined = undefined
   /** Request-aligned cache telemetry. Tool output is consumed by the next model call. */
   turnCacheObservability = new TurnCacheObservability()
-  /** Estimated context tokens at the end of the previous turn — baseline for
+  /** Estimated context tokens at the end of the previous turn ? baseline for
    *  compact attribution (compactPreRatio / compactReclaimed in the cache-log). */
   prevEstTokens = 0
   /** The compact-history artifact most recently produced by a compaction, set in
@@ -543,8 +544,8 @@ export class AgentLoop {
   private turnOrchestrator: TurnOrchestrator
   turnStepProducer: TurnStepProducer
   private reasoningEffort: ReasoningEffortController
-  /** 用户是否手动设置了 reasoning effort（/effort max 等）。
-   *  true 时 autoReasoning 不得覆盖；/effort auto 清为 false 交还 autoReasoning。 */
+  /** ????????? reasoning effort?/effort max ???
+   *  true ? autoReasoning ?????/effort auto ?? false ?? autoReasoning? */
   userReasoningOverride = false
   intentRoute: IntentRetrievalRouteController
   antiAnchoring: AntiAnchoringController
@@ -578,8 +579,8 @@ export class AgentLoop {
    *  Self-created for TUI; the server replaces it via setJobs() with an instance
    *  it subscribes to for SSE + REST. */
   private _jobs: import('../tools/job-store.js').SessionJobs | undefined
-  /** Session-scoped monitor registry（monitor 工具 + monitor-hook 共享；
-   *  经 getter 晚绑定 _jobs——server setJobs 替换实例后自动重绑）。 */
+  /** Session-scoped monitor registry?monitor ?? + monitor-hook ???
+   *  ? getter ??? _jobs??server setJobs ??????????? */
   private _monitors: import('./monitor-registry.js').MonitorRegistry | undefined
   sessionStateManager: SessionStateManager | undefined
   stigmergyStore: StigmergyStore
@@ -589,7 +590,7 @@ export class AgentLoop {
   lastSeenEventId = 0
   gitChangeRate = 0
   telemetryWriter: TelemetryWriter
-  /** P3-D：frame 全量记录的独立落盘通道（frames.jsonl，默认开）。 */
+  /** P3-D?frame ????????????frames.jsonl?????? */
   frameRecorder: FrameRecorder
   baselineFingerprint: PrefixFingerprint | null = null
   sensoriumSnapshots: SensoriumEntry[] = []
@@ -616,7 +617,7 @@ export class AgentLoop {
   /**
    * P2-5: mid-round history rewrites break the prefix cache between two API
    * calls inside one user round (cache-log #30: input +319, cacheRead
-   * 50,304→17,792). Pressure detected mid-round is deferred via these flags
+   * 50,304?17,792). Pressure detected mid-round is deferred via these flags
    * and processed at the next user-message boundary (turn 0), keeping the
    * session append-only within a round.
    */
@@ -630,26 +631,26 @@ export class AgentLoop {
   llmSpeculationEngine: import('./llm-speculation.js').LlmSpeculationEngine | null = null
   immuneHook: ImmuneHook
   _lastImmuneHint?: import('./immune-context.js').ImmuneContextHint
-  /** A1: unified advisory bus — collects corrective signals, renders ≤3 per turn */
+  /** A1: unified advisory bus ? collects corrective signals, renders ?3 per turn */
   advisoryBus = new AdvisoryBus()
-  /** P1a 核销闭环：advisory 送达后按 expect 谓词核销 adopted/ignored */
+  /** P1a ?????advisory ???? expect ???? adopted/ignored */
   advisoryReadback = new AdvisoryReadback()
-  /** 主控心流控制面（RIVET_CONTROL_PLANE: off|shadow|active，默认 shadow）。
-   *  shadow 只归并/记账（K0），不改 prompt；active 才允许 appendix 出口（Wave 4）。 */
+  /** ????????RIVET_CONTROL_PLANE: off|shadow|active??? shadow??
+   *  shadow ???/???K0???? prompt?active ??? appendix ???Wave 4?? */
   controlPlane = new ControlPlaneController()
-  /** 破坏性命令 pre-execution 闸门(验证失败后 git 清场当轮拦截,首拦重放行)。
-   *  tool-pipeline 是唯一写者兼读者,loop 只持有生命周期。 */
+  /** ????? pre-execution ??(????? git ??????,?????)?
+   *  tool-pipeline ????????,loop ???????? */
   destructiveGate = createDestructiveGateState({
     getVirtueCredit: () => {
-      // 反证 4：reversal 季冻结——平稳期信任不适用于压力态
+      // ?? 4?reversal ?????????????????
       if (this.currentSeason === 'reversal') return 0.5
       const signals = this.stanceTally.getAllSignals?.()
       return signals ? computeVirtueCredit(signals) : 0.5
     },
   })
-  /** B 跨会话效能信息素 store（构造器内初始化） */
+  /** B ???????? store????????? */
   advisoryEfficacyStore!: AdvisoryEfficacyStore
-  /** 上次效能 flush 时的 per-key 计数快照 — mergeAndSave 只收增量,差分在此 */
+  /** ???? flush ?? per-key ???? ? mergeAndSave ????,???? */
   private lastEfficacyFlush = new Map<string, EfficacyDelta>()
   /** F-fix: tool calls since the last discipline re-anchor advisory. */
   private toolCallsSinceReanchor = 0
@@ -657,21 +658,21 @@ export class AgentLoop {
   turnsSinceLastObjection = 0
   lastToolCompleteTime = 0
   initialUserMessage: string | null = null
-  /** 知识重构（Wave 1/2）：候选知识缓冲——正则观察 + 手动 remember 队列，
-   *  不直写存储，由 postSession essence-gate 统一裁决准入。会话级，上限 60 条 FIFO。 */
+  /** ?????Wave 1/2?????????????? + ?? remember ???
+   *  ??????? postSession essence-gate ????????????? 60 ? FIFO? */
   knowledgeCandidates: KnowledgeCandidate[] = []
-  /** 当前 run 的 orchestrator 循环轮数(每 run 从 0 重计)——缺口 C/D hook 消费 */
+  /** ?? run ? orchestrator ????(? run ? 0 ??)???? C/D hook ?? */
   runLoopTurn = 0
-  /** 最近一次用户输入(run 启动 = 0,steer 注入时更新)的 run 轮数 */
+  /** ????????(run ?? = 0,steer ?????)? run ?? */
   lastUserInputRunTurn = 0
   /** Sliding window of recent turn text fingerprints for cross-turn repetition detection. */
   recentTextFingerprints: string[] = []
   /** T2-02: Current effort shadow record (telemetry only in P0, influences effort in P3+) */
   _currentEffortShadow: EffortShadowRecord | null = null
-  /** 逃生口运行时挂载的 EXTENDED 工具名（经 /tools enable 加入）。updateTools 时作为豁免传入。 */
+  /** ????????? EXTENDED ????? /tools enable ????updateTools ???????? */
   private readonly mountedExtras = new Set<string>()
-  /** 视觉副驾短期记忆：本会话用户/工具携带的图片按短 id 寄存，供 ask_image 反复追问。
-   *  纯内存、不进 prompt 历史、不落盘（见 image-registry.ts 的边界约束）。 */
+  /** ??????????????/????????? id ???? ask_image ?????
+   *  ?????? prompt ???????? image-registry.ts ??????? */
   readonly imageRegistry = new ImageRegistry()
 
   constructor(
@@ -684,27 +685,27 @@ export class AgentLoop {
       this.config.permissionsOverlay = createPermissionOverlay()
     }
     this.cwd = cwd ?? process.cwd()
-    // 构造期注入共享 prewarm——必须早于 createToolExecutionController（下方
-    // L929 附近）：其 deps 按值捕获 self.prewarm，构造后替换字段到不了消费端。
+    // ??????? prewarm?????? createToolExecutionController???
+    // L929 ????? deps ???? self.prewarm???????????????
     if (config.prewarm) this.prewarm = config.prewarm
     this.evidence = new EvidenceTracker()
-    // 证据义务状态机：与 EvidenceTracker 同寿命。验证事件单向流入——
-    // blocked 只记 attempted、目标不匹配的失败不满足 RED（Wave 1 语义）。
+    // ????????? EvidenceTracker ??????????????
+    // blocked ?? attempted???????????? RED?Wave 1 ????
     this.obligations = new ObligationTracker()
     this.evidence.setVerificationListener(meta => this.obligations.applyVerification(meta))
     this.traceStore = createTraceStore()
-    // P1b 习惯化对抗：核销账本的 ignoredStreak 驱动升级措辞/有界静音
+    // P1b ??????????? ignoredStreak ??????/????
     this.advisoryBus.setHabituationPolicy(this.advisoryReadback)
-    // Phase 2 挂起观察自愈判定：expect 谓词在观察窗口内已被自发满足 → 撤销
+    // Phase 2 ?????????expect ?????????????? ? ??
     this.advisoryBus.setSelfHealCheck((expect, since, now) =>
       this.advisoryReadback.wasSatisfiedBetween(expect, since, now))
-    // Holdout 反事实抽样：小概率静默扣留以度量真实 lift（RIVET_ADVISORY_HOLDOUT=0 关闭）
+    // Holdout ?????????????????? lift?RIVET_ADVISORY_HOLDOUT=0 ???
     this.advisoryBus.setHoldoutPolicy({
       rate: parseHoldoutRate(process.env.RIVET_ADVISORY_HOLDOUT),
       isEligible: key => this.advisoryReadback.getDeliveredCount(key) >= HOLDOUT_MIN_DELIVERED,
     })
-    // B 跨会话效能信息素：加载 EWMA 衰减后的先验（holdout 资格/副驾闸门/
-    // Top-N 次级排序三个消费方;习惯化保持会话内,guardian meta 保持会话纯度）
+    // B ??????????? EWMA ???????holdout ??/????/
+    // Top-N ?????????;????????,guardian meta ???????
     this.advisoryEfficacyStore = new AdvisoryEfficacyStore(this.cwd)
     try {
       const priors = this.advisoryEfficacyStore.load()
@@ -714,26 +715,26 @@ export class AgentLoop {
           shadowHeld: p.shadowHeld, shadowSatisfied: p.shadowSatisfied,
         }] as [string, EfficacyPriorCounts]),
       )
-    } catch { /* 先验加载失败不致命——回退冷启动 */ }
+    } catch { /* ???????????????? */ }
     this.advisoryBus.setAdoptionRateProvider(key => this.advisoryReadback.getAdoptionRate(key))
-    // W2 efficacy 负反馈环（20b9714e）：发射前回读会话内 delivered/adopted——
-    // 同 key 零采纳连发 3 次后冷却翻倍、6 次后会话内静默（constitutional 豁免）。
+    // W2 efficacy ?????20b9714e?????????? delivered/adopted??
+    // ? key ????? 3 ???????6 ????????constitutional ????
     this.advisoryBus.setEfficacyStatsProvider(key => {
       const s = this.advisoryReadback.getStats().get(key)
       return s ? { delivered: s.delivered, adopted: s.adopted } : null
     })
-    // 星域措辞适配（2026-07-07）：按当前域把 advisory 翻译成该域听得进的
-    // 形态（如天权的证据式裁决协议）。惰性读 sessionDomain——域激活/切换自动生效。
+    // ???????2026-07-07??????? advisory ?????????
+    // ??????????????????? sessionDomain?????/???????
     this.advisoryBus.setToneAdapter((content, meta) =>
       applyDomainAdvisoryTone(this.sessionDomain?.id, content, meta))
-    // Lift 消费端：成熟 lift（会话 + 先验,过成熟度门）驱动负 lift 静音与
-    // Top-N 排序升级。RIVET_ADVISORY_LIFT_CONSUMER=0 关（不注入 = 全回退旧行为）。
+    // Lift ?????? lift??? + ??,????????? lift ???
+    // Top-N ?????RIVET_ADVISORY_LIFT_CONSUMER=0 ????? = ????????
     if (process.env.RIVET_ADVISORY_LIFT_CONSUMER !== '0') {
       this.advisoryBus.setLiftProvider(key => this.advisoryReadback.getMatureLift(key))
     }
-    // Phase 2 阶段抑制：产出流 = 近期编辑+验证交替且无失败（navigator 沉默规则）。
-    // 只影响 encouragement/typecheck/informational 白名单——守护类不受抑制。
-    // 判据本体在 production-flow.ts（EFE/affordance 的 wuwei 让位共用同一处）。
+    // Phase 2 ???????? = ????+?????????navigator ??????
+    // ??? encouragement/typecheck/informational ?????????????
+    // ????? production-flow.ts?EFE/affordance ? wuwei ?????????
     this.advisoryBus.setFlowStateProvider(() => isInProductionFlow(this.recentToolHistory))
     this.harness = new TurnHarness(
       { maxRetries: 2, retryableClasses: ['timeout', 'flaky'] },
@@ -741,9 +742,9 @@ export class AgentLoop {
       this.failureJournal,
     )
     this.pressureMonitor = new PressureMonitor(this.config.contextWindow)
-    // 累加器语义是「当前历史里驻留的 CVM 字节」。任何丢弃历史消息的操作都会
-    // 重置 appendix baseline，同一时刻这些字节也离开了上下文——挂在 engine 内部
-    // 而非逐个调用点，两者结构上无法漂移。
+    // ??????????????? CVM ?????????????????
+    // ?? appendix baseline???????????????????? engine ??
+    // ??????????????????
     this.config.promptEngine.setOnResetAppendixBaseline(() => {
       this.pressureMonitor.resetCvmOverhead()
     })
@@ -753,8 +754,8 @@ export class AgentLoop {
     this.frameRecorder = createFrameRecorder(this.cwd, this.config.sessionId)
     const sessionDir = join(getSessionDir(this.cwd), this.config.sessionId ?? 'anon')
     const pheromonesPath = join(sessionDir, 'pheromones.json')
-    // 批级共享 store 优先（星河收编 #3）：同批 worker 共用内存信息素库，
-    // 不各自落盘到 sessionDir。
+    // ???? store ??????? #3???? worker ?????????
+    // ?????? sessionDir?
     this.stigmergyStore = this.config.stigmergyStore ?? new StigmergyStore(pheromonesPath)
 
     // Initialize ArtifactStore for append-only artifact log
@@ -765,14 +766,14 @@ export class AgentLoop {
       this.sessionStateManager = stateManager
       this._jobs = new SessionJobs(join(artifactDir, 'jobs'))
     }
-    // MonitorRegistry 无条件创建（无会话时 getJobs 返回 undefined，subscribe 优雅降级）。
+    // MonitorRegistry ?????????? getJobs ?? undefined?subscribe ??????
     this._monitors = new MonitorRegistry(() => this._jobs, { telemetry: this.telemetryWriter })
 
     this.cacheAdvisor = new CacheAdvisor({
       providerProfile: this.config.providerProfile ?? { cacheType: 'none', persistent: false },
       contextWindow: this.config.contextWindow,
     })
-    // W3-C3: observe-only delay-compact decision ledger → cache-log.jsonl
+    // W3-C3: observe-only delay-compact decision ledger ? cache-log.jsonl
     // (event:'compact_delay_decision'), same channel as per-request cache rows
     // so offline analysis joins decisions with the actual cache outcome.
     if (this.config.sessionId) {
@@ -789,7 +790,7 @@ export class AgentLoop {
       })
     }
     // Speculative pre-execution chain SEALED (2026-07-07): no execute callback
-    // and speculativeEnabled unset → miner still records patterns, but nothing
+    // and speculativeEnabled unset ? miner still records patterns, but nothing
     // is pre-executed or cached. Serving was cut 2026-07-06 (ShadowQueue had no
     // mtime validation and served pre-edit file content as a live read_file
     // result); without serving the background pre-reads were pure cost.
@@ -797,7 +798,7 @@ export class AgentLoop {
     this.p3 = createP3Integration()
 
 
-    // Physarum + Immune system — construction only, DB reads deferred to warmupMemories() (S9)
+    // Physarum + Immune system ? construction only, DB reads deferred to warmupMemories() (S9)
     const meridianDb = this.config.meridianIndexer?.getDb()
     const physarum = new PhysarumEngine(meridianDb)
     this.immuneHook = new ImmuneHook({ physarum, stigmergy: this.stigmergyStore, notebook: this.p3?.notebook })
@@ -814,7 +815,7 @@ export class AgentLoop {
       getProviderDegradationRatio: () => this.config.providerHealth?.getDegradationRatio() ?? 0,
       // Hook injections are pseudo-user messages: append as SR to the last
       // user message (not a new message entry) to preserve prefix cache.
-      // W2-B1: K1 append-only egress — runtime hook payloads (MCTS seeds,
+      // W2-B1: K1 append-only egress ? runtime hook payloads (MCTS seeds,
       // scout packets, fallback advisories) charge their bytes exactly once
       // at commit, under the 'runtime-payload' tag.
       addUserMessage: message => {
@@ -872,7 +873,7 @@ export class AgentLoop {
           })
         }
         // P3: hot-refresh the session-memory volatile block so memories extracted
-        // during compaction are visible in THIS session's prompt — not just the
+        // during compaction are visible in THIS session's prompt ? not just the
         // next session. rebuildFrozenBase defers the actual volatileBlock swap to
         // the next user message boundary, and compaction runs at turn 0, so this
         // stays prefix-cache safe. Mirrors the /remember slash-command path.
@@ -883,7 +884,7 @@ export class AgentLoop {
       getAbortSignal: () => this.abortController?.signal,
       getActiveContract: () => this.taskContract,
       // After any compaction rewrite the historical tool_results that read-ref
-      // points at may be gone — drop this session's read-dedup records so the
+      // points at may be gone ? drop this session's read-dedup records so the
       // next read_file re-serves real content instead of a dangling reference.
       onHistoryRewritten: () => { invalidateSessionReadDedup(this.config.sessionId) },
       // Layered archival: persist discarded history as a recallable
@@ -924,15 +925,15 @@ export class AgentLoop {
         }
       },
       // Side-path usage accounting: summary calls are billed but used to
-      // discard their usage — book them into session totals + cache-log.
+      // discard their usage ? book them into session totals + cache-log.
       recordSummaryUsage: (usage, model) => {
         createSidePathUsageRecorder(this)('compact-summary', usage, model)
       },
       onReclaimDecision: createReclaimDecisionRecorder(this),
       writeProbe: createWriteEvidenceProbe(this.cwd),
     })
-    // 在 AgentLoop 构造时立即设置 prefixOverhead，关闭 UI 启动到 maybeCompact 之间的窗口。
-    // 否则首次响应前 GlanceBar 显示 ctx 0%、◧ 0/1.0M（数据未接入而非真的 0%）。
+    // ? AgentLoop ??????? prefixOverhead??? UI ??? maybeCompact ??????
+    // ??????? GlanceBar ?? ctx 0%?? 0/1.0M?????????? 0%??
     this.compaction.ensurePrefixOverhead()
     this.turnStream = this.createTurnStreamController()
     this.turnCompletion = this.createTurnCompletionController()
@@ -947,7 +948,7 @@ export class AgentLoop {
     this.modelRoutingShadow = createModelRoutingShadowController(this)
     this.prewarmController = createPrewarmController(this)
     
-    // 初始化 SessionPersist 用于 fuzzy checkpoint
+    // ??? SessionPersist ?? fuzzy checkpoint
     if (this.config.sessionId) {
       this.persist = new SessionPersist(this.config.sessionId, this.cwd)
 
@@ -956,7 +957,7 @@ export class AgentLoop {
         model: this.config.promptEngine.getModel(),
         cwd: this.cwd,
       })
-      // R1: record cwd (cross-cwd resume gate) and reset cleanExit — the session
+      // R1: record cwd (cross-cwd resume gate) and reset cleanExit ? the session
       // is now live, so a subsequent crash should be recoverable and a later
       // clean exit must re-mark it. Runs for both fresh and resumed sessions.
       this.persist.updateMetadata({ cwd: this.cwd, cleanExit: false })
@@ -984,7 +985,7 @@ export class AgentLoop {
   }
 
 
-  /** Capture an agent's departure mark — sealed into the starmap at session close. */
+  /** Capture an agent's departure mark ? sealed into the starmap at session close. */
   captureLeaveMark(mark: import('../tools/types.js').LeaveMarkInput): void {
     this.pendingLeaveMark = mark
   }
@@ -1023,19 +1024,19 @@ export class AgentLoop {
   }
 
   /**
-   * 用户级验收面的声明与核销（todo 的 acceptance 字段）。这是 acceptance 义务
-   * **唯一**的核销入口——它刻意不在 `applyVerificationEvent` 的自动满足集合里，
-   * 跑多少测试都关不掉，只有 agent 显式回写验收结果才能关。
+   * ?????????????todo ? acceptance ?????? acceptance ??
+   * **??**???????????? `applyVerificationEvent` ?????????
+   * ???????????? agent ????????????
    *
-   * 状态机：任一项 pending → 义务保持 open；有 met 但缺 evidence → 只记 attempt
-   * （逼出「实际做了什么」，两次后升级为 ask_user）；有 blocked 且无 pending →
-   * block（走 honest_blocked，交付时强制披露）；全部 met 且有据 → satisfy。
+   * ??????? pending ? ???? open?? met ?? evidence ? ?? attempt
+   * ?????????????????? ask_user??? blocked ?? pending ?
+   * block?? honest_blocked???????????? met ??? ? satisfy?
    */
   captureAcceptance(items: import('../tools/types.js').AcceptanceItemInput[]): void {
     if (items.length === 0) return
 
-    // 声明落进契约：successCriteria 在 tail 区被渲染进提示词，替换默认套话。
-    // 只在文本真变了才赋值——状态回写（pending→met）不该翻转提示词字节。
+    // ???????successCriteria ? tail ????????????????
+    // ?????????????????pending?met???????????
     const criteria = items.map(i => i.criterion)
     if (this.taskContract) {
       const prev = this.taskContract.successCriteria
@@ -1052,7 +1053,7 @@ export class AgentLoop {
     if (!outcome) return
     switch (outcome.kind) {
       case 'declared':
-        // 留痕即可，让「请声明验收面」的 advisory 闭嘴；义务保持未决。
+        // ??????????????? advisory ??????????
         this.obligations.recordAttempt(ob.id, { evidenceRef: `acceptance-declared:${criteria.length}` })
         return
       case 'missing_evidence':
@@ -1076,17 +1077,17 @@ export class AgentLoop {
       // Reset convergence cooldown when the agent produces a productive tool
       // (edit/bash/test/commit/deliver). This means past convergence nudges
       // were either effective (prompted action) or irrelevant (direction was
-      // fine all along) — in either case, reset the repeat counter and cooldown
+      // fine all along) ? in either case, reset the repeat counter and cooldown
       // so the next nudge starts fresh rather than escalating from a stale count.
       if (PRODUCTIVE_TOOLS.has(name)) {
         this.convergenceEmitRepeatCount = 0
         this.convergenceEmitCooldownTurns = this.convergenceEmitBaseCooldownTurns
-        // B1c：turn 级产出标志,由 runConvergenceCheck 在下个 turn 边界结算
+        // B1c?turn ?????,? runConvergenceCheck ??? turn ????
         this.turnHadProductiveTool = true
       }
       // F-fix (session 803d897d): field habituation moves discipline text out of
       // focus after ~4 turns while a heavy turn can run 20+ tool calls. Re-anchor
-      // a one-line discipline summary through the advisory bus every N calls —
+      // a one-line discipline summary through the advisory bus every N calls ?
       // appendix-rendered, cache-safe, no frozen-prefix changes.
       this.toolCallsSinceReanchor++
       if (this.toolCallsSinceReanchor >= DISCIPLINE_REANCHOR_INTERVAL) {
@@ -1101,8 +1102,8 @@ export class AgentLoop {
 
   bindSessionDomain(taskDescription: string): void {
     if (this.sessionDomain !== undefined) return
-    // 首次绑定前检查 defaultDomain 配置——非 auto 时钉定，让所有入口
-    //（TUI/headless/server/外部）统一在此钉定，不再依赖入口层各显神通。
+    // ??????? defaultDomain ????? auto ?????????
+    //?TUI/headless/server/??????????????????????
     if (isStarSoulEnabled()) {
       const key = this.config.defaultDomain ?? 'qiming'
       if (key !== 'auto') {
@@ -1121,10 +1122,10 @@ export class AgentLoop {
         }
       }
     }
-    // domainKeywordRouting 默认 true：Auto 按消息在 DOMAIN_AUTO_POOL（四个均衡
-    // 工程域 + 自定义域）内 matchDomain，未命中回退天权（DEFAULT_DOMAIN）；
-    // 显式 false 时固定落到 DEFAULT_DOMAIN。池外特化域（含华盖）仅手动/钉定/
-    // 委派进入。仅 defaultDomain='auto' 的会话走到这里，其余已被钉定。
+    // domainKeywordRouting ?? true?Auto ???? DOMAIN_AUTO_POOL?????
+    // ??? + ?????? matchDomain?????????DEFAULT_DOMAIN??
+    // ?? false ????? DEFAULT_DOMAIN??????????????/??/
+    // ?????? defaultDomain='auto' ???????????????
     this.sessionDomain = isStarSoulEnabled()
       ? buildActiveDomain(taskDescription, {
           keywordRouting: this.config.domainKeywordRouting !== false,
@@ -1134,17 +1135,17 @@ export class AgentLoop {
     this.persistSessionDomain()
   }
 
-  /** 域变更即写 meta.domain——TUI /resume 恢复原域的依据（bootstrap
-   *  switchAgentSession 读取；shutdown 时 buildSessionHandoff 旁另有兜底重写）。
-   *  best-effort：持久化失败不阻断域切换。 */
+  /** ????? meta.domain??TUI /resume ????????bootstrap
+   *  switchAgentSession ???shutdown ? buildSessionHandoff ?????????
+   *  best-effort????????????? */
   private persistSessionDomain(): void {
     try { this.persist?.updateMetadata({ domain: this.sessionDomain?.id }) } catch { /* best-effort */ }
   }
 
   /**
-   * 主控会话的域经验摘要：随域绑定挂 top-3 lessons（worker 侧同源
-   * buildDomainKnowledgeBlock）。与域同为会话常量、同一时机构建 → 一起进
-   * FROZEN 前缀，不引入 per-turn 变化。
+   * ???????????????? top-3 lessons?worker ???
+   * buildDomainKnowledgeBlock????????????????? ? ???
+   * FROZEN ?????? per-turn ???
    */
   private withDomainKnowledge(domain: ActiveStarDomain | null): (ActiveStarDomain & { knowledgeBlock?: string }) | null {
     if (!domain || !this.config.domainKnowledgeStore) return domain
@@ -1160,13 +1161,13 @@ export class AgentLoop {
     this._turnInterruptCount++
     this._pendingAbort = true
     this.abortController?.abort()
-    // NOTE: killAll() removed — it was a global hammer that killed processes
-    // from ALL AgentLoop instances, not just this one (中间层 #1).
-    // 范围化进程清理由「协作式取消」实现，而非全局硬锤：abortController 是
-    // 本实例独有的，abort() 翻转其信号 → 经 tool-pipeline 透传到本实例正在跑的
-    // 工具（bash/run_tests 已监听 params.abortSignal，立即 killProcessTree 自身子进程）。
-    // 因信号按实例隔离，中止本实例绝不会波及另一实例的子进程（双实例隔离）。
-    // 进程的最终兜底清理仍由 main.tsx 退出路径的 killAllSync() 负责。
+    // NOTE: killAll() removed ? it was a global hammer that killed processes
+    // from ALL AgentLoop instances, not just this one (??? #1).
+    // ?????????????????????????abortController ?
+    // ???????abort() ????? ? ? tool-pipeline ??????????
+    // ???bash/run_tests ??? params.abortSignal??? killProcessTree ???????
+    // ???????????????????????????????????
+    // ??????????? main.tsx ????? killAllSync() ???
   }
 
   /**
@@ -1188,7 +1189,7 @@ export class AgentLoop {
   }
 
   /**
-   * System-initiated abort (hard-stall watchdog) — breaks a wedged turn
+   * System-initiated abort (hard-stall watchdog) ? breaks a wedged turn
    * WITHOUT incrementing `_turnInterruptCount`. That counter feeds the
    * recovery-trigger's "repeatedly interrupted" classification (see
    * refreshReliabilityDecision); a watchdog stall-recovery is not a user
@@ -1204,7 +1205,7 @@ export class AgentLoop {
     this.config.approvalMode = mode
   }
 
-  /** C3 — current checkpoint interval for status displays. */
+  /** C3 ? current checkpoint interval for status displays. */
   getCheckpointInterval(): number {
     return this.config.checkpointEveryTurns ?? 0
   }
@@ -1270,7 +1271,7 @@ export class AgentLoop {
 
   /** Attach a GoalTracker to the current run. Owned by AgentLoop; the
    *  orchestrator reads it via deps.getGoalTracker (no longer a field on
-   *  TurnOrchestrator), severing the loop→orchestrator back-edge that
+   *  TurnOrchestrator), severing the loop?orchestrator back-edge that
    *  getDoomLoopLevel/isGoalActive used to traverse. */
   setGoalTracker(tracker: import('./goal-tracker.js').GoalTracker | null): void {
     this.goalTracker = tracker
@@ -1307,8 +1308,8 @@ export class AgentLoop {
     this.config.promptEngine.setPlanModeState(this.planModeState)
     this.config.promptEngine.setActivePlanFilePath(this.activePlanFilePath)
     this.config.promptEngine.setAskModeState(this.askModeState)
-    // 落盘到 session meta——resume 后计划模式可恢复（内存态否则随进程消失）。
-    // 所有状态迁移(enter/exit/setActivePlan)都经本方法,单点持久化。
+    // ??? session meta??resume ?????????????????????
+    // ??????(enter/exit/setActivePlan)?????,??????
     try {
       this.persist?.updateMetadata({
         planModeState: this.planModeState,
@@ -1319,24 +1320,24 @@ export class AgentLoop {
   }
 
   /**
-   * source 分流（2026-07-25 advisory-ecology-repair W1）：
-   * 只有用户路径（/effort 斜杠命令、CLI、桌面端设置）才动 userReasoningOverride；
-   * 程序化路径（perception strategy effort、autoReasoning 档位调整）只透传
-   * reasoningEffort.set()。此前程序化调用每轮把 override 置真，
-   * 自会话第 2 轮起永久架空关键词 autoReasoning（用户从未 /effort 却被当作已手动设置）。
+   * source ???2026-07-25 advisory-ecology-repair W1??
+   * ???????/effort ?????CLI????????? userReasoningOverride?
+   * ??????perception strategy effort?autoReasoning ????????
+   * reasoningEffort.set()??????????? override ???
+   * ???? 2 ????????? autoReasoning????? /effort ???????????
    */
   setReasoningEffort(
     effort: import('./auto-reasoning.js').ReasoningEffort | 'auto',
     source: 'user' | 'programmatic' = 'user',
   ): void {
     if (effort === 'auto') {
-      // 用户显式选 auto → autoReasoning 接管后续每轮 effort，清除 override 标志。
+      // ????? auto ? autoReasoning ?????? effort??? override ???
       if (source === 'user') this.userReasoningOverride = false
       return
     }
     if (source === 'user') this.userReasoningOverride = true
-    // 用户已显式选档（/effort max 等）→ 程序化调整（perception strategy、
-    // autoReasoning 档位）不得覆盖，保护显式用户意图。
+    // ????????/effort max ??? ??????perception strategy?
+    // autoReasoning ?????????????????
     if (source === 'programmatic' && this.userReasoningOverride) return
     this.reasoningEffort.set(effort)
   }
@@ -1361,17 +1362,17 @@ export class AgentLoop {
   }
 
   /**
-   * 应用工具门控后的定义集 — 构造期之外（MCP/LSP 注册刷新、逃生口挂载）的唯一过滤入口。
-   * 复用 createAgentConfig 同款 gateToolDefinitions，确保 updateTools 不会把 EXTENDED 工具
-   * 整个还原（历史 bug：MCP/LSP 初始化后 updateTools 拉全量 → 门控被毫秒内覆盖）。
+   * ??????????? ? ??????MCP/LSP ???????????????????
+   * ?? createAgentConfig ?? gateToolDefinitions??? updateTools ??? EXTENDED ??
+   * ??????? bug?MCP/LSP ???? updateTools ??? ? ??????????
    */
   private gatedToolDefinitions(): import('../api/types.js').ToolDefinition[] {
     const all = this.config.toolRegistry.getDefinitions()
     const gating = this.config.toolGating
-    // 描述档位：优先读会话启动期冻结的快照（config.blockPolicy）——长驻进程里
-    // 进程级 memo 会被新会话创建时 invalidate，live 读会让描述从 compact 回弹
-    // 成 full，system 字节中途翻转 → 整段前缀缓存 miss。快照缺省（手工构造
-    // config 的测试路径）才回退 live 解析。
+    // ???????????????????config.blockPolicy????????
+    // ??? memo ???????? invalidate?live ?????? compact ??
+    // ? full?system ?????? ? ?????? miss??????????
+    // config ????????? live ???
     const toolDescriptions = (this.config.blockPolicy
       ?? resolvePromptBlocks(this.config.cwd ?? process.cwd())).toolDescriptions
     if (!gating) return applyDescriptionMode(all, toolDescriptions)
@@ -1390,18 +1391,18 @@ export class AgentLoop {
     this.config.promptEngine.updateTools(this.gatedToolDefinitions())
   }
 
-  /** 当前主控实际可见的工具名（已应用门控 + 运行时挂载）。 */
+  /** ?????????????????? + ??????? */
   getActiveToolNames(): string[] {
     return this.gatedToolDefinitions().map(d => d.name)
   }
 
   /**
-   * 逃生口：把一个 EXTENDED 工具临时挂回主控（在 turn 边界由 slash 命令触发）。
+   * ??????? EXTENDED ?????????? turn ??? slash ??????
    *
-   * 代价：挂载会改变 staticCtx.tools 的 fingerprint，对 exact-prefix 缓存的 provider
-   * （deepseek-native / anthropic-cache-control）造成一次性全前缀缓存失效；'none' provider 无代价。
+   * ???????? staticCtx.tools ? fingerprint?? exact-prefix ??? provider
+   * ?deepseek-native / anthropic-cache-control??????????????'none' provider ????
    *
-   * @returns 结构化结果，供 UI 渲染（status + 缓存影响）
+   * @returns ??????? UI ???status + ?????
    */
   enableTool(name: string): {
     status: 'mounted' | 'already-active' | 'not-extended' | 'unknown' | 'gating-off'
@@ -1412,19 +1413,19 @@ export class AgentLoop {
     const cacheImpact: 'prefix-invalidated' | 'none' =
       strategy === 'none' ? 'none' : 'prefix-invalidated'
 
-    // 门控未开 → 全量本就可见，无需挂载
+    // ???? ? ???????????
     if (!this.config.toolGating || !this.config.toolGating.enabled) {
       return { status: 'gating-off', cacheImpact: 'none', prefixCacheStrategy: strategy }
     }
-    // 工具必须真实注册
+    // ????????
     if (!this.config.toolRegistry.getDefinitions().some(d => d.name === name)) {
       return { status: 'unknown', cacheImpact: 'none', prefixCacheStrategy: strategy }
     }
-    // 仅 EXTENDED 工具需要逃生口；非 EXTENDED（CORE/MCP/LSP）默认已可见
+    // ? EXTENDED ????????? EXTENDED?CORE/MCP/LSP??????
     if (!isExtendedTool(name)) {
       return { status: 'not-extended', cacheImpact: 'none', prefixCacheStrategy: strategy }
     }
-    // 已挂载 → 幂等
+    // ??? ? ??
     if (this.mountedExtras.has(name)) {
       return { status: 'already-active', cacheImpact: 'none', prefixCacheStrategy: strategy }
     }
@@ -1456,7 +1457,7 @@ export class AgentLoop {
     // No-op: mode detection is automatic. Kept for backward compat with slash commands.
   }
 
-  /** @deprecated Always returns 'task' — chat/task binary no longer exists. */
+  /** @deprecated Always returns 'task' ? chat/task binary no longer exists. */
   getPromptMode(): string {
     return 'task'
   }
@@ -1482,7 +1483,7 @@ export class AgentLoop {
 
   /**
    * Completed-turn count for this session. Used to detect a mid-session
-   * star-domain switch (>0 → switching now invalidates the prefix cache and
+   * star-domain switch (>0 ? switching now invalidates the prefix cache and
    * forces a full context rebuild at the next request, ~10x cost).
    */
   getSessionTurnCount(): number {
@@ -1490,7 +1491,7 @@ export class AgentLoop {
   }
 
   /**
-   * PlusMenu — per-session disabled skill names. Filters the skill discovery
+   * PlusMenu ? per-session disabled skill names. Filters the skill discovery
    * block (turn-step-producer) so disabled skills are hidden from the model.
    * Empty set = all skills available (default).
    */
@@ -1597,7 +1598,7 @@ export class AgentLoop {
     }
   }
 
-  /** 中#5: Check for tool_calls that have no matching tool_result. */
+  /** ?#5: Check for tool_calls that have no matching tool_result. */
   private detectPendingTools(): boolean {
     const msgs = this.session.getMessages()
     const pendingIds = new Set<string>()
@@ -1614,7 +1615,7 @@ export class AgentLoop {
     return pendingIds.size > 0
   }
 
-  /** 中#5: Compute session integrity snapshot for recovery trigger. */
+  /** ?#5: Compute session integrity snapshot for recovery trigger. */
   private computeSessionIntegrity() {
     const msgs = this.session.getMessages()
     const toolCallIds = new Set<string>()
@@ -1663,21 +1664,21 @@ export class AgentLoop {
     return this.latestPolicySignals
   }
 
-  /** Enter plan mode — only read-only tools allowed. Clears any stale approved-plan pointer. */
+  /** Enter plan mode ? only read-only tools allowed. Clears any stale approved-plan pointer. */
   enterPlanMode(opts?: { planFilePath?: string }): void {
     // Idempotent re-entry: already planning with a live draft and no explicit
-    // target → keep the current draft. Creating a fresh one would orphan the
+    // target ? keep the current draft. Creating a fresh one would orphan the
     // file the agent is incrementally writing to.
     if (this.planModeState === 'planning' && this.activePlanFilePath && !opts?.planFilePath) {
       return
     }
-    // Mutual exclusion with Ask Mode — enter plan exits ask silently.
+    // Mutual exclusion with Ask Mode ? enter plan exits ask silently.
     if (this.askModeState === 'asking') {
       this.askModeState = 'off'
       try { this.onAskModeChange?.('off') } catch { /* non-fatal */ }
     }
     this.planModeState = 'planning'
-    // P2 plan advisory 去重键随生命周期清空——新的 planning 语境允许新建议。
+    // P2 plan advisory ?????????????? planning ????????
     this.structureFlowPlanAdvisoryKeys.clear()
     // Re-entering cancels any pending exit reminder from a prior exit.
     this.config.promptEngine.setPlanExitReminderPending(false)
@@ -1694,20 +1695,20 @@ export class AgentLoop {
     }
     this.syncPlanModeToConfig()
     this.markSkillInvoked(WRITING_PLANS_SKILL)
-    // 主动 plan mode 链路：带活跃任务契约进入时，注入一次性并行调研 advisory。
-    // 主控自主决定切分（不硬派）——advisory 只给方法与素材（scope 文件分组提示）。
-    // 优先使用 DisciplineEligibility.requiresEngineeringDiscipline，回退到 isActionable。
+    // ?? plan mode ??????????????????????? advisory?
+    // ???????????????advisory ????????scope ????????
+    // ???? DisciplineEligibility.requiresEngineeringDiscipline???? isActionable?
     const isEngineeringTask = this.latestCognitiveSnapshot?.requiresEngineeringDiscipline ?? this.taskContract?.isActionable
     if (isEngineeringTask) {
       const files = this.taskContract?.scope.mentionedFiles ?? []
       const fileHint = files.length > 0
-        ? `契约 scope 内已提到的文件（可按此分组）：${files.slice(0, 12).join(', ')}${files.length > 12 ? ` …（共 ${files.length} 个）` : ''}。`
+        ? `?? scope ???????????????${files.slice(0, 12).join(', ')}${files.length > 12 ? ` ??? ${files.length} ??` : ''}?`
         : ''
       this.advisoryBus.submit({
         key: 'plan-scout-parallel',
         priority: 0.7,
         category: 'delegation',
-        content: `已进入计划模式且有活跃任务契约。多模块任务先并行调研再写计划：用 \`delegate_batch\` 一次并行派 2-4 个只读 \`code_scout\`（按模块/文件域切分，每个 scout 给独立的调研目标），汇总发现后再写计划。${fileHint}单模块小任务可跳过并行直接调研。`,
+        content: `???????????????????????????????? \`delegate_batch\` ????? 2-4 ??? \`code_scout\`????/???????? scout ????????????????????${fileHint}????????????????`,
         ttl: 2,
         expect: { kind: 'tool_appears', tools: ['delegate_batch'], withinTurns: 2 },
         channel: 'system-reminder',
@@ -1716,10 +1717,10 @@ export class AgentLoop {
     try { this.onPlanModeChange?.('planning') } catch { /* non-fatal */ }
   }
 
-  /** Exit plan mode — user approved, all tools allowed */
+  /** Exit plan mode ? user approved, all tools allowed */
   exitPlanMode(): void {
     this.planModeState = 'off'
-    // P2 plan advisory 去重键随生命周期清空。
+    // P2 plan advisory ???????????
     this.structureFlowPlanAdvisoryKeys.clear()
     this.config.promptEngine.setPlanExitReminderPending(true)
     this.releasePlanModeArtifacts()
@@ -1730,7 +1731,7 @@ export class AgentLoop {
   /**
    * Shared plan-mode teardown: drop the draft pointer (removing the draft file
    * when it is still empty, so toggling in and out doesn't litter .rivet/plans/)
-   * and release the writing-plans skill pin — leaving it invoked would re-inject
+   * and release the writing-plans skill pin ? leaving it invoked would re-inject
    * the full planning skill into every post-approval execution turn.
    */
   private releasePlanModeArtifacts(): void {
@@ -1751,8 +1752,8 @@ export class AgentLoop {
 
   /**
    * Set (or clear) the approved-plan pointer. Injects a tiny slug/title/path
-   * reminder into the dynamic appendix — NOT the plan body (which stays on disk).
-   * Approving releases plan mode (state→off) so execution tools are unblocked.
+   * reminder into the dynamic appendix ? NOT the plan body (which stays on disk).
+   * Approving releases plan mode (state?off) so execution tools are unblocked.
    * Cache-safe: the pointer never enters the frozen base.
    */
   setActivePlan(plan: { slug: string; title: string; selectedApproach?: string } | null): void {
@@ -1761,9 +1762,9 @@ export class AgentLoop {
       return
     }
     this.config.promptEngine.setActivePlan(formatActivePlanPointer(plan))
-    // 层3 重构回归契约：计划带「回归清单」章节时灌入 task contract，
-    // deliver_task 交付前对清单逐项 grep 核验（事故链缺口 3）。best-effort。
-    // 层4 计划约束（D8 L2）：反目标/待验证假设随计划批准灌入契约，派发时兜底注入。
+    // ?3 ????????????????????? task contract?
+    // deliver_task ???????? grep ???????? 3??best-effort?
+    // ?4 ?????D8 L2?????/???????????????????????
     try {
       const planContent = readFileSync(join(this.cwd, '.rivet', 'plans', `${plan.slug}.md`), 'utf-8')
       const inventory = extractRegressionInventory(planContent)
@@ -1774,7 +1775,7 @@ export class AgentLoop {
       if (planConstraints.length > 0 && this.taskContract) {
         this.taskContract = { ...this.taskContract, planConstraints }
       }
-    } catch { /* best-effort: 清单/约束灌入失败不影响计划批准 */ }
+    } catch { /* best-effort: ??/????????????? */ }
     const wasPlanning = this.planModeState === 'planning'
     this.planModeState = 'off'
     if (wasPlanning) this.config.promptEngine.setPlanExitReminderPending(true)
@@ -1786,10 +1787,10 @@ export class AgentLoop {
   /** Get current plan mode state */
   getPlanModeState(): PlanModeState { return this.planModeState }
 
-  /** Enter Ask Mode — pure read-only Q&A. Mutually exclusive with Plan Mode. */
+  /** Enter Ask Mode ? pure read-only Q&A. Mutually exclusive with Plan Mode. */
   enterAskMode(): void {
     if (this.askModeState === 'asking') return
-    // Mutual exclusion with Plan Mode — enter ask exits plan (with exit reminder).
+    // Mutual exclusion with Plan Mode ? enter ask exits plan (with exit reminder).
     if (this.planModeState === 'planning') {
       this.planModeState = 'off'
       this.config.promptEngine.setPlanExitReminderPending(true)
@@ -1801,7 +1802,7 @@ export class AgentLoop {
     try { this.onAskModeChange?.('asking') } catch { /* non-fatal */ }
   }
 
-  /** Exit Ask Mode — restore normal tool access. */
+  /** Exit Ask Mode ? restore normal tool access. */
   exitAskMode(): void {
     if (this.askModeState === 'off') return
     this.askModeState = 'off'
@@ -1851,13 +1852,13 @@ export class AgentLoop {
   }
 
   /** Real context-window occupancy (anchor on last API prompt_tokens + tail
-   *  estimate) — for display only. See SessionContext.getRealOccupancy. */
+   *  estimate) ? for display only. See SessionContext.getRealOccupancy. */
   getRealOccupancy(): number {
     return this.session.getRealOccupancy()
   }
 
   /** Observe-only recall stats for compacted-history artifacts (for /context).
-   *  Cheap delegate — avoids the heavier getDebugInfo() build. */
+   *  Cheap delegate ? avoids the heavier getDebugInfo() build. */
   getRecallSummary(): RecallMetricsSummary {
     return this.cacheAdvisor.getRecallSummary()
   }
@@ -1873,8 +1874,8 @@ export class AgentLoop {
 
   getTaskContract(): TaskContract | undefined { return this.taskContract }
 
-  /** W5（incident 20b9714e）：session_vitals 工具的数据源。全部为运行时
-   *  内存态实测，零磁盘 IO；拿不到的维度返回 null，工具层显式标注"无数据"。 */
+  /** W5?incident 20b9714e??session_vitals ?????????????
+   *  ????????? IO????????? null????????"???"? */
   getSessionVitals(): import('../tools/session-vitals.js').SessionVitalsData {
     const estimatedTokens = this.session.getEstimatedTokens()
     const contextWindow = this.config.contextWindow
@@ -1890,6 +1891,30 @@ export class AgentLoop {
       .sort((a, b) => b.delivered - a.delivered)
       .slice(0, 5)
     const s = this.sensorium
+    let runtime: import('./runtime-self-model.js').RuntimeSelfModel | null = null
+    try {
+      const coordinator = this.config.coordinatorRef?.()
+      if (coordinator) {
+        const verification = this.evidence.getVerificationSummary()
+        runtime = buildRuntimeSelfModel({
+          phase: this.planModeState,
+          turn: this.session.getTurnCount(),
+          contextRatio: contextWindow > 0 ? estimatedTokens / contextWindow : 1,
+          sensorium: s ? {
+            pressure: s.pressure,
+            confidence: s.confidence,
+            stability: s.stability,
+          } : null,
+          verificationDebt: verification.total > 0
+            ? verification.pending / verification.total
+            : (this.evidence.hasVerificationDebt() ? 1 : 0),
+          coordinator: coordinator.getRuntimeSnapshot(),
+        })
+      }
+    } catch {
+      // session_vitals is diagnostic; a missing coordinator must never break it.
+      runtime = null
+    }
     return {
       ctx: {
         estimatedTokens,
@@ -1913,11 +1938,12 @@ export class AgentLoop {
         ignored: this.guardianActivity.advisoriesIgnored,
         top,
       },
+      runtime,
       turn: this.session.getTurnCount(),
     }
   }
 
-  /** 获取持久化的任务列表（从 Assistant 回复中提取），用于 TUI 固定显示和多轮回溯 */
+  /** ???????????? Assistant ????????? TUI ????????? */
   getTaskList() { return this.sessionStateManager?.getTaskList() ?? [] }
 
   addAnchor(kind: ContextAnchor['kind'], text: string): void {
@@ -1934,8 +1960,8 @@ export class AgentLoop {
     createSidePathUsageRecorder(this)(kind, usage, model)
   }
 
-  /** 本会话 frozen 前缀的分块归因（`/prefix-budget`）。档位来自会话启动时
-   *  解析的策略——中途改配置不会反映在这里，正如它也不会反映在前缀里。 */
+  /** ??? frozen ????????`/prefix-budget`???????????
+   *  ????????????????????????????????? */
   getPrefixBudget(): { profile: string; toolDescriptions: string; report: import('../prompt/prefix-budget.js').PrefixBudgetReport } {
     const policy = this.config.blockPolicy ?? resolvePromptBlocks(this.config.cwd ?? process.cwd())
     return {
@@ -1957,7 +1983,7 @@ export class AgentLoop {
       cacheAdvisor: this.cacheAdvisor.getDiagnostic() }
   }
 
-  /** Drain pending async persist writes — public for /cd pre-migration
+  /** Drain pending async persist writes ? public for /cd pre-migration
    *  (moving session files while a queued append is in flight would recreate
    *  a dangling jsonl at the old path). */
   async drainPersistWrites(): Promise<void> {
@@ -1980,8 +2006,8 @@ export class AgentLoop {
     } catch { /* non-critical */ }
     try {
       const db = this.config.meridianIndexer?.getDb()
-      // notebook 默认停用（见 p3-integration.ts）——停用时不落盘，也不清空旧表
-      //（清空交给 memory-epoch reset，保持"停用≠销毁"语义以便复活）。
+      // notebook ?????? p3-integration.ts????????????????
+      //????? memory-epoch reset???"?????"????????
       if (db && this.p3.notebook) db.saveMistakeEntries(this.p3.notebook.getAllEntries())
     } catch { /* non-critical */ }
     try {
@@ -1998,8 +2024,8 @@ export class AgentLoop {
       }
     } catch { /* non-critical */ }
     try {
-      // 会话内 /handoff（或人工编辑）已产出更新的交接文档时，结构化摘要不覆盖——
-      // 自动 handoff 只是「会话内没做手动交接」的兜底（shouldAutoWriteHandoff）。
+      // ??? /handoff?????????????????????????????
+      // ?? handoff ?????????????????shouldAutoWriteHandoff??
       const sp = this.persist
       const handoffMtime = sp && existsSync(sp.getHandoffPath()) ? statSync(sp.getHandoffPath()).mtimeMs : null
       if (sp && shouldAutoWriteHandoff(handoffMtime, this.createdAtMs)) {
@@ -2017,16 +2043,16 @@ export class AgentLoop {
     try {
       this.telemetryWriter.write({ kind: 'recall-summary', ...this.cacheAdvisor.getRecallSummary() })
     } catch { /* telemetry is best-effort */ }
-    // Speculation source stats → session meta. Written unconditionally of the
+    // Speculation source stats ? session meta. Written unconditionally of the
     // RIVET_DEBUG_TELEMETRY gate so the "should llmSpeculation default on"
     // decision has cross-session hit-rate evidence. Only written when at least
-    // one source saw activity — idle sessions don't grow their meta files.
+    // one source saw activity ? idle sessions don't grow their meta files.
     try {
       const stats = this.p3.queue.statsBySource()
       const hasActivity = Object.values(stats).some(s => s.enqueued > 0 || s.hits > 0)
       if (hasActivity) this.persist?.updateMetadata({ speculationStats: stats })
-    } catch { /* meta 摘要是观测辅助 — 永不阻断 */ }
-    // LLM speculation engine call counters → meta. speculationStats.llm only
+    } catch { /* meta ??????? ? ???? */ }
+    // LLM speculation engine call counters ? meta. speculationStats.llm only
     // counts shadow-queue enqueued/hits; without fired/errors there is no
     // on-disk evidence of how many speculative API calls actually happened
     // (2026-07-06 cost blind spot fix).
@@ -2035,30 +2061,30 @@ export class AgentLoop {
       if (engineStats && engineStats.fired > 0) {
         this.persist?.updateMetadata({ llmSpeculationEngine: engineStats })
       }
-    } catch { /* meta 摘要是观测辅助 — 永不阻断 */ }
-    // Obligation final gate 遥测（Wave 3 心流保护）：auto-continue 触发率与
-    // 误触发率的原始计数。误触发率 >20% 时优先怀疑 task kind 分类而非调低
-    // 风险阈值（计划纪律）。有活动才写，闲置会话不长 meta。
+    } catch { /* meta ??????? ? ???? */ }
+    // Obligation final gate ???Wave 3 ??????auto-continue ????
+    // ?????????????? >20% ????? task kind ??????
+    // ??????????????????????? meta?
     try {
       const og = this.obligationGateStats
       if (og.continued > 0 || og.misfires > 0 || og.honestBlocked > 0 || og.suppressed > 0) {
         this.persist?.updateMetadata({ obligationGate: og })
       }
-    } catch { /* meta 摘要是观测辅助 — 永不阻断 */ }
-    // todo 退回计数 → meta。detectRegressions 是本仓唯一的结果侧探测器（模型是否
-    // 守得住自己的任务状态），此前触发只进一条工具结果就丢了，退回率无从跨会话取。
-    // 与上面几项同规格：绕过 debug 门，有写入才写，闲置会话不长 meta。
+    } catch { /* meta ??????? ? ???? */ }
+    // todo ???? ? meta?detectRegressions ?????????????????
+    // ??????????????????????????????????????
+    // ??????????? debug ?????????????? meta?
     try {
       const todoStats = (this.config.getTodoRegressionStats ?? getTodoRegressionStats)()
       if (todoStats.writes > 0) {
-        // 实验臂随计数一起落盘。没有它这些计数无法分组——两个臂的会话混在一起，
-        // 退回率就只是个总体数字，回答不了「decisions 通道有没有用」。
+        // ???????????????????????????????????
+        // ?????????????????decisions ????????
         this.persist?.updateMetadata({
           todoRegressions: todoStats,
           decisionsArm: resolveDecisionsArm(this.config.sessionId),
         })
       }
-    } catch { /* meta 摘要是观测辅助 — 永不阻断 */ }
+    } catch { /* meta ??????? ? ???? */ }
   }
 
   async startFsWatcher(): Promise<void> {
@@ -2086,7 +2112,7 @@ export class AgentLoop {
     // cancelIdleCompaction drain) so a duplicate run() that arrives during the
     // drain sees _running=true and no-ops instead of racing _runInner.
     if (this._running) {
-      debugLog('[agent] run() called while already running — skipping duplicate')
+      debugLog('[agent] run() called while already running ? skipping duplicate')
       return
     }
     this._running = true
@@ -2099,7 +2125,7 @@ export class AgentLoop {
     this._pendingAbort = false
     this._watchdogAborted = false
     this.abortController = new AbortController()
-    // W3：每轮用户输入开始时重置 system-reminder 计数器（每轮最多 1 条）。
+    // W3???????????? system-reminder ???????? 1 ???
     this.session.resetSrCount()
     // Cancel + drain any pending/in-flight idle compaction before mutating the
     // session, so the user turn never races idle history rewrites. Awaiting the
@@ -2109,49 +2135,49 @@ export class AgentLoop {
     try {
       await this.cancelIdleCompaction()
 
-      // 视觉副驾：先把本轮图片寄存进 registry（无论主控是否多模态），供 ask_image
-      // 反复追问。id 顺序与 images 顺序一致。纯内存、不进 prompt/落盘。
+      // ?????????????? registry????????????? ask_image
+      // ?????id ??? images ??????????? prompt/???
       const registeredIds = images && images.length > 0 ? this.imageRegistry.register(images) : []
 
       // Vision bridge: when the primary model is text-only but a dedicated
       // multimodal model is configured, describe the images and prepend the
       // description to the user prompt so the primary model still receives
-      // the visual information. 多模态主控则跳过桥接——images 照常进 oaiMessages 原生识图，
-      // 同时已寄存进 registry 供 ask_image 复用（v4 变多模态后自动走这条路）。
+      // the visual information. ????????????images ??? oaiMessages ?????
+      // ?????? registry ? ask_image ???v4 ?????????????
       if (images && images.length > 0 && !this.config.supportsVision && this.config.visionClient) {
-        // 桥接失败不得炸整轮：视觉模型超时/报错/返回空，都降级为一条可见提示，
-        // 让主控知道"有图但没读到"而非静默吞图或整轮 failed。原因落 debugLog。
-        // 缓存键必须按**原始** userInput 归类（与 describeImages 内部的模式判定同源）——
-        // userInput 下面会被 prepend 改写，故先算好键再改写。
+        // ????????????????/??/???????????????
+        // ?????"??????"????????? failed???? debugLog?
+        // ??????**??** userInput ???? describeImages ????????????
+        // userInput ???? prepend ????????????
         const firstDescKey = visionCacheKey(undefined, this.config.visionModelPrompt, userInput)
         try {
           const description = await describeImages(this.config.visionClient, images, {
             prompt: this.config.visionModelPrompt,
-            // 随图文本用于自动切通用/精确转写模式（用户没显式配 prompt 时）：
-            // "这个报错怎么回事[图]" → 精确 OCR 转写，避免泛泛描述丢掉报错行。
+            // ???????????/????????????? prompt ???
+            // "????????[?]" ? ?? OCR ???????????????
             accompanyingText: userInput,
             maxTokens: this.config.visionModelMaxTokens,
             signal: this.abortController.signal,
           })
           if (description) {
-            userInput = `[图片描述]\n${description}\n\n${userInput}`
-            // 首描述写入首图缓存，供 ask_image 同角度追问命中零调用。
+            userInput = `[????]\n${description}\n\n${userInput}`
+            // ??????????? ask_image ???????????
             const firstId = registeredIds[0]
             if (firstId) {
               this.imageRegistry.cacheDescription(firstId, firstDescKey, description)
             }
           } else {
-            userInput = `[图片桥接提示] 用户发送了 ${images.length} 张图片，但识图模型返回空描述——`
-              + `请告知用户重发或检查识图模型配置。\n\n${userInput}`
+            userInput = `[??????] ????? ${images.length} ????????????????`
+              + `?????????????????\n\n${userInput}`
             debugLog('[vision] bridge returned empty description')
           }
         } catch (err) {
           const reason = (err as Error)?.message ?? String(err)
-          userInput = `[图片桥接失败] 用户发送了 ${images.length} 张图片，但识图桥接出错（${reason}）——`
-            + `请告知用户识图暂不可用，可检查 agent.visionModel 配置或稍后重试。\n\n${userInput}`
+          userInput = `[??????] ????? ${images.length} ????????????${reason}???`
+            + `??????????????? agent.visionModel ????????\n\n${userInput}`
           debugLog(`[vision] bridge error: ${reason}`)
         }
-        // text-only 主控：图已转描述，从 prompt parts 去掉（原图仍在 registry 供二次看）。
+        // text-only ?????????? prompt parts ??????? registry ??????
         images = undefined
       }
 
@@ -2192,13 +2218,13 @@ export class AgentLoop {
   }
 
   /**
-   * 闲时压缩生效门槛 = provider 策略的 compact 档（cache-preserving 0.86 /
-   * balanced 0.78 / aggressive 0.70），可用 RIVET_IDLE_COMPACTION_RATIO 覆盖。
+   * ???????? = provider ??? compact ??cache-preserving 0.86 /
+   * balanced 0.78 / aggressive 0.70???? RIVET_IDLE_COMPACTION_RATIO ???
    *
-   * 语义：闲时**只做下一轮用户边界铁定要做的重压缩**（纯时间挪移，零额外信息
-   * 损失）。旧门槛 0.5 对齐的是陈旧轮截断地板——用户离开一小会旧轮工具输出就
-   * 被提前截断且不可逆（「闲时压缩吃掉上下文」投诉的根因）；50–compact 档区间
-   * 的渐进降压留给用户边界在正常门控（缓存健康延迟等）下决定。
+   * ?????**?????????????????**????????????
+   * ??????? 0.5 ???????????????????????????
+   * ????????????????????????????50?compact ???
+   * ?????????????????????????????
    */
   private idleCompactionMinRatio(): number {
     const override = Number(process.env['RIVET_IDLE_COMPACTION_RATIO'])
@@ -2208,13 +2234,13 @@ export class AgentLoop {
 
   /**
    * Run a single turn-0-equivalent compaction pass while idle. Reuses the full
-   * boundary ladder (session split → maybeCompact → T9 → stale → heap, plus
-   * pending-flag drain) at turn=0 semantics — prefix-cache safe, identical to
+   * boundary ladder (session split ? maybeCompact ? T9 ? stale ? heap, plus
+   * pending-flag drain) at turn=0 semantics ? prefix-cache safe, identical to
    * what the next user turn would run, just paid during idle time.
    *
-   * 触发语义 = 「重压缩时间挪移 + 递延债清算」：ratio 达到 compact 档（下一轮
-   * 反正要做重压缩）才主动跑；mid-turn 递延的 pendingStale/pendingHeap 债不论
-   * ratio 都清算。不在闲时做 50% 档的主动陈旧轮截断。
+   * ???? = ???????? + ???????ratio ?? compact ?????
+   * ?????????????mid-turn ??? pendingStale/pendingHeap ???
+   * ratio ????????? 50% ??????????
    */
   async runIdleCompaction(): Promise<void> {
     if (this._running || this._idleCompacting) return
@@ -2270,21 +2296,21 @@ export class AgentLoop {
    * T2-02 Track A2: Apply bandit delta to a base reasoning effort.
    *
    * Wired into the live effort selection path. Protected by three gates:
-   *   1. effortBanditEnabled flag (default false) — checked in getEffortDelta()
-   *   2. Consistency-promotion gate (totalPulls ≥ 30, agreement ≥ 0.8)
+   *   1. effortBanditEnabled flag (default false) ? checked in getEffortDelta()
+   *   2. Consistency-promotion gate (totalPulls ? 30, agreement ? 0.8)
    *   3. reasoningFloor still enforced (resolveEffortDelta clamp)
    *
-   * When any gate is closed, returns baseEffort unchanged — zero behavior delta.
+   * When any gate is closed, returns baseEffort unchanged ? zero behavior delta.
    */
   applyEffortDelta(baseEffort: string): string {
     return this.reasoningEffort.applyDelta(baseEffort)
   }
 
   /**
-   * P3 认知帧：turn 边界的**单一装配点**——loop 控制路径上唯一直读
-   * sensorium / latestPolicySignals / PAL / evidence 做控制用途的位置。
-   * 全部事实先进 frame（含质量语义），控制器输入由 frame 投影导出。
-   * frame 恒产出（EFE 缺失时 quality.efe='missing'）；纯组装，无 IO。
+   * P3 ????turn ???**?????**??loop ?????????
+   * sensorium / latestPolicySignals / PAL / evidence ?????????
+   * ?????? frame?????????????? frame ?????
+   * frame ????EFE ??? quality.efe='missing'??????? IO?
    */
   private assembleBoundaryFrame(
     turn: number,
@@ -2292,9 +2318,9 @@ export class AgentLoop {
     todoCompletedDelta: number,
     userMessageConsumed: boolean,
   ): CognitiveFrame {
-    // flow 信号复用 P1 的 computeFlowBeacon。窗口取整个保留历史（容量 5，
-    // ≤ 各 tier signalWindow），与 detector 内部 slice(-signalWindow) 对
-    // 5 条历史的结果一致——不引入第二个窗口语义。
+    // flow ???? P1 ? computeFlowBeacon????????????? 5?
+    // ? ? tier signalWindow??? detector ?? slice(-signalWindow) ?
+    // 5 ?????????????????????
     const momentumHasData = this.sensorium
       ? (this.sensorium.quality?.momentum ?? 'measured') !== 'no-data'
       : false
@@ -2309,8 +2335,8 @@ export class AgentLoop {
       })
       : null
 
-    // 连续失败：工具历史尾部连续 failed（running 在途样本跳过不断链，
-    // 与 P1 flow beacon 的 settled-only 口径一致）。
+    // ????????????? failed?running ??????????
+    // ? P1 flow beacon ? settled-only ??????
     let consecutiveFailures = 0
     for (let i = this.recentToolHistory.length - 1; i >= 0; i--) {
       const status = this.recentToolHistory[i]!.status
@@ -2318,10 +2344,10 @@ export class AgentLoop {
       else if (status === 'success') break
     }
 
-    // 验证债务判据统一走 EvidenceTracker.hasVerificationDebt()（W3 单一口径，
-    // self-verify 债龄计数共用），语义不变：验证失败过或未验证编辑 ≥3。
-    // 不用「存在任何未验证编辑」——正常的编辑→验证节奏会瞬时经过该状态，
-    // 拿它 hardTighten 等于取消 P1 对健康构建流的保护。
+    // ????????? EvidenceTracker.hasVerificationDebt()?W3 ?????
+    // self-verify ???????????????????????? ?3?
+    // ??????????????????????????????????
+    // ?? hardTighten ???? P1 ??????????
     const gateState = this.evidence.getGateState()
     const hasVerificationDebt = this.evidence.hasVerificationDebt()
 
@@ -2344,9 +2370,9 @@ export class AgentLoop {
         consecutiveFailures,
       },
       user: { intervened: userMessageConsumed },
-      // 控制器语义的「活跃计划上下文」在投影层展开为 activePlanFile ||
-      // planning（projectStructureFlowInputs）；detector 的
-      // progressBeacons.activePlan 保持只看批准计划文件，两个语义不混用。
+      // ?????????????????????? activePlanFile ||
+      // planning?projectStructureFlowInputs??detector ?
+      // progressBeacons.activePlan ???????????????????
       plan: { activePlanFile: this.activePlanFilePath !== null, planModeState: this.planModeState },
       progress: { todoCompletedDelta },
     })
@@ -2361,47 +2387,47 @@ export class AgentLoop {
   ): Promise<{
     action: 'proceed' | 'abort'
   }> {
-    // Fix 3 — the user just intervened this turn, so any pre-intervention
+    // Fix 3 ? the user just intervened this turn, so any pre-intervention
     // "hesitation" (no-tool) streak is broken: zero it before evaluation so a
     // stale streak can't drive a spurious stagnation/abort right after the user
     // speaks. (Turn-start and tool-use paths reset this elsewhere; this covers
     // mid-run steer injection.)
     if (userMessageConsumed) {
       this.consecutiveNoToolTurns = 0
-      // 缺口 C 意图锚点:steer 注入 = 用户刚重申过意图,stale 计时重置
+      // ?? C ????:steer ?? = ????????,stale ????
       this.lastUserInputRunTurn = turn
-      // P2 plan advisory：用户刚说话 = 新语境，允许重新建议（去重键清空）。
+      // P2 plan advisory?????? = ??????????????????
       this.structureFlowPlanAdvisoryKeys.clear()
     }
 
-    // W1 — 阶段相对轮数：phase 切换即重置基线，文案与判定引用的是"本阶段"
-    // 的轮数而非会话全局计数。
+    // W1 ? ???????phase ?????????????????"???"
+    // ????????????
     if (phaseClass !== this.lastConvergencePhaseClass) {
       this.lastConvergencePhaseClass = phaseClass
       this.phaseStartTurn = turn
     }
     const phaseRelativeTurn = Math.max(1, turn - this.phaseStartTurn + 1)
 
-    // W1 — 进度信标：todo 完成数在近窗口内的增量。todo 推进是最硬的
-    // "未停滞"证据，交给 detector 做 L2+ 否决。
+    // W1 ? ?????todo ????????????todo ??????
+    // "???"????? detector ? L2+ ???
     let todoCompletedNow = 0
     try {
       todoCompletedNow = (this.config.getTodos ?? getTodos)().filter(t => t.status === 'completed').length
-    } catch { /* beacon is advisory-only — never break the convergence check */ }
+    } catch { /* beacon is advisory-only ? never break the convergence check */ }
     this.todoCompletedSamples.push(todoCompletedNow)
     if (this.todoCompletedSamples.length > 10) this.todoCompletedSamples.shift()
     const todoCompletedDelta = todoCompletedNow - (this.todoCompletedSamples[0] ?? todoCompletedNow)
 
-    // W3 — 诊断态识别：只读为主 + 零改动的排查会话，收敛文案分流为
-    // "先核实断言再收束"（催"输出结论"是 20b9714e 三次脑补的直接诱因）。
+    // W3 ? ?????????? + ????????????????
+    // "????????"??"????"? 20b9714e ???????????
     const activityMode = classifyActivityMode(
       this.recentToolHistory,
       this.evidence.getState().filesModified.size,
     )
 
-    // B1c/M4：turn 边界结算上一轮产出 → 维护连续产出计数;达 N 轮且有未清
-    // 警告时清台账（镜像下方 userMessageConsumed 清账路径）。清账后若再触发
-    // L3,走"先警告一轮再熔断"的 grace-turn,而不是拿陈旧警告直接 abort。
+    // B1c/M4?turn ????????? ? ????????;? N ?????
+    // ??????????? userMessageConsumed ?????????????
+    // L3,?"????????"? grace-turn,?????????? abort?
     this.productiveTurnStreak = this.turnHadProductiveTool ? this.productiveTurnStreak + 1 : 0
     this.turnHadProductiveTool = false
     if (this.lastConvergenceEmitLevel >= 2 && this.productiveTurnStreak >= this.convergenceWarningClearProductiveTurns) {
@@ -2420,11 +2446,11 @@ export class AgentLoop {
     const warnedInEarlierTurn = this.lastConvergenceEmitLevel >= 2
       && this.lastConvergenceEmitTurn < turn
 
-    // P3 认知帧：先装配 turn 边界事实帧（单一装配点），再投影出 P2 控制器
-    // 输入。EFE 质量非 measured → 投影 null → latestStructureFlow=null，
-    // 与 P2「EFE 缺失 → 旧行为」路径逐字节一致。
-    // P2 阴阳调度：互斥仲裁——快照合格（非 missing-data）时只传
-    // structureRelaxation、不传 flowInputs（同一 flow 信号绝不计两次）。
+    // P3 ??????? turn ????????????????? P2 ???
+    // ???EFE ??? measured ? ?? null ? latestStructureFlow=null?
+    // ? P2?EFE ?? ? ????????????
+    // P2 ????????????????? missing-data????
+    // structureRelaxation??? flowInputs??? flow ?????????
     this.latestCognitiveFrame = this.assembleBoundaryFrame(turn, phaseClass, todoCompletedDelta, userMessageConsumed)
     const structureFlowInputs = projectStructureFlowInputs(this.latestCognitiveFrame)
     this.latestStructureFlow = structureFlowInputs
@@ -2435,9 +2461,9 @@ export class AgentLoop {
       ? this.latestStructureFlow.relaxation
       : null
 
-    // W4 噪音洪流修复：计算最近工具调用中 status='failed' 的占比。
-    // 高错误率时收敛检测器降级——agent 在绕工具 bug 不是 doom-loop。
-    // transient 失败（pointer-guard 等格式瞬错）被排除：模型下轮即可修正。
+    // W4 ???????????????? status='failed' ????
+    // ??????????????agent ???? bug ?? doom-loop?
+    // transient ???pointer-guard ???????????????????
     const toolErrorWindow = this.recentToolHistory.slice(-10)
     const recentToolErrorRatio = toolErrorWindow.length > 0
       ? toolErrorWindow.filter(h => h.status === 'failed' && !h.transient).length / toolErrorWindow.length
@@ -2445,7 +2471,7 @@ export class AgentLoop {
 
     // Sanitize history for convergence detector: transient guard failures
     // (pointer-guard rejections, etc.) are format-level mistakes the model fixes
-    // next turn — not competence failures. Reclassify them as 'success' so they
+    // next turn ? not competence failures. Reclassify them as 'success' so they
     // don't drag down computeErrorPenalty and trigger false stagnation signals.
     const sanitizedHistory = this.recentToolHistory.map(h =>
       h.status === 'failed' && h.transient ? { ...h, status: 'success' as const } : h)
@@ -2468,11 +2494,11 @@ export class AgentLoop {
       progressBeacons: {
         todoCompletedDelta,
         activePlan: this.activePlanFilePath !== null,
-        // P2 快照合格 → 单声源接管软阈值；否则 P1 心流保护：Sensorium 原始
-        // 快照三字段透传——工具成功率与推进因子由 detector 内部按
-        // tier.signalWindow 计算（窗口与其它信号一致）。Sensorium 缺失 →
-        // 不传 → 不进入保护态，旧行为不变。P3 起从认知帧投影取数（单一
-        // 装配点），字段与旧直读逐位一致。
+        // P2 ???? ? ??????????? P1 ?????Sensorium ??
+        // ???????????????????? detector ???
+        // tier.signalWindow ??????????????Sensorium ?? ?
+        // ?? ? ?????????????P3 ????????????
+        // ????????????????
         ...(structureRelaxation !== null ? { structureRelaxation } : (this.latestCognitiveFrame?.facts.sensorium ? {
           flowInputs: { ...this.latestCognitiveFrame.facts.sensorium },
         } : {})),
@@ -2481,23 +2507,23 @@ export class AgentLoop {
       recentToolErrorRatio,
     })
     this.latestConvergenceResult = convergenceCheck
-    // P3 Wave 3 / P3-D：认知帧回放遥测。full 记录（facts 全量，可回放重算）
-    // 默认落会话目录 frames.jsonl（独立通道，RIVET_FRAME_TELEMETRY=0 可关）；
-    // lite 摘要（<200B）继续走 sensorium.jsonl。recorder 关闭时连记录构建
-    // 也跳过。写失败绝不阻断 loop。
+    // P3 Wave 3 / P3-D?????????full ???facts ?????????
+    // ??????? frames.jsonl??????RIVET_FRAME_TELEMETRY=0 ????
+    // lite ???<200B???? sensorium.jsonl?recorder ????????
+    // ??????????? loop?
     try {
       if (this.frameRecorder.enabled) {
         this.frameRecorder.write(buildCognitiveFrameRecord(this.latestCognitiveFrame, this.latestStructureFlow, convergenceCheck))
       }
       this.telemetryWriter.write(buildCognitiveFrameLiteRecord(this.latestCognitiveFrame, this.latestStructureFlow, convergenceCheck))
     } catch { /* telemetry is diagnostics-only */ }
-    // Maintain rolling score history for L3 decline-trend detection (sliding window ≤ 20)
+    // Maintain rolling score history for L3 decline-trend detection (sliding window ? 20)
     this.convergenceScoreHistory.push(convergenceCheck.score)
     if (this.convergenceScoreHistory.length > 20) this.convergenceScoreHistory.shift()
     debugLog(`[convergence] turn=${turn} score=${convergenceCheck.score.toFixed(2)} level=${convergenceCheck.level} phase=${phaseClass}`)
 
     if (convergenceCheck.shouldKick && convergenceCheck.injectedMessage) {
-      // Fix 3 — user-interaction reset. When the user just spoke/intervened this
+      // Fix 3 ? user-interaction reset. When the user just spoke/intervened this
       // turn, the agent has already handed control back (the "right" convergence
       // outcome). Reset the cooldown and skip emitting a nudge this turn so we
       // don't nag right after the user starts acting. (An agent that ends a turn
@@ -2509,28 +2535,28 @@ export class AgentLoop {
         this.lastConvergenceMsgKey = ''
         this.lastConvergenceEmitVerifyFailStreak = 0
       } else {
-        // Fix 1 — cooldown + dedup gate on the visible side-effects. The message
+        // Fix 1 ? cooldown + dedup gate on the visible side-effects. The message
         // type is keyed by its header line, so same-type nudges with only changed
         // diagnostic numbers do not count as a new "direction". Skip the
-        // "（第 N 次同类提醒…）" progressive prefix: it varies per emission and
+        // "?? N ???????" progressive prefix: it varies per emission and
         // must not make a repeat look like a direction change (that would reset
-        // the cooldown and re-emit every turn — the exact spam this gate exists
+        // the cooldown and re-emit every turn ? the exact spam this gate exists
         // to stop).
         const msgKey = convergenceCheck.injectedMessage.split('\n')
-          .find(l => l.length > 0 && !l.startsWith('（第')) ?? ''
+          .find(l => l.length > 0 && !l.startsWith('??')) ?? ''
         const cooldownElapsed = turn - this.lastConvergenceEmitTurn >= this.convergenceEmitCooldownTurns
         const scoreDropped = this.lastConvergenceEmitScore - convergenceCheck.score > 0.15
         const cooledDown = cooldownElapsed || scoreDropped
         const escalated = convergenceCheck.level > this.lastConvergenceEmitLevel
         const changedDirection = msgKey !== this.lastConvergenceMsgKey
-        // 第四突破条件（2026-07-04 触发面修复）：验证失败流水加深 = 排查轮次
-        // 正在膨胀，是最尖锐的"需要改道"信号——不等冷却到期，提前发射。
-        // 与 CCR P7 同信号源（computeVerifyFailStreak），语义失败才计入。
+        // ???????2026-07-04 ??????????????? = ????
+        // ??????????"????"????????????????
+        // ? CCR P7 ?????computeVerifyFailStreak??????????
         const verifyFailStreak = computeVerifyFailStreak(this.recentToolHistory)
         const verifyFailEscalated = verifyFailStreak >= 2 && verifyFailStreak > this.lastConvergenceEmitVerifyFailStreak
         if (cooledDown || escalated || changedDirection || verifyFailEscalated) {
           // Backoff: if the same message variant fires again, double the cooldown
-          // (3→6→12→24…). Reset to base when direction changes or level escalates.
+          // (3?6?12?24?). Reset to base when direction changes or level escalates.
           if (changedDirection || escalated) {
             this.convergenceEmitRepeatCount = 0
             this.convergenceEmitCooldownTurns = this.convergenceEmitBaseCooldownTurns
@@ -2543,33 +2569,33 @@ export class AgentLoop {
           this.lastConvergenceMsgKey = msgKey
           this.lastConvergenceEmitVerifyFailStreak = verifyFailStreak
           this.lastConvergenceEmitScore = convergenceCheck.score
-          // B1c：新警告要求 N 轮全新产出才可清账——发射即重置计数
+          // B1c?????? N ??????????????????
           this.productiveTurnStreak = 0
           this.turnHadProductiveTool = false
 
           // Level 2: inject user guidance as a system-visible nudge
           callbacks.onPhaseChange?.('convergence-warning', {
-            reason: `收敛检测 L${convergenceCheck.level}: ${phaseClass} 阶段近 ${phaseRelativeTurn} 轮进度信号弱 (score=${convergenceCheck.score.toFixed(2)})`,
+            reason: `???? L${convergenceCheck.level}: ${phaseClass} ??? ${phaseRelativeTurn} ?????? (score=${convergenceCheck.score.toFixed(2)})`,
             suggestion: convergenceCheck.injectedMessage.slice(0, 200),
           })
-          // R4 — externalize the convergence nudge as a structured course-correction
-          // so the desktop renders a "改道" card; the injected guidance below is what
-          // the agent acts on next, making the cause→effect visible to the user.
-          // W2 — efficacy 环静默的 key 同步抑制改道卡：advisory 都不再送达了，
-          // 还继续弹卡就是纯 UI 噪音（20b9714e：32 张改道卡）。
+          // R4 ? externalize the convergence nudge as a structured course-correction
+          // so the desktop renders a "??" card; the injected guidance below is what
+          // the agent acts on next, making the cause?effect visible to the user.
+          // W2 ? efficacy ???? key ????????advisory ???????
+          // ???????? UI ???20b9714e?32 ??????
           if (!this.advisoryBus.isEfficacySilenced('convergence')) {
             this.recordDecisionShift('convergence')
             callbacks.onDecisionShift?.({
               source: 'convergence',
-              reason: `${phaseClass} 阶段近 ${phaseRelativeTurn} 轮进度信号弱，已提示换一种推进方式`,
+              reason: `${phaseClass} ??? ${phaseRelativeTurn} ?????????????????`,
               methods: [convergenceCheck.injectedMessage.slice(0, 200)],
               severity: convergenceCheck.level >= 2 ? 'warn' : 'info',
             })
           }
-          // W4 advisory 密度感知（2026-07-28 session 0087edf0）：当会话已渲染
-          // 大量 advisory（平均 >15 条/轮）时，收敛 detection 不再向 advisory
-          // bus 提交——agent 已在噪音中迷失，再投喂 advisory 只会加剧正反馈回路。
-          // 仍保留 onPhaseChange 事件供 TUI 观测，但不再增加 advisory 负荷。
+          // W4 advisory ?????2026-07-28 session 0087edf0????????
+          // ?? advisory??? >15 ?/?????? detection ??? advisory
+          // bus ????agent ??????????? advisory ??????????
+          // ??? onPhaseChange ??? TUI ???????? advisory ???
           const avgAdvisoriesPerTurn = (turn + 1) > 0 ? this.guardianActivity.advisoriesRendered / (turn + 1) : 0
           const advisoryFlood = avgAdvisoriesPerTurn > 15
           if (!advisoryFlood) {
@@ -2580,13 +2606,13 @@ export class AgentLoop {
             category: 'discipline',
             content: convergenceCheck.injectedMessage +
               ` ${renderRouteAnnotation(STALL_ROUTE_TABLE[this.consecutiveNoToolTurns >= 2 ? 'no-tool-stall' : 'strategy-stall'])}`,
-            // 谓词映射表（P1a + W3 + B1b）：
-            // - 无工具僵局变体：任意工具调用即打破僵局。
-            // - 诊断态变体（W3）："核实后收束"的行为签名 = 后续轮出现认知型
-            //   工具调用（read/grep/glob 等）。核实了 → adopted 续命；直接
-            //   无工具脑补结论 → 谓词失败计 ignored，与 efficacy 环双轨咬合。
-            // - build 变体（B1b/M4，2026-07-23 信号互扰治理）：改道 = 换文件面
-            //   /换工具族——course_changed 粗签名核销，填补此前刻意留空的核销位。
+            // ??????P1a + W3 + B1b??
+            // - ????????????????????
+            // - ??????W3??"?????"????? = ????????
+            //   ?????read/grep/glob ?????? ? adopted ?????
+            //   ??????? ? ????? ignored?? efficacy ??????
+            // - build ???B1b/M4?2026-07-23 ?????????? = ????
+            //   /??????course_changed ???????????????????
             expect: this.consecutiveNoToolTurns >= 2
               ? { kind: 'tool_appears', tools: [], withinTurns: 1 }
               : activityMode === 'diagnostic'
@@ -2598,13 +2624,13 @@ export class AgentLoop {
           // When convergence is detected, append the delivery gate hint so the
           // agent sees the gate state alongside the convergence message.
           // Previously only fired for doomLoopLevel==='blocked', but YELLOW
-          // gates (no_test_infra, external_blocked) also need context —
-          // otherwise the generic "换个角度看问题" can contradict "可带条件交付".
+          // gates (no_test_infra, external_blocked) also need context ?
+          // otherwise the generic "???????" can contradict "??????".
           if (convergenceCheck.level >= 2) {
-            let gateHint = '交付门禁状态未知。请运行 deliver_task 检查。'
+            let gateHint = '???????????? deliver_task ???'
             try {
               const gate = this.config.deliveryGateV2?.([...this.evidence.getState().filesModified])
-              if (gate) gateHint = `交付门禁：${buildGateConvergenceHint(gate, this._taskDepthLayer)}`
+              if (gate) gateHint = `?????${buildGateConvergenceHint(gate, this._taskDepthLayer)}`
             } catch { /* gate evaluation must never break convergence handling */ }
             this.advisoryBus.submit({
               key: 'convergence-gate',
@@ -2622,7 +2648,7 @@ export class AgentLoop {
       // Level 3: force session split to reset context and break the loop
       debugLog(`[convergence] turn=${turn} force-split score=${convergenceCheck.score.toFixed(2)}`)
       if (await this.compaction.trySessionSplit()) {
-        // split succeeded — reset turn counter and continue
+        // split succeeded ? reset turn counter and continue
         debugLog(`[convergence] turn=${turn} split-succeeded`)
       }
     }
@@ -2632,7 +2658,7 @@ export class AgentLoop {
       // turn (first escalation straight to L3, or the ladder was reset by a
       // user message), demote this abort to the kick that was just emitted
       // above and let the model act on it for one turn. This applies to both
-      // score-based and no-tool aborts — a model that went silent without prior
+      // score-based and no-tool aborts ? a model that went silent without prior
       // warning deserves one more chance after being nudged.
       if (!warnedInEarlierTurn) {
         debugLog(`[convergence] turn=${turn} score-abort demoted to kick (no prior-turn warning) score=${convergenceCheck.score.toFixed(2)}`)
@@ -2640,10 +2666,10 @@ export class AgentLoop {
       }
       // Structured stop-reason: distinguish the no-tool hard cap from a
       // score-based abort, and tag whether the model was still reasoning (a
-      // near-miss that would previously have been a silent false熔断). This is
-      // the "反面找被熔断的原因" observability — emitted via debugLog +
+      // near-miss that would previously have been a silent false??). This is
+      // the "?????????" observability ? emitted via debugLog +
       // onPhaseChange, and the onAbort tag lets the TUI render a labeled stop
-      // instead of a bare "⏹ Interrupted" (which looked like a user interrupt).
+      // instead of a bare "? Interrupted" (which looked like a user interrupt).
       const stopReason: StopReason = {
         source: convergenceCheck.abortCause === 'no-tool' ? 'no-tool-abort' : 'convergence-abort',
         turn,
@@ -2671,4 +2697,3 @@ export class AgentLoop {
   }
 
 }
-

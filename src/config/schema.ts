@@ -5,24 +5,24 @@ import { THEME_NAMES } from '../tui/theme.js'
 export const modelConfigSchema = z.object({
   id: z.string(),
   alias: z.string().optional(),
-  /** 擅长场景 — 展示在模型选择器（ModelPicker），预设定义处填充。 */
+  /** ???? ? ?????????ModelPicker?????????? */
   description: z.string().optional(),
   contextWindow: z.number().int().positive(),
   maxTokens: z.number().int().positive(),
   reasoningEffort: z.enum(['off', 'low', 'medium', 'high', 'max']).optional(),
   /** Model accepts image inputs (multimodal user messages). Declared per model,
-   *  NOT per provider — mixed text/vision model fleets under one provider are
-   *  the norm. Gates the computer_use screenshot → conversation vision channel.
+   *  NOT per provider ? mixed text/vision model fleets under one provider are
+   *  the norm. Gates the computer_use screenshot ? conversation vision channel.
    *  Default undefined = text-only (images are dropped, today's behavior). */
   supportsVision: z.boolean().optional(),
-  /** Pricing per 1M tokens (USD). Optional — used by insights / cost visualization. */
+  /** Pricing per 1M tokens (USD). Optional ? used by insights / cost visualization. */
   pricing: z.object({
     input: z.number().min(0).optional(),
     output: z.number().min(0).optional(),
     cacheRead: z.number().min(0).optional(),
     cacheWrite: z.number().min(0).optional(),
     reasoning: z.number().min(0).optional(),
-    /** True for a genuinely free model (e.g. GLM-4V-Flash) — distinct from a
+    /** True for a genuinely free model (e.g. GLM-4V-Flash) ? distinct from a
      *  subscription plan whose per-token price is also 0 (e.g. GLM Coding Plan).
      *  Drives a "free" badge in the UI and is a candidate for the vision bridge.
      *  Optional; absent = not known to be free (treated as paid). */
@@ -71,20 +71,20 @@ export const providerSchema = z.object({
   /**
    * Thinking-stall timeout (ms): once reasoning tokens have arrived but no text/tool
    * output yet, abort the stream if no further chunk within this window.
-   * 默认 undefined = 取 readMs（禁用）。仅对易卡死的 SLOW_THINKING provider（如 glm）
-   * 建议显式设置一个 < readMs 的值；factory.ts 对 glm 注入了 120s 内置默认。
+   * ?? undefined = ? readMs??????????? SLOW_THINKING provider?? glm?
+   * ???????? < readMs ???factory.ts ? glm ??? 120s ?????
    */
   thinkingStallTimeoutMs: z.number().int().positive().optional(),
   /**
    * First-byte (pre-first-chunk) timeout base override (ms).
-   * 默认 undefined = 按 provider/thinking 推导（45/90/180s）。该 base 之上还会随请求
-   * 预估输入规模自动上浮以避免大上下文冷启动被误杀；仅当某个自定义/慢 OpenAI 兼容模型
-   * 即便小上下文也迟迟不出首 token 时，才需要显式抬高这个 base。
+   * ?? undefined = ? provider/thinking ???45/90/180s??? base ???????
+   * ???????????????????????????????/? OpenAI ????
+   * ???????????? token ??????????? base?
    */
   firstByteTimeoutMs: z.number().int().positive().optional(),
   unsupported: z.array(z.string()).default([]),
   /**
-   * Provider usage calibration factor for `prompt_tokens` (0–1).
+   * Provider usage calibration factor for `prompt_tokens` (0?1).
    * 1.0 (default) = trust the API's prompt_tokens as-is.
    * 0 = discard prompt_tokens entirely; use local estimateOaiTokens instead.
    * GLM coding API returns prompt_tokens inflated ~20-100x due to server-side
@@ -142,8 +142,8 @@ export const antiAnchoringSchema = z.object({
 /** Tier 2 LLM speculation: during a tool-batch await window, fire a side-path
  *  LLM request sharing the main session prefix (near-free on DeepSeek prefix
  *  cache) to predict the next read-only tool calls, feeding ShadowQueue.
- *  ⚠ INERT since 2026-07-07: the speculative pre-execution chain is sealed
- *  (stale-read incident — ShadowQueue served pre-edit file content); the
+ *  ? INERT since 2026-07-07: the speculative pre-execution chain is sealed
+ *  (stale-read incident ? ShadowQueue served pre-edit file content); the
  *  engine is no longer constructed regardless of this setting. Schema kept so
  *  existing configs still parse. See P3Config.speculativeEnabled. */
 export const llmSpeculationSchema = z.preprocess(
@@ -193,7 +193,7 @@ export const reviewProfileOverrideSchema = z.object({
  *  - profiles: per-profile override map; omitted profiles fall back to session model
  *  - skipAuto: bypass deliver_task post-commit auto review (per-config equivalent
  *    of RIVET_REVIEW_DISCIPLINE=0, but scoped to this config file). Default true:
- *    auto review is off by default — users opt in via explicit `false` here, the
+ *    auto review is off by default ? users opt in via explicit `false` here, the
  *    RIVET_REVIEW_DISCIPLINE env, or a manual `/review` invocation. */
 export const reviewConfigSchema = z.object({
   profiles: z.record(z.string(), reviewProfileOverrideSchema).default({}),
@@ -210,8 +210,8 @@ export type ReviewConfig = z.infer<typeof reviewConfigSchema>
 
 /** Per-seat council configuration. When `provider`+`model` are set, that seat's
  *  worker runs on an independent provider/model (its own server-side cache),
- *  enabling heterogeneous councils — e.g. one seat on DeepSeek Pro, another on
- *  GLM — for genuine cross-model deliberation. Provider must exist in
+ *  enabling heterogeneous councils ? e.g. one seat on DeepSeek Pro, another on
+ *  GLM ? for genuine cross-model deliberation. Provider must exist in
  *  config.provider.providers; otherwise the seat silently falls back to the
  *  session model (same rule as agent.review / workers routing). */
 export const councilSeatConfigSchema = z.object({
@@ -233,93 +233,101 @@ export type CouncilConfig = z.infer<typeof councilConfigSchema>
 
 export const agentSchema = z.object({
   approval: z.enum(['auto-accept', 'auto-safe', 'suggest', 'manual', 'dangerously-skip-permissions']).default('auto-safe'),
-  // 长任务远端兜底。runaway 由 wedged-loop/convergence/watchdog/context-pressure
-  // 先行拦截，此值对标 Claude Code/Codex 的"无硬上限"取宽松 4 倍余量（50→200，
-  // 会话 5158719d 证明 50 轮迫使用户在正常长任务中反复手动「继续」）。
-  // 0 = 无限轮次（真正全自动 YOLO）；wedged-loop 等安全熔断仍然生效。
+  // ????????runaway ? wedged-loop/convergence/watchdog/context-pressure
+  // ????????? Claude Code/Codex ?"????"??? 4 ????50?200?
+  // ?? 5158719d ?? 50 ??????????????????????
+  // 0 = ?????????? YOLO??wedged-loop ??????????
   maxTurns: z.number().int().nonnegative().default(200),
   mode: z.enum(['code', 'ask', 'plan']).default('code'),
   autoReasoning: z.boolean().default(true),
-  /** 默认星域（qiming | tianshu | kaiyang | … | auto）。新会话的初始星域将由此
-   *  配置项决定；默认 qiming（启明）显式钉定、会话内不自动切换。'auto' 为用户
-   *  显式开启：不钉定，由会话首条消息按关键词路由（见 domainKeywordRouting）。 */
+  /** ?????qiming | tianshu | kaiyang | ? | auto?????????????
+   *  ???????? qiming??????????????????'auto' ???
+   *  ???????????????????????? domainKeywordRouting?? */
   defaultDomain: z.string().default('qiming'),
   /**
-   * 默认模型（provider:modelId 格式，如 "deepseek:deepseek-v4-pro"）。
-   * 新会话的首模型——无项目覆盖时生效。未配置时使用默认 provider 的首模型。
-   * 格式校验在 setDefaultModelConfig 层完成（需要校验 provider + model 存在性）。 */
+   * ?????provider:modelId ???? "deepseek:deepseek-v4-pro"??
+   * ?????????????????????????? provider ?????
+   * ????? setDefaultModelConfig ???????? provider + model ????? */
   defaultModel: z.string().optional(),
   /**
-   * 会话 Auto 星域是否按消息关键词匹配换域（仅 defaultDomain='auto' 时生效）。
-   * 默认 true：Auto 按首条消息在 auto 池（天权/开阳/瑶光/天梁 + 自定义域）
-   * 内 matchDomain，未命中回退 DEFAULT_DOMAIN（天权）。池外特化域（含华盖）
-   * 经 defaultDomain 钉定或 /domain 手工切换进入。显式 false 时 Auto 固定落到
-   * DEFAULT_DOMAIN。
+   * ?? Auto ???????????????? defaultDomain='auto' ?????
+   * ?? true?Auto ?????? auto ????/??/??/?? + ?????
+   * ? matchDomain?????? DEFAULT_DOMAIN???????????????
+   * ? defaultDomain ??? /domain ????????? false ? Auto ????
+   * DEFAULT_DOMAIN?
    */
   domainKeywordRouting: z.boolean().default(true),
   /**
-   * 重启后一键续跑的兜底模型（可选）。续跑严格沿用会话原模型（前缀缓存亲和）；
-   * 仅当原模型不可用且此项配置了可用模型时才切换续跑（UI 明示缓存将重建）。
-   * 未配置时 fail-closed：不自动续跑，引导开新会话。绝不静默回退默认模型。
+   * ?????????????????????????????????????
+   * ?????????????????????????UI ?????????
+   * ???? fail-closed?????????????????????????
    */
   resumeFallbackModel: z.string().optional(),
   /** Explicit opt-in for Songline substrate post-session pheromone/cycle relay. */
   songlineEnabled: z.boolean().default(false),
-  /** 写操作后的安全模式正则告警（层1）。默认开：纯正则、零 API 调用、命中才注入，
-   *  与其他 advisory hook 同档。设 false 或 RIVET_SECURITY_GUIDANCE=0 关闭。
-   *  配置项存在的意义是让桌面端用户也能关——GUI 启动的 sidecar 继承不到 shell 环境变量。 */
+  /** ???????????????1??????????? API ?????????
+   *  ??? advisory hook ???? false ? RIVET_SECURITY_GUIDANCE=0 ???
+   *  ????????????????????GUI ??? sidecar ???? shell ????? */
   securityGuidance: z.boolean().default(true),
-  /** 证据防火墙 Phase 2（jidoka 硬门禁）：deliver_task commit 时引用未经本会话
-   *  独立核验的 delegate/scout file:line 断言 → isError 拦截。默认关（opt-in，
-   *  Phase 1 诚实标注数据决定是否默认开）。env RIVET_SCOUT_FIREWALL 优先。 */
+  /** ????? Phase 2?jidoka ?????deliver_task commit ????????
+   *  ????? delegate/scout file:line ?? ? isError ???????opt-in?
+   *  Phase 1 ???????????????env RIVET_SCOUT_FIREWALL ??? */
   scoutEvidenceFirewall: z.boolean().default(false),
   /** Enable cross-session knowledge loading (memory block, playbook, companion presence).
-   *  Default true — injects distilled project knowledge from .rivet/knowledge/.
+   *  Default true ? injects distilled project knowledge from .rivet/knowledge/.
    *  Set false for fully isolated sessions. Env RIVET_NO_CROSS_SESSION=1 overrides as force-off. */
   crossSessionEnabled: z.boolean().default(true),
-  /** T8 桌面化办公工具（create_document 等 7 个）。默认关闭以守住工具数 kernel budget（≤25）。 */
+  /** T8 ????????create_document ? 7 ????????????? kernel budget??25?? */
   desktopTools: z.boolean().default(false),
-  /** Tool gating: 主控工具分层门控。enabled 时只暴露 CORE_TOOLS 给主控，
-   *  EXTENDED 工具下放子代理。关闭则全量暴露（向后兼容）。 */
+  /** Tool gating: ?????????enabled ???? CORE_TOOLS ????
+   *  EXTENDED ?????????????????????? */
   toolGating: z.object({
     enabled: z.boolean().default(true),
-    /** 可选：覆盖默认 CORE 清单（工具名数组） */
+    /** ??????? CORE ????????? */
     coreTools: z.array(z.string()).optional(),
-    /** 可选：额外加入 CORE 的工具名（追加到默认清单） */
+    /** ??????? CORE ????????????? */
     extraCore: z.array(z.string()).default([]),
-    /** 会话级禁用的工具名（CORE/EXTENDED/MCP 均可）。Session 启动时生效，运行中不变（缓存约束）。 */
+    /** ??????????CORE/EXTENDED/MCP ????Session ?????????????????? */
     disabledTools: z.array(z.string()).optional(),
   }).default({ enabled: true }),
   /** Explicit opt-in for HEARTH anchor invariant observation (postTurn, diagnostic only). */
   hearthObserveEnabled: z.boolean().default(false),
-  /** VSW 隔离验证策略（C4）。auto = §6 矩阵（仅在检测到并行会话或脏基线时
-   *  才用快照 worktree 隔离验证——单干净会话保持 in-place，与历史行为一致）；
-   *  always = 强制隔离（等价 RIVET_VSW=1）；off = 完全关闭快照管理器。
-   *  环境变量 RIVET_VSW=1 仍然生效（强制 always 语义）。 */
+  /** VSW ???????C4??auto = ?6 ?????????????????
+   *  ???? worktree ????????????? in-place??????????
+   *  always = ??????? RIVET_VSW=1??off = ??????????
+   *  ???? RIVET_VSW=1 ??????? always ???? */
   verificationSnapshot: z.enum(['auto', 'always', 'off']).default('auto'),
   /** Explicit opt-in for anti-anchoring harness hooks (prompt-flow intervention). */
   antiAnchoring: antiAnchoringSchema,
-  /** Explicit opt-in for auto-delegation of exploration tasks. Default off — workers cost API budget. */
+  /** Explicit opt-in for auto-delegation of exploration tasks. Default off ? workers cost API budget. */
   autoDelegateEnabled: z.boolean().default(false),
   /** Max nesting depth for delegation (a worker delegating to a sub-worker). Default 2. */
   maxDelegationDepth: z.number().int().positive().default(2),
-  /** 全局 worker 并发闸上限（P1-6，coordinator 信号量）。顶层 delegate/
-   *  batch/background 统一入闸；嵌套委派豁免（否则 planner 持槽等子工死锁）。
-   *  缺省 3；RIVET_MAX_WORKERS env 可覆盖。 */
+  /** ?? worker ??????P1-6?coordinator ??????? delegate/
+   *  batch/background ?????????????? planner ?????????
+   *  ?? 3?RIVET_MAX_WORKERS env ???? */
   maxWorkers: z.number().int().min(1).optional(),
+  /** ?? worker?explore ??????S1 ?????? = maxWorkers?
+   *  galaxy ????? fan-out ????? 6????????? maxWorkers
+   *  ????????? = max(maxWorkers, maxExploreWorkers, maxWriteWorkers)? */
+  maxExploreWorkers: z.number().int().min(1).optional(),
+  /** ? worker?hands ??????S1 ?????? = maxWorkers?
+   *  ????? maxWorkers ?????????????????????
+   *  ??????????????? */
+  maxWriteWorkers: z.number().int().min(1).optional(),
   /** Default max concurrent workers per team wave when input.maxParallel is unset. Clamped 1..5. */
   maxTeamParallel: z.number().int().min(1).max(5).default(3),
-  /** council_convene seat configuration — custom seats with optional per-seat
+  /** council_convene seat configuration ? custom seats with optional per-seat
    *  provider/model for heterogeneous (cross-model) councils. */
   council: councilConfigSchema,
   /**
-   * C3 检查点间隔 — Auto 模式下每 N 轮暂停并同步进度摘要（0 = 关）。
-   * YOLO 和 Manual 模式不读此字段。仅在高风险仍需人工确认的 auto-safe 模式下生效。
+   * C3 ????? ? Auto ???? N ???????????0 = ???
+   * YOLO ? Manual ???????????????????? auto-safe ??????
    */
   checkpointEveryTurns: z.number().int().min(0).default(0),
   /** Explicit opt-in for current-turn intent retrieval route guidance. */
   intentRetrievalRouter: intentRetrievalRouterSchema,
-  /** Tier 2 LLM speculation (shared-prefix next-tool prediction). INERT — chain sealed 2026-07-07. */
+  /** Tier 2 LLM speculation (shared-prefix next-tool prediction). INERT ? chain sealed 2026-07-07. */
   llmSpeculation: llmSpeculationSchema,
   /** @deprecated Use banditPromotion.teamScheduler ('forced') instead. True still works as forced. */
   teamSchedulerBanditEnabled: z.boolean().default(false),
@@ -327,8 +335,8 @@ export const agentSchema = z.object({
   modelTierBanditEnabled: z.boolean().default(false),
   /** @deprecated Use banditPromotion.modelRouting ('forced') instead. True still works as forced. */
   modelRoutingGatedEnabled: z.boolean().default(false),
-  /** Track 1: 统一 bandit shadow→gated 晋升闸。
-   *  off=一键回退 / shadow=只收证据 / auto=证据达标自动 gated / forced=手动覆盖。 */
+  /** Track 1: ?? bandit shadow?gated ????
+   *  off=???? / shadow=???? / auto=?????? gated / forced=????? */
   banditPromotion: z.object({
     modelTier: banditPromotionModeSchema.default('shadow'),
     teamScheduler: banditPromotionModeSchema.default('shadow'),
@@ -338,7 +346,7 @@ export const agentSchema = z.object({
     killSwitch: z.boolean().default(false),
   }).default({}),
   permissions: permissionsSchema.default({}),
-  /** Review worker model routing — see reviewConfigSchema. */
+  /** Review worker model routing ? see reviewConfigSchema. */
   review: reviewConfigSchema,
   /** Optional dedicated multimodal model for image recognition.
    *  When the primary model does not declare supportsVision, images sent by the
@@ -351,7 +359,7 @@ export const agentSchema = z.object({
     prompt: z.string().optional(),
     /** Max output tokens for the generated description. */
     maxTokens: z.number().int().positive().default(1024),
-    /** Optional backup vision model — used when the primary vision model errors
+    /** Optional backup vision model ? used when the primary vision model errors
      *  (5xx/timeout). Wrapped in a FallbackStreamClient. Same provider list. */
     fallback: z.object({
       provider: z.string(),
@@ -361,7 +369,7 @@ export const agentSchema = z.object({
   /**
    * Opt-in: when `visionModel` is unset and the primary model is text-only, pick
    * the first vision-capable model that has usable credentials and bridge through
-   * it. Off by default on purpose — auto-bridging ships the user's images to a
+   * it. Off by default on purpose ? auto-bridging ships the user's images to a
    * provider they never chose for this purpose, which is a cost and a privacy
    * decision, not a convenience default. When off, an available candidate is
    * reported (TUI hint / `visionBridge.detail`) instead of being used silently.
@@ -385,11 +393,11 @@ export const agentSchema = z.object({
       browser: z.boolean().default(false),
     }).default({}),
   }).default({}),
-  /** 交付行为控制。 */
+  /** ??????? */
   delivery: z.object({
-    /** 任务完成后是否自动执行 git commit。默认 true（向后兼容）。
-     *  设为 false 后，deliver_task 仍会运行门禁和审查，但不会实际提交——
-     *  用户需手动审查变更后自行 git commit。 */
+    /** ??????????? git commit??? true???????
+     *  ?? false ??deliver_task ???????????????????
+     *  ???????????? git commit? */
     autoCommit: z.boolean().default(true),
   }).default({}),
 })
@@ -407,7 +415,7 @@ export const compactSchema = z.object({
   /** Model that performs the compaction summarization (LLM compact / partial
    *  compact). When the model exists on the primary (or any configured)
    *  provider, a dedicated cheap client is built even if `provider` is unset
-   *  — see resolveCompactProviderName(). Pair with `provider` to force a
+   *  ? see resolveCompactProviderName(). Pair with `provider` to force a
    *  specific host. Without a resolvable provider+credentials, compaction
    *  uses the session's primary model (backward compatible). */
   model: z.string().default('deepseek-v4-flash'),
@@ -415,10 +423,10 @@ export const compactSchema = z.object({
    *  Optional: when omitted, the runtime infers a provider that lists `model`
    *  (preferring the session primary). Set explicitly to pin compaction onto
    *  an isolated cheap model. Unknown provider / missing model / no
-   *  credentials → silent fallback to the session primary. */
+   *  credentials ? silent fallback to the session primary. */
   provider: z.string().optional(),
   /** T9 turn-0 quality-compaction trigger ratios (provider cost-aware).
-   *  Only the turn-0, phase-gated quality lever — mid-turn delay guards are
+   *  Only the turn-0, phase-gated quality lever ? mid-turn delay guards are
    *  unaffected. Per-token cache-preserving providers (DeepSeek) skip T9
    *  entirely regardless of these. */
   qualityCompact: z.object({
@@ -447,14 +455,14 @@ export const searchSchema = z.object({
   braveApiKeyEnv: z.string().default('BRAVE_API_KEY'),
   /** Env var holding the Tavily Search API key. */
   tavilyApiKeyEnv: z.string().default('TAVILY_API_KEY'),
-  /** Env var holding the Bocha (博查) Search API key — 国内直连 AI 搜索（Tavily 国内替代）。 */
+  /** Env var holding the Bocha (??) Search API key ? ???? AI ???Tavily ?????? */
   bochaApiKeyEnv: z.string().default('BOCHA_API_KEY'),
-  /** Inline API key（明文存 config，与 provider.apiKey 同构）。桌面端 UI 可填，
-   *  解析优先级：inline config > apiKeyEnv 指向的 env > 标准 BOCHA_API_KEY。 */
+  /** Inline API key???? config?? provider.apiKey ??????? UI ???
+   *  ??????inline config > apiKeyEnv ??? env > ?? BOCHA_API_KEY? */
   bochaApiKey: z.string().optional(),
-  /** Inline Brave Search API key（明文存 config）。 */
+  /** Inline Brave Search API key???? config?? */
   braveApiKey: z.string().optional(),
-  /** Inline Tavily Search API key（明文存 config）。 */
+  /** Inline Tavily Search API key???? config?? */
   tavilyApiKey: z.string().optional(),
   /** Per-backend request timeout (ms). */
   timeoutMs: z.number().int().positive().default(15_000),
@@ -473,28 +481,28 @@ export const fetchSchema = z.object({
   userAgent: z.string().default('Tianshu/1.0 (terminal coding agent)'),
   /** Extract <main>/<article> content from HTML instead of returning full page noise. */
   extractMainContent: z.boolean().default(true),
-  /** 本地 Playwright 渲染 SPA 页面（本地提取质量差时降级渲染；需 chromium 可用，桌面端内置）。 */
+  /** ?? Playwright ?? SPA ????????????????? chromium ?????????? */
   enablePlaywright: z.boolean().default(false),
-  /** Playwright 渲染超时（ms），独立于 timeoutMs。 */
+  /** Playwright ?????ms????? timeoutMs? */
   renderTimeoutMs: z.number().int().positive().default(30_000),
-  /** 渲染后额外等待（ms，SPA 水合用；生效值钳制为 ≤ renderTimeoutMs/2）。 */
+  /** ????????ms?SPA ?????????? ? renderTimeoutMs/2?? */
   renderWaitMs: z.number().int().nonnegative().default(0),
-  /** 抓取缓存读取有效期（ms，默认 2 天；0 = 禁读仍写）。 */
+  /** ??????????ms??? 2 ??0 = ?????? */
   cacheMaxAgeMs: z.number().int().nonnegative().default(172_800_000),
-  /** Jina Reader 基础地址。默认 https://r.jina.ai。
-   *  国内可填自建反代域名（如 Cloudflare Worker 转发）规避直连不稳。
-   *  仅 host 替换，路径 `/` 拼接目标 URL 的语义不变。 */
+  /** Jina Reader ??????? https://r.jina.ai?
+   *  ???????????? Cloudflare Worker ??????????
+   *  ? host ????? `/` ???? URL ?????? */
   jinaBaseUrl: z.string().default('https://r.jina.ai'),
 }).default({})
 
 export type FetchConfig = z.infer<typeof fetchSchema>
 
 export const networkSchema = z.object({
-  /** HTTP/HTTPS 代理地址（如 http://127.0.0.1:7890）。
-   *  优先于环境变量 HTTPS_PROXY/HTTP_PROXY。留空则跟随系统环境变量。 */
+  /** HTTP/HTTPS ?????? http://127.0.0.1:7890??
+   *  ??????? HTTPS_PROXY/HTTP_PROXY????????????? */
   proxy: z.string().optional(),
-  /** 不走代理的域名列表（逗号分隔，支持 * 通配和 . 前缀）。
-   *  匹配语义对齐 curl/wget 的 NO_PROXY。留空则跟随 NO_PROXY 环境变量。 */
+  /** ????????????????? * ??? . ????
+   *  ?????? curl/wget ? NO_PROXY?????? NO_PROXY ????? */
   noProxy: z.string().optional(),
 }).default({})
 export type NetworkConfig = z.infer<typeof networkSchema>
@@ -504,12 +512,12 @@ export const editorSchema = z.object({
    * 'auto' (default) follows the real host (process.platform). Explicit values
    * let a project opt into another OS's conventions (e.g. a Windows-targeted
    * project authored on macOS). NOTE: this only affects file conventions and
-   * the prompt hint — command execution always runs on the real host shell.
+   * the prompt hint ? command execution always runs on the real host shell.
    */
   platform: z.enum(['auto', 'windows', 'macos', 'linux']).default('auto'),
   /**
    * New-file line-ending default. 'auto' derives from `platform`
-   * (windows → crlf, otherwise lf). Explicit 'lf'/'crlf' overrides it — for
+   * (windows ? crlf, otherwise lf). Explicit 'lf'/'crlf' overrides it ? for
    * example a Windows host that still wants LF source files. Existing files
    * always keep their own EOL, and .bat/.cmd are always CRLF regardless.
    */
@@ -526,35 +534,35 @@ export const workerRoutingSchema = z.record(z.string(), z.string()).default({
   code_edit: 'cheap-flash',
   test_failure_diagnosis: 'cheap-flash',
   risky_refactor: 'cheap-flash',
-  // 规划模型独立路由：2026-08-02 起默认走 cheap-flash（deepseek-v4-flash）——
-  // v4-flash 能力实测已超 v4-pro，成本仅 1/3；需更强可在此键改 capable。
+  // ?????????2026-08-02 ???? cheap-flash?deepseek-v4-flash???
+  // v4-flash ?????? v4-pro???? 1/3????????? capable?
   planning: 'cheap-flash',
 })
 
 export const workersSchema = z.object({
   profiles: z.record(z.string(), workerProfileSchema).default({}),
   routing: workerRoutingSchema,
-  /** 天梁 patcher 子代理的默认 tier（config.workers.patcherTier）。
-   *  flash 能力足以承担各级风险的执行任务，默认 'cheap'（不因 riskTier 预判降级
-   *  ——浪费生产力）；可设 'balanced' 或 'strong' 让执行者用更强模型（如 DeepSeek Pro）。 */
+  /** ?? patcher ?????? tier?config.workers.patcherTier??
+   *  flash ?????????????????? 'cheap'??? riskTier ????
+   *  ??????????? 'balanced' ? 'strong' ??????????? DeepSeek Pro?? */
   patcherTier: z.enum(['cheap', 'balanced', 'strong']).default('cheap'),
-  /** 失败升档天花板。只约束**失败驱动**的档位升级——规则升档
-   *  （consecutiveFailures≥2 → strong）与 Flash→Pro 升档重试；
-   *  不影响前置路由（workers.routing 如 planning→capable、planner hardFloor、
-   *  瑶光门席位下限、review.profiles 覆盖卡、议事会 modelOverride）。
-   *  动机：升档重试是全新会话零缓存全量重跑整个 work order，成本可达 flash
-   *  的数十倍；而规划类 worker 从小上下文起步，前置用强模型成本可控。
-   *  'off'（默认）= 失败不升档，重试留在原档模型；
-   *  'balanced' = 最多升到 balanced 卡重试；'strong' = 旧的自动升 Pro 行为。 */
+  /** ???????????**????**???????????
+   *  ?consecutiveFailures?2 ? strong?? Flash?Pro ?????
+   *  ????????workers.routing ? planning?capable?planner hardFloor?
+   *  ????????review.profiles ??????? modelOverride??
+   *  ????????????????????? work order????? flash
+   *  ????????? worker ???????????????????
+   *  'off'????= ???????????????
+   *  'balanced' = ???? balanced ????'strong' = ????? Pro ??? */
   escalationCap: z.enum(['off', 'balanced', 'strong']).default('off'),
 }).default({})
 
 export const skillsSchema = z.object({
   /** Skill names to COPY from .claude/skills/ (project then global ~/.claude)
-   *  into .rivet/skills/ at load time. Only listed skills are imported — avoids
+   *  into .rivet/skills/ at load time. Only listed skills are imported ? avoids
    *  pulling in all 70+ Claude skills when the user only needs a few. The copy
    *  is idempotent (existing .rivet/skills entries are never overwritten) and
-   *  the runtime only ever loads from .rivet/skills — external dirs are never
+   *  the runtime only ever loads from .rivet/skills ? external dirs are never
    *  scanned in place. Empty array (default) = import nothing. */
   importFromClaude: z.array(z.string()).default([]),
 }).default({})
@@ -591,7 +599,7 @@ export const mirrorsSchema = z.object({
 }).default({})
 
 /** GitHub PR panel defaults (desktop CI loop). Initial values for the per-PR
- *  toggles/method — the panel can override them per PR without writing back. */
+ *  toggles/method ? the panel can override them per PR without writing back. */
 export const prDefaultsSchema = z.object({
   /** Default merge method for the PR panel's merge action. */
   mergeMethod: z.enum(['squash', 'merge', 'rebase']).default('squash'),
@@ -609,24 +617,24 @@ export const envSchema = z.object({
    *  (Explorer/Finder/Dock) with a minimal PATH. Default true; set false to use
    *  the raw process env only. */
   resolve: z.boolean().default(true),
-  /** Extra directories appended to PATH for command execution — a manual
+  /** Extra directories appended to PATH for command execution ? a manual
    *  escape hatch when auto-resolution still misses a tool. */
   extraPath: z.array(z.string()).default([]),
   /** Extra environment variables injected into command execution. Highest
-   *  priority — overrides both process env and resolved values. */
+   *  priority ? overrides both process env and resolved values. */
   extraVars: z.record(z.string(), z.string()).default({}),
   /** Windows only: absolute path to a custom Git Bash `bash.exe`. When set,
    *  it seeds `RIVET_GIT_BASH_PATH` at startup so both the agent bash tool
    *  (platform.ts) and the desktop integrated terminal (pty.rs) use it. A real
    *  OS env var of the same name always wins (explicit override). Empty/unset
-   *  falls back to the normal probe chain (where git → common dirs → bundled
+   *  falls back to the normal probe chain (where git ? common dirs ? bundled
    *  PortableGit). */
   gitBashPath: z.string().optional(),
   /** Absolute path to a custom `git.exe` (Windows) or `git` binary (macOS/Linux).
    *  When set, it seeds `RIVET_GIT_PATH` at startup so the environment probe
    *  (`/environment`) uses it directly instead of searching PATH. A real OS env
    *  var of the same name always wins (explicit override). Empty/unset falls
-   *  back to the normal probe chain (PATH → common install dirs → bundled git). */
+   *  back to the normal probe chain (PATH ? common install dirs ? bundled git). */
   gitPath: z.string().optional(),
 }).default({})
 
@@ -663,14 +671,14 @@ export const uiSchema = z.object({
 }).default({})
 
 /** Project verify command declarations (A1). Machine-readable source of truth
- *  for the project's verification commands — declared in the project-layer
+ *  for the project's verification commands ? declared in the project-layer
  *  `.rivet-config.json`, consumed by run_tests (test), the deliver review gate
  *  (typecheck/build for non-TS projects), and bash verification annotation.
  *  Typically generated by /init from the project fingerprint; hand-edits win. */
 export const verifySchema = z.object({
   /** Full test command, e.g. "cargo test" / "go test ./..." / "pytest". */
   test: z.string().optional(),
-  /** Build command — for compiled languages, build success is a more basic
+  /** Build command ? for compiled languages, build success is a more basic
    *  signal than tests, e.g. "cargo build" / "go build ./...". */
   build: z.string().optional(),
   /** Typecheck command, e.g. "tsc --noEmit" / "cargo check" / "mypy .". */
@@ -702,12 +710,12 @@ export const proSchema = z.object({
   features: z.object({
     computerUse: z.boolean().default(true),
     chatGateway: z.boolean().default(true),
-    /** team_orchestrate mode:'max'（多视角 planner fanout）。 */
+    /** team_orchestrate mode:'max'???? planner fanout?? */
     teamMax: z.boolean().default(true),
-    /** council_convene rounds≥2（反驳/辩论轮）。 */
+    /** council_convene rounds?2???/????? */
     councilMultiRound: z.boolean().default(true),
-    /** 无人值守自动化（付费版 v1 · T2）：非 always-review 审查策略 +
-     *  含 computer_use 的定时任务。 */
+    /** ??????????? v1 ? T2??? always-review ???? +
+     *  ? computer_use ?????? */
     unattendedAutomation: z.boolean().default(true),
   }).default({}),
 }).default({})
@@ -715,26 +723,26 @@ export const proSchema = z.object({
 export type ProConfig = z.infer<typeof proSchema>
 
 /**
- * 前缀预算档位 — 控制 frozen 前缀里挂多少「参考类」内容。
+ * ?????? ? ?? frozen ??????????????
  *
- * 三档语义（解析与冻结见 prompt/block-policy.ts）：
- * - standard（默认）：现状，与历史版本逐字节一致。不选就是它。
- * - lean：缩减参考类块（capsule 索引 / manifest / codebase-index /
- *   project-memory / historical-lessons），为长会话腾注意力。
- * - full：放宽上限，适合上下文窗口大且要求全知的场景。
+ * ??????????? prompt/block-policy.ts??
+ * - standard?????????????????????????
+ * - lean????????capsule ?? / manifest / codebase-index /
+ *   project-memory / historical-lessons???????????
+ * - full???????????????????????
  *
- * 档位**不影响行为护栏**（static.ts 的 rules / delivery-contract /
- * workflow、星域 volatileBlock）。护栏撤成按需召回会导致行为漂移——
- * V3.1 (0c776b9→17b496a) 当日回滚是这条边界的来源。
+ * ??**???????**?static.ts ? rules / delivery-contract /
+ * workflow??? volatileBlock???????????????????
+ * V3.1 (0c776b9?17b496a) ?????????????
  *
- * 会话内冻结：中途改配置不生效，下个会话才应用（改前缀 = 全量重建）。
+ * ?????????????????????????? = ??????
  */
 const promptSchema = z.object({
   profile: z.enum(['standard', 'lean', 'full']).optional(),
-  /** 工具 schema 描述档位。compact 压缩超长描述，保留硬门禁行。
-   *  工具描述是操作手册不是护栏，压缩不影响行为纪律。 */
+  /** ?? schema ?????compact ??????????????
+   *  ???????????????????????? */
   toolDescriptions: z.enum(['full', 'compact']).optional(),
-  /** 逐块显式开关，优先级高于 profile。未设时由 profile 决定。 */
+  /** ???????????? profile????? profile ??? */
   blocks: z.object({
     seedCapsule: z.boolean().optional(),
     knowledgeManifest: z.boolean().optional(),
@@ -766,8 +774,8 @@ export const configSchema = z.object({
   env: envSchema,
   ui: uiSchema,
   verify: verifySchema,
-  /** 工具装配档位：minimal（默认）/ frontend / full。会话启动期解析，
-   *  会话内冻结（前缀缓存安全）；RIVET_TOOL_PRESET env 优先于此配置。 */
+  /** ???????minimal????/ frontend / full?????????
+   *  ??????????????RIVET_TOOL_PRESET env ??????? */
   tools: z.object({
     preset: z.enum(['minimal', 'frontend', 'full']).optional(),
   }).default({}),

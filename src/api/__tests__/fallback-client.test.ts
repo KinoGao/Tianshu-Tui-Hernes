@@ -37,7 +37,7 @@ function makeClient(behavior: 'ok' | 'server_error' | 'auth_error'): StreamClien
 }
 
 describe('FallbackStreamClient', () => {
-  it('succeeds on primary — no fallback attempted', async () => {
+  it('succeeds on primary ? no fallback attempted', async () => {
     const primary = makeClient('ok')
     let fallbackCalled = false
     const client = new FallbackStreamClient(primary, 'main', [
@@ -136,5 +136,23 @@ describe('FallbackStreamClient', () => {
     await client.stream(makeRequest(), makeCallbacks())
     assert.ok(log.includes('main->backup'), 'should fall back on stream_parse error')
     assert.ok(log.includes('backup-created'), 'backup client should be instantiated')
+  })
+
+  it('falls back on status-less service_unavailable errors', async () => {
+    const primary: StreamClient = {
+      async stream() {
+        throw new Error('OpenAI API error (service_unavailable_error): Service is too busy')
+      },
+    }
+    const log: string[] = []
+    const client = new FallbackStreamClient(
+      primary,
+      'main',
+      [{ name: 'backup', create: () => makeClient('ok') }],
+      (from, to) => log.push(`${from}->${to}`),
+    )
+
+    await client.stream(makeRequest(), makeCallbacks())
+    assert.deepEqual(log, ['main->backup'])
   })
 })

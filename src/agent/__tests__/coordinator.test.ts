@@ -13,6 +13,7 @@ import {
   shouldDelegateObjective,
   type WorkerRuntimeFactory,
 } from '../coordinator.js'
+import { classifyProfile } from '../coordination-policy.js'
 import { READ_ONLY_WORKER_TOOLS, WRITE_WORKER_TOOLS, type WorkerResult } from '../work-order.js'
 import { CollaborationProtocol } from '../collaboration-protocol.js'
 import { profileRegistry } from '../profile-registry.js'
@@ -38,7 +39,7 @@ function makeRegistry() {
   for (const name of ['edit_file', 'write_file', 'bash', 'run_tests']) registry.register(fakeTool(name))
   // Mirror the production base registry: register every tool any built-in profile
   // can allowlist (file_info / semantic_search / web_search / web_fetch / hash_edit /
-  // apply_patch / git / delegate_* / lsp_* …) so filterToolRegistry (coordinator)
+  // apply_patch / git / delegate_* / lsp_* ?) so filterToolRegistry (coordinator)
   // never throws "Cannot allowlist unknown tool" on a stale hand-maintained set.
   for (const pname of profileRegistry.getProfileNames()) {
     for (const tool of profileRegistry.get(pname)!.allowedTools) registry.register(fakeTool(tool))
@@ -47,7 +48,7 @@ function makeRegistry() {
 }
 
 function sortedReadOnlyToolNames(): string[] {
-  // ProfileRegistry provides tools for readonly profiles — includes read_section, repo_graph
+  // ProfileRegistry provides tools for readonly profiles ? includes read_section, repo_graph
   return [...READ_ONLY_WORKER_TOOLS, 'read_section', 'repo_graph'].sort()
 }
 
@@ -132,14 +133,14 @@ describe('DelegationCoordinator', () => {
   it('counts CJK characters so Chinese objectives are not silently skipped', () => {
     // Whitespace word-count reads a spaceless Chinese objective as ~1 word and
     // would wrongly skip dispatch. A substantive Chinese objective must pass.
-    assert.equal(shouldDelegateObjective('修复并发工具调用导致的参数污染问题', {}), true)
+    assert.equal(shouldDelegateObjective('?????????????????', {}), true)
     // The patcher's Chinese instruction prefix alone is substantive enough.
     assert.equal(
-      shouldDelegateObjective('你是天梁执行者。只执行本 task，不扩展范围，不重写计划。\n\nModify foo', {}),
+      shouldDelegateObjective('???????????? task?????????????\n\nModify foo', {}),
       true,
     )
     // A trivial Chinese fragment (< 8 CJK chars, no files/symbols) is still gated.
-    assert.equal(shouldDelegateObjective('改一下', {}), false)
+    assert.equal(shouldDelegateObjective('???', {}), false)
   })
 
   it('degrades gracefully when a profile allowlists a tool absent from the base registry', async () => {
@@ -267,7 +268,7 @@ describe('DelegationCoordinator', () => {
           promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
           toolRegistry: workerRegistry,
           cwd: '/repo',
-          // Deliberately huge generic default — the per-profile budget must win.
+          // Deliberately huge generic default ? the per-profile budget must win.
           maxTurns: 99,
           contextWindow: card.contextWindow,
           compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
@@ -534,7 +535,7 @@ describe('DelegationCoordinator', () => {
     assert.ok(run.results.every(r => r.status === 'passed'))
   })
 
-  it('delegateBatch 透传 tierFloor 到 WorkOrder（瑶光门 batch 路径——曾只传 modelOverride 丢 tierFloor）', async () => {
+  it('delegateBatch ?? tierFloor ? WorkOrder???? batch ??????? modelOverride ? tierFloor?', async () => {
     const capturedFloors: Array<string | undefined> = []
     const coordinator = new DelegationCoordinator({
       baseToolRegistry: makeRegistry(),
@@ -581,10 +582,10 @@ describe('DelegationCoordinator', () => {
       },
     ])
 
-    assert.deepEqual(capturedFloors.sort(), ['strong', undefined].sort(), 'tierFloor 必须进 WorkOrder（声明 strong 的席位不得被静默降档）')
+    assert.deepEqual(capturedFloors.sort(), ['strong', undefined].sort(), 'tierFloor ??? WorkOrder??? strong ???????????')
   })
 
-  it('delegateBatch 同批 worker 共享一个 PrewarmCache，且派发前已预热 scope.files（P0-1）', async () => {
+  it('delegateBatch ?? worker ???? PrewarmCache???????? scope.files?P0-1?', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coord-prewarm-'))
     writeFileSync(join(dir, 'a.txt'), 'alpha evidence')
     writeFileSync(join(dir, 'b.txt'), 'beta evidence')
@@ -621,14 +622,14 @@ describe('DelegationCoordinator', () => {
     ])
 
     assert.equal(seen.length, 2)
-    assert.ok(seen[0], 'worker 必须拿到批级共享 prewarm 实例')
-    assert.equal(seen[0], seen[1], '同批两个 worker 必须共享同一个 PrewarmCache 实例')
+    assert.ok(seen[0], 'worker ???????? prewarm ??')
+    assert.equal(seen[0], seen[1], '???? worker ??????? PrewarmCache ??')
     const cache = seen[0] as import('../prewarm.js').PrewarmCache
-    // 派发前预热已把两个 scope 文件装进共享 cache（canonical 可能是 realpath）
+    // ????????? scope ?????? cache?canonical ??? realpath?
     const canonA = realpathSync(join(dir, 'a.txt'))
     const canonB = realpathSync(join(dir, 'b.txt'))
-    assert.ok(cache.has(canonA) || cache.has(join(dir, 'a.txt')), 'a.txt 应在派发前被预热')
-    assert.ok(cache.has(canonB) || cache.has(join(dir, 'b.txt')), 'b.txt 应在派发前被预热')
+    assert.ok(cache.has(canonA) || cache.has(join(dir, 'a.txt')), 'a.txt ????????')
+    assert.ok(cache.has(canonB) || cache.has(join(dir, 'b.txt')), 'b.txt ????????')
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -639,7 +640,7 @@ describe('DelegationCoordinator', () => {
       modelCards: cards,
       maxWorkers: 2,
       // A hard dispatch fault (factory throw) propagates out of delegateOrder and
-      // is caught as a worker failure → queue.markFailed. The upstream id then
+      // is caught as a worker failure ? queue.markFailed. The upstream id then
       // never enters completedIds, so its dependent can never be dequeued.
       runtimeFactory: (order, card, workerRegistry) => {
         if (order.id === 'team:T1') throw new Error('factory boom')
@@ -683,7 +684,7 @@ describe('DelegationCoordinator', () => {
       },
     ])
 
-    // Every order must be accounted for — the dependent is NOT lost.
+    // Every order must be accounted for ? the dependent is NOT lost.
     assert.equal(run.results.length, 2)
     const t1 = run.results.find(r => r.workOrderId === 'team:T1')!
     const t2 = run.results.find(r => r.workOrderId === 'team:T2')!
@@ -694,7 +695,7 @@ describe('DelegationCoordinator', () => {
     assert.ok(!ran.includes('team:T2'), 'dependent worker was not executed')
   })
 
-  it('条件边 skip：依赖失败 → 本任务跳过（summary 明示 skipped，不执行）（收编 #6）', async () => {
+  it('??? skip????? ? ??????summary ?? skipped???????? #6?', async () => {
     const ran: string[] = []
     const coordinator = new DelegationCoordinator({
       baseToolRegistry: makeRegistry(),
@@ -745,10 +746,10 @@ describe('DelegationCoordinator', () => {
     const t2 = run.results.find(r => r.workOrderId === 'team:T2')!
     assert.equal(t2.status, 'blocked')
     assert.match(t2.summary, /skipped/)
-    assert.ok(!ran.includes('team:T2'), 'skip 语义：依赖失败后本任务不得执行')
+    assert.ok(!ran.includes('team:T2'), 'skip ???????????????')
   })
 
-  it('条件边 alternate：依赖失败 → 改等 alternate，其完成则本任务执行（收编 #6）', async () => {
+  it('??? alternate????? ? ?? alternate????????????? #6?', async () => {
     const ran: string[] = []
     const coordinator = new DelegationCoordinator({
       baseToolRegistry: makeRegistry(),
@@ -803,8 +804,8 @@ describe('DelegationCoordinator', () => {
       },
     ])
 
-    // T1 失败 → T2 改等 T3；T3 完成 → T2 真实执行
-    assert.ok(ran.includes('team:T2'), 'alternate 完成时本任务应执行')
+    // T1 ?? ? T2 ?? T3?T3 ?? ? T2 ????
+    assert.ok(ran.includes('team:T2'), 'alternate ?????????')
     const t2 = run.results.find(r => r.workOrderId === 'team:T2')!
     assert.equal(t2.status, 'passed')
   })
@@ -891,8 +892,8 @@ describe('DelegationCoordinator', () => {
       authority: 'tianquan',
     })
 
-    // reviewer has tierLock:'cheap' → preferredTier='cheap' → no cheap cards in set
-    // → fallback to all cards → recommendModelForTask picks large-cache
+    // reviewer has tierLock:'cheap' ? preferredTier='cheap' ? no cheap cards in set
+    // ? fallback to all cards ? recommendModelForTask picks large-cache
     assert.equal(run.selectedModel, 'large-cache')
     assert.equal(saved.length, 3)
     assert.ok(saved.some(row => row.kind.startsWith('gated_influence_audit:model_tier_bandit:')))
@@ -957,8 +958,8 @@ describe('DelegationCoordinator', () => {
       authority: 'tianliang',
     })
 
-    // tierLock:'cheap' forces ruleTier=cheap; bandit also recommends cheap →
-    // baseline=candidate (same arm), margin=0 → gate closed (reward_margin)
+    // tierLock:'cheap' forces ruleTier=cheap; bandit also recommends cheap ?
+    // baseline=candidate (same arm), margin=0 ? gate closed (reward_margin)
     assert.equal(run.selectedModel, 'cheap-flash')
     assert.deepEqual(selectedModels, ['cheap-flash'])
     assert.equal(run.modelTierGatedDecisions?.[0]?.applied, false)
@@ -1016,8 +1017,8 @@ describe('DelegationCoordinator', () => {
       authority: 'tianliang',
     })
 
-    // reviewer tierLock:'cheap' → recommendedTier='cheap' → selects cheap-flash even when bandit disabled
-    // tierLock=cheap matches bandit cheap → margin=0 → gateOpen=false
+    // reviewer tierLock:'cheap' ? recommendedTier='cheap' ? selects cheap-flash even when bandit disabled
+    // tierLock=cheap matches bandit cheap ? margin=0 ? gateOpen=false
     assert.equal(run.selectedModel, 'cheap-flash')
     assert.deepEqual(selectedModels, ['cheap-flash'])
     assert.equal(run.modelTierGatedDecisions?.[0]?.gateOpen, false)
@@ -1079,8 +1080,8 @@ describe('DelegationCoordinator', () => {
       authority: 'tianliang',
     })
 
-    // reviewer tierLock:'cheap' → tierRecommendation='cheap' even when gate vetoes
-    // tierLock=cheap matches bandit cheap → margin=0 → gate closed on reward_margin (before scope-health)
+    // reviewer tierLock:'cheap' ? tierRecommendation='cheap' even when gate vetoes
+    // tierLock=cheap matches bandit cheap ? margin=0 ? gate closed on reward_margin (before scope-health)
     assert.equal(run.selectedModel, 'cheap-flash')
     assert.deepEqual(selectedModels, ['cheap-flash'])
     assert.equal(run.modelTierGatedDecisions?.[0]?.applied, false)
@@ -1129,8 +1130,8 @@ describe('DelegationCoordinator', () => {
       scope: { files: ['src/agent/coordinator.ts', 'src/agent/__tests__/coordinator.test.ts'] },
     })
 
-    // adversarial_verifier has tierLock:'cheap' — margin=0 (rule=bandit=cheap)
-    // → gate closed on reward_margin → applied=false → falls back to tierRecommendation='cheap' → cheap-flash
+    // adversarial_verifier has tierLock:'cheap' ? margin=0 (rule=bandit=cheap)
+    // ? gate closed on reward_margin ? applied=false ? falls back to tierRecommendation='cheap' ? cheap-flash
     assert.equal(run.selectedModel, 'cheap-flash')
     assert.equal(run.modelTierGatedDecisions?.[0]?.applied, false)
     assert.match(run.modelTierGatedDecisions?.[0]?.reason ?? '', /reward margin/)
@@ -1262,18 +1263,18 @@ describe('DelegationCoordinator', () => {
 
     assert.equal(run.status, 'completed')
     assert.equal(run.results.length, 1)
-    // 目标对账门（`883a3a22`）跑在证据门之前：派它去 verify，它既无 verification
-    // 元数据、transcript 里也没有验证痕迹 → 直接硬改判 blocked。证据门随后不再
-    // 补「自报 verified 却没跑 run_tests」那条 risk（它只在 evidenceStatus 仍是
-    // verified 时发力，而这里已经被改成 unverified 了）——两条判词说的是同一件
-    // 事，留一条即可，但断言必须跟着改：现在只有目标对账那条。
+    // ??????`883a3a22`???????????? verify???? verification
+    // ????transcript ???????? ? ????? blocked????????
+    // ???? verified ??? run_tests??? risk???? evidenceStatus ??
+    // verified ???????????? unverified ??????????????
+    // ????????????????????????????
     assert.equal(run.results[0]!.status, 'blocked')
     assert.equal(run.results[0]!.evidenceStatus, 'unverified')
     assert.ok(
-      run.results[0]!.risks.some(r => r.includes('未执行受派的验证')),
-      `应留下未执行验证的判词，实际：${JSON.stringify(run.results[0]!.risks)}`,
+      run.results[0]!.risks.some(r => r.includes('????????')),
+      `???????????????${JSON.stringify(run.results[0]!.risks)}`,
     )
-    assert.ok(run.packet.includes('未执行受派的验证'), '判词要进主控 packet')
+    assert.ok(run.packet.includes('????????'), '?????? packet')
   })
 
   it('keeps adversarial verifier verified when run_tests appears in transcript', async () => {
@@ -1411,7 +1412,7 @@ describe('DelegationCoordinator', () => {
       }),
     })
 
-    // code_search routes to 'cheap' → MiniMax-M2.7
+    // code_search routes to 'cheap' ? MiniMax-M2.7
     await coordinator.delegate({
       parentTurnId: 'turn_r1',
       objective: 'Search for all imports of the coordinator module across the codebase.',
@@ -1422,7 +1423,7 @@ describe('DelegationCoordinator', () => {
 
     assert.equal(selectedModels[0], 'MiniMax-M2.7')
 
-    // doc_research also maps to repo_summarization → cheap
+    // doc_research also maps to repo_summarization ? cheap
     await coordinator.delegate({
       parentTurnId: 'turn_r2',
       objective: 'Research the documentation about how surface routing works in this project.',
@@ -1646,7 +1647,7 @@ describe('DelegationCoordinator', () => {
       runHands: async () => { throw new Error('worker crashed after lock') },
     })
 
-    // B1: delegate no longer rethrows — returns structured degradation.
+    // B1: delegate no longer rethrows ? returns structured degradation.
     // Locks must still be released (finally block runs regardless).
     const degradedRun = await coordinator.delegate({
       parentTurnId: 'turn_lock_throw',
@@ -1739,7 +1740,7 @@ describe('DelegationCoordinator', () => {
       runHands: async () => { throw new Error('worker crashed after claim') },
     })
 
-    // B1: delegate no longer rethrows — returns structured degradation.
+    // B1: delegate no longer rethrows ? returns structured degradation.
     // File claims must still be released (finally block runs regardless).
     const degradedRun = await coordinator.delegate({
       parentTurnId: 'turn_claim_throw',
@@ -1752,6 +1753,131 @@ describe('DelegationCoordinator', () => {
     assert.ok(degradedRun.results[0]?.summary?.includes('worker crashed after claim'))
 
     assert.equal(sessionRegistry.acquireClaim('other-session', 'src/claim-failure-cleanup.ts'), true)
+  })
+
+  it('shutdownAndWait waits for an aborted writer before handoff', async () => {
+    const claims = new Map<string, string>()
+    const sessionRegistry = {
+      acquireClaim: (sessionId: string, filePath: string) => {
+        const owner = claims.get(filePath)
+        if (owner && owner !== sessionId) return false
+        claims.set(filePath, sessionId)
+        return true
+      },
+      releaseClaim: (sessionId: string, filePath: string) => {
+        if (claims.get(filePath) === sessionId) claims.delete(filePath)
+      },
+    }
+    let started!: () => void
+    const startedPromise = new Promise<void>(resolve => { started = resolve })
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 1,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      sessionRegistry: sessionRegistry as never,
+      sessionId: 's-old',
+      runHands: async config => {
+        await config.runAgent('', { onTurnComplete: () => {} } as never, '/repo')
+        return { result: resultFor(config.order.id), usage: {} }
+      },
+      runWorker: async config => {
+        started()
+        await new Promise<void>(resolve => {
+          if (config.abortSignal?.aborted) { resolve(); return }
+          config.abortSignal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getMessages: () => [], getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    const pending = coordinator.delegate({
+      parentTurnId: 'handoff_writer',
+      objective: 'Hold a write claim until shutdown explicitly releases it before the next session starts.',
+      kind: 'patch_proposal',
+      profile: 'patcher',
+      scope: { files: ['src/handoff-claim.ts'] },
+    })
+    await startedPromise
+    assert.equal(await coordinator.shutdownAndWait(1_000), true)
+    await pending
+
+    assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-claim.ts'), true)
+  })
+
+  it('shutdownAndWait reports a timeout while a provider ignores abort', async () => {
+    const claims = new Map<string, string>()
+    const sessionRegistry = {
+      acquireClaim: (sessionId: string, filePath: string) => {
+        const owner = claims.get(filePath)
+        if (owner && owner !== sessionId) return false
+        claims.set(filePath, sessionId)
+        return true
+      },
+      releaseClaim: (sessionId: string, filePath: string) => {
+        if (claims.get(filePath) === sessionId) claims.delete(filePath)
+      },
+    }
+    let started!: () => void
+    const startedPromise = new Promise<void>(resolve => { started = resolve })
+    let finish!: () => void
+    const finishPromise = new Promise<void>(resolve => { finish = resolve })
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 1,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      sessionRegistry: sessionRegistry as never,
+      sessionId: 's-main',
+      runWorker: async config => {
+        started()
+        await finishPromise
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getMessages: () => [], getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    const pending = coordinator.delegate({
+      parentTurnId: 'handoff_timeout',
+      objective: 'Keep a write claim while the provider ignores abort.',
+      kind: 'patch_proposal',
+      profile: 'patcher',
+      scope: { files: ['src/handoff-timeout-claim.ts'] },
+    })
+    await startedPromise
+    assert.equal(await coordinator.shutdownAndWait(1), false)
+    assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-timeout-claim.ts'), false)
+
+    finish()
+    await pending
+    assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-timeout-claim.ts'), true)
   })
 
   it('blocks write worker when files are already claimed by another session', async () => {
@@ -1802,7 +1928,7 @@ describe('DelegationCoordinator', () => {
 
     assert.equal(run.status, 'completed')
     assert.equal(run.results[0]?.status, 'blocked')
-    assert.ok(run.results[0]?.summary?.includes('文件声明冲突'))
+    assert.ok(run.results[0]?.summary?.includes('??????'))
     assert.ok(run.results[0]?.summary?.includes('src/blocked-file.ts'))
     // Worker should NOT be dispatched
     assert.equal(runHandsCalled, false)
@@ -1811,7 +1937,7 @@ describe('DelegationCoordinator', () => {
     assert.equal(sessionRegistry.acquireClaim('s-main', 'src/blocked-file.ts'), false)
   })
 
-  it('T3: retries failed worker with Pro model when budget allows (Flash→Pro escalation)', async () => {
+  it('T3: retries failed worker with Pro model when budget allows (Flash?Pro escalation)', async () => {
     const escalateCards: ModelCapabilityCard[] = [
       { model: 'cheap-flash', toolUseReliability: 0.7, jsonStability: 0.7, editSuccessRate: 0.5, testRepairRate: 0.5, contextWindow: 1_000_000, cacheEconomics: 'strong', recommendedTasks: ['code_search'] },
       { model: 'deepseek-pro', toolUseReliability: 0.95, jsonStability: 0.95, editSuccessRate: 0.9, testRepairRate: 0.85, contextWindow: 128_000, cacheEconomics: 'medium', recommendedTasks: ['patch_proposal'] },
@@ -1852,7 +1978,7 @@ describe('DelegationCoordinator', () => {
 
     const run = await coordinator.delegate({
       parentTurnId: 'turn_escalation',
-      objective: 'Investigate the Flash→Pro escalation when a worker fails transiently.',
+      objective: 'Investigate the Flash?Pro escalation when a worker fails transiently.',
       kind: 'code_search',
       profile: 'code_scout',
       scope: { files: ['src/test.ts'] },
@@ -1866,7 +1992,7 @@ describe('DelegationCoordinator', () => {
     assert.equal(modelsUsed[1], 'deepseek-pro')
     // Escalation shadow event emitted
     assert.ok(run.modelTierShadows && run.modelTierShadows.length >= 2, 'expected at least 2 tier shadows')
-    const escShadow = run.modelTierShadows!.find(s => s.actualTier === 'strong' && s.reason.includes('Flash→Pro 升级重试'))
+    const escShadow = run.modelTierShadows!.find(s => s.actualTier === 'strong' && s.reason.includes('Flash?Pro ????'))
     assert.ok(escShadow, 'escalation shadow must be emitted')
     assert.equal(escShadow!.actualModel, 'deepseek-pro')
     assert.ok(run.selectedModel === 'deepseek-pro', 'selected model should be the Pro model')
@@ -1898,13 +2024,13 @@ describe('DelegationCoordinator', () => {
         }
       },
       runWorker: async (config) => {
-        // Fail all 4 attempts — first 3 escalate to Pro, 4th stays Flash
+        // Fail all 4 attempts ? first 3 escalate to Pro, 4th stays Flash
         failCount++
         throw new Error(`Worker failure #${failCount}`)
       },
     })
 
-    // Run 4 failing delegates — only first 3 should escalate
+    // Run 4 failing delegates ? only first 3 should escalate
     for (let i = 0; i < 4; i++) {
       await coordinator.delegate({
         parentTurnId: `turn_limit_${i}`,
@@ -1916,15 +2042,15 @@ describe('DelegationCoordinator', () => {
       })
     }
 
-    // Models used: flash(×4) + pro(×3) = 7 runtimeFactory calls
+    // Models used: flash(?4) + pro(?3) = 7 runtimeFactory calls
     assert.equal(modelsUsed.length, 7)
-    // First 3 delegates: flash → pro escalation
+    // First 3 delegates: flash ? pro escalation
     assert.equal(modelsUsed.filter(m => m === 'deepseek-pro').length, 3)
     // 4th delegate: flash only (no escalation)
     assert.equal(modelsUsed.filter(m => m === 'cheap-flash').length, 4)
   })
 
-  it('P0-5: 契约失败（json_parse blocked 正常返回）→ Flash→Pro 升档，更好结果替换原结果', async () => {
+  it('P0-5: ?????json_parse blocked ?????? Flash?Pro ????????????', async () => {
     const escalateCards: ModelCapabilityCard[] = [
       { model: 'cheap-flash', toolUseReliability: 0.7, jsonStability: 0.7, editSuccessRate: 0.5, testRepairRate: 0.5, contextWindow: 1_000_000, cacheEconomics: 'strong', recommendedTasks: ['code_search'] },
       { model: 'deepseek-pro', toolUseReliability: 0.95, jsonStability: 0.95, editSuccessRate: 0.9, testRepairRate: 0.85, contextWindow: 128_000, cacheEconomics: 'medium', recommendedTasks: ['patch_proposal'] },
@@ -1951,7 +2077,7 @@ describe('DelegationCoordinator', () => {
       },
       runWorker: async (config) => {
         workerCalls++
-        // 契约破碎是「正常返回」不是异常——升档判定必须覆盖这条路径。
+        // ??????????????????????????????
         const result: WorkerResult = workerCalls === 1
           ? {
               workOrderId: config.order.id,
@@ -1981,15 +2107,15 @@ describe('DelegationCoordinator', () => {
     })
 
     assert.equal(run.status, 'completed')
-    assert.equal(modelsUsed.join(','), 'cheap-flash,deepseek-pro', '契约失败后升档到 Pro 重跑一次')
+    assert.equal(modelsUsed.join(','), 'cheap-flash,deepseek-pro', '???????? Pro ????')
     assert.equal(workerCalls, 2)
     assert.equal(run.selectedModel, 'deepseek-pro')
-    assert.equal(run.results[0]!.status, 'passed', '升档产出的合规结果替换原契约破碎结果')
-    const shadow = run.modelTierShadows!.find(s => s.reason.includes('契约失败'))
-    assert.ok(shadow, '契约失败升档必须落 shadow（配额记账）')
+    assert.equal(run.results[0]!.status, 'passed', '??????????????????')
+    const shadow = run.modelTierShadows!.find(s => s.reason.includes('????'))
+    assert.ok(shadow, '????????? shadow??????')
   })
 
-  it('P0-5: 升档后契约仍碎 → 保留原结果、不替换 selectedModel', async () => {
+  it('P0-5: ??????? ? ????????? selectedModel', async () => {
     const escalateCards: ModelCapabilityCard[] = [
       { model: 'cheap-flash', toolUseReliability: 0.7, jsonStability: 0.7, editSuccessRate: 0.5, testRepairRate: 0.5, contextWindow: 1_000_000, cacheEconomics: 'strong', recommendedTasks: ['code_search'] },
       { model: 'deepseek-pro', toolUseReliability: 0.95, jsonStability: 0.95, editSuccessRate: 0.9, testRepairRate: 0.85, contextWindow: 128_000, cacheEconomics: 'medium', recommendedTasks: ['patch_proposal'] },
@@ -2037,16 +2163,16 @@ describe('DelegationCoordinator', () => {
       budget: { maxRetries: 1, maxTurns: 4, maxTokens: 4096, timeoutMs: 30000 },
     })
 
-    assert.equal(modelsUsed.join(','), 'cheap-flash,deepseek-pro', '仍尝试了一次升档')
-    assert.equal(run.results[0]!.status, 'blocked', '升档无改善 → 原结果保留')
+    assert.equal(modelsUsed.join(','), 'cheap-flash,deepseek-pro', '????????')
+    assert.equal(run.results[0]!.status, 'blocked', '????? ? ?????')
     assert.equal(run.results[0]!.failureReason, 'json_parse')
-    assert.equal(run.selectedModel, 'cheap-flash', 'selectedModel 不切换到无改善的升档模型')
+    assert.equal(run.selectedModel, 'cheap-flash', 'selectedModel ????????????')
   })
 
 
-  it('escalationCap=off blocks Flash→Pro escalation retry entirely', async () => {
-    // 升档重试是全新会话零缓存全量重跑，off 时失败重试必须留在原档卡上，
-    // 绝不自动碰 Pro。前置路由不受影响（此单为 cheap 推荐，无升档诉求）。
+  it('escalationCap=off blocks Flash?Pro escalation retry entirely', async () => {
+    // ?????????????????off ??????????????
+    // ????? Pro????????????? cheap ??????????
     const escalateCards: ModelCapabilityCard[] = [
       { model: 'cheap-flash', toolUseReliability: 0.7, jsonStability: 0.7, editSuccessRate: 0.5, testRepairRate: 0.5, contextWindow: 1_000_000, cacheEconomics: 'strong', recommendedTasks: ['code_search'] },
       { model: 'deepseek-pro', toolUseReliability: 0.95, jsonStability: 0.95, editSuccessRate: 0.9, testRepairRate: 0.85, contextWindow: 128_000, cacheEconomics: 'medium', recommendedTasks: ['patch_proposal'] },
@@ -2094,7 +2220,7 @@ describe('DelegationCoordinator', () => {
   it('escalationCap=balanced retries with a balanced card, never the strong card', async () => {
     const cards: ModelCapabilityCard[] = [
       { model: 'cheap-flash', toolUseReliability: 0.7, jsonStability: 0.7, editSuccessRate: 0.5, testRepairRate: 0.5, contextWindow: 1_000_000, cacheEconomics: 'strong', recommendedTasks: ['code_search'] },
-      // 名字无 tier 关键词 + 中等能力 → inferModelTierFromCard 判为 balanced
+      // ??? tier ??? + ???? ? inferModelTierFromCard ?? balanced
       { model: 'mid-model', toolUseReliability: 0.7, jsonStability: 0.7, editSuccessRate: 0.7, testRepairRate: 0.7, contextWindow: 300_000, cacheEconomics: 'medium', recommendedTasks: ['code_edit'] },
       { model: 'deepseek-pro', toolUseReliability: 0.95, jsonStability: 0.95, editSuccessRate: 0.9, testRepairRate: 0.85, contextWindow: 128_000, cacheEconomics: 'medium', recommendedTasks: ['patch_proposal'] },
     ]
@@ -2189,7 +2315,7 @@ describe('DelegationCoordinator', () => {
       budget: { maxRetries: 1, maxTurns: 4, maxTokens: 4096, timeoutMs: 30000 },
     })
 
-    // Only the cheap model ran — no Pro escalation despite maxRetries > 0.
+    // Only the cheap model ran ? no Pro escalation despite maxRetries > 0.
     assert.ok(!modelsUsed.includes('deepseek-pro'), `reviewer must not escalate to Pro, got: ${modelsUsed.join(',')}`)
     assert.equal(modelsUsed.length, 1)
     assert.equal(modelsUsed[0], 'cheap-flash')
@@ -2390,7 +2516,7 @@ describe('DelegationCoordinator', () => {
         runWorker: async () => { throw new Error('502 upstream error') },
       })
 
-      // B1: delegate() no longer rethrows — returns structured degradation
+      // B1: delegate() no longer rethrows ? returns structured degradation
       const degradedRun = await coordinator.delegate({
         parentTurnId: 'turn_ph2',
         objective: 'Summarize repository documentation layout for onboarding guide.',
@@ -2420,7 +2546,7 @@ describe('DelegationCoordinator', () => {
         runWorker: async () => { throw new Error('Delegation aborted: caller signal fired') },
       })
 
-      // B1: delegate no longer rethrows — it returns structured degradation
+      // B1: delegate no longer rethrows ? it returns structured degradation
       const degradedRun = await coordinator.delegate({
         parentTurnId: 'turn_ph3',
         objective: 'Summarize repository documentation layout for onboarding guide.',
@@ -2437,7 +2563,7 @@ describe('DelegationCoordinator', () => {
     })
   })
 
-  describe('EFE × provider-health worker routing (Track 1)', () => {
+  describe('EFE ? provider-health worker routing (Track 1)', () => {
     const neutralSignals = {
       efe: { epistemicValue: 0.5, pragmaticValue: 0.5, noveltyBonus: 0.2, precision: 0.5 },
       sensorium: { complexity: 0.4, pressure: 0.3, confidence: 0.6, stability: 0.8 },
@@ -2457,7 +2583,7 @@ describe('DelegationCoordinator', () => {
       }
     }
 
-    // No routing.routing entry for repo_summarization → explicit routing never
+    // No routing.routing entry for repo_summarization ? explicit routing never
     // matches, so the EFE path (or static fallback) decides.
     const routing = {
       providers: {
@@ -2516,7 +2642,7 @@ describe('DelegationCoordinator', () => {
 
     function coldProvider(health: ProviderHealthTracker, providerId: string) {
       health.registerProvider(providerId)
-      // hot → warm (2 failures), warm → cold (3 more)
+      // hot ? warm (2 failures), warm ? cold (3 more)
       for (let i = 0; i < 5; i++) health.recordFailure(providerId)
     }
 
@@ -2572,7 +2698,7 @@ describe('DelegationCoordinator', () => {
     })
   })
 
-  // ── Wave 2: exponential backoff retry ───────────────────────────
+  // ?? Wave 2: exponential backoff retry ???????????????????????????
 
   describe('exponential backoff retry', () => {
     it('retries same-model worker on failure and succeeds on second attempt', async () => {
@@ -2619,7 +2745,7 @@ describe('DelegationCoordinator', () => {
       assert.equal(sleepCalls[0], 10000, 'first backoff delay should be 10s (base * 2^0)')
     })
 
-    it('respects maxRetries=0 — no retry, immediate failure', async () => {
+    it('respects maxRetries=0 ? no retry, immediate failure', async () => {
       let calls = 0
       const sleepCalls: number[] = []
       const coordinator = new DelegationCoordinator({
@@ -2653,8 +2779,8 @@ describe('DelegationCoordinator', () => {
       }])
 
       assert.equal(run.status, 'completed')
-      assert.equal(calls, 1, 'runWorker called once — no retry')
-      assert.equal(sleepCalls.length, 0, 'no sleep calls — retry disabled')
+      assert.equal(calls, 1, 'runWorker called once ? no retry')
+      assert.equal(sleepCalls.length, 0, 'no sleep calls ? retry disabled')
     })
 
     it('uses exponential delay formula: base * 2^(attempt-1)', async () => {
@@ -2696,7 +2822,7 @@ describe('DelegationCoordinator', () => {
     })
   })
 
-  it('delegateBatch 同批读工共享批级 StigmergyStore；写工默认不挂、显式 opt-in 才挂（收编 #3）', async () => {
+  it('delegateBatch ???????? StigmergyStore?????????? opt-in ????? #3?', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'coord-stigmergy-'))
     const seen: Array<{ id: string; profile: string; stigmergy: unknown }> = []
     const coordinator = new DelegationCoordinator({
@@ -2715,8 +2841,8 @@ describe('DelegationCoordinator', () => {
         compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
       }),
       runWorker: async config => {
-        // 按 order.id 记录——并发派发下完成顺序由事件循环决定，位置断言在
-        // 负载下会翻（seen[2]/seen[3] 对调），按 id 断言消除顺序敏感。
+        // ? order.id ??????????????????????????
+        // ??????seen[2]/seen[3] ????? id ?????????
         seen.push({ id: config.order.id, profile: config.order.profile, stigmergy: config.stigmergy })
         return {
           result: resultFor(config.order.id),
@@ -2730,8 +2856,8 @@ describe('DelegationCoordinator', () => {
     await coordinator.delegateBatch([
       { parentTurnId: 'batch:st:0', objective: 'Explore the alpha module for routing seams and risk patterns.', kind: 'code_search', profile: 'code_scout', scope: {} },
       { parentTurnId: 'batch:st:1', objective: 'Explore the beta module for cache affinity and hot paths.', kind: 'code_search', profile: 'code_scout', scope: {} },
-      // scope.files 显式声明——P1-8 起写工空 scope 会被全局闸拦下（本用例测批级
-      // StigmergyStore，不是测闸；闸的行为见下方专项用例）。
+      // scope.files ??????P1-8 ???? scope ??????????????
+      // StigmergyStore???????????????????
       { parentTurnId: 'batch:st:2', objective: 'Implement the gamma feature with tests and typecheck verification.', kind: 'patch_proposal', profile: 'patcher', scope: { files: ['src/gamma.ts'] } },
       { parentTurnId: 'batch:st:3', objective: 'Implement the delta feature with tests and typecheck verification.', kind: 'patch_proposal', profile: 'patcher', scope: { files: ['src/delta.ts'] }, batchStigmergy: true },
     ])
@@ -2742,11 +2868,117 @@ describe('DelegationCoordinator', () => {
     const read1 = byId('st:1')!
     const writerDefault = byId('st:2')!
     const writerOptIn = byId('st:3')!
-    assert.ok(read0.stigmergy, '读工必须拿到批级共享 store')
-    assert.equal(read1.stigmergy, read0.stigmergy, '同批读工共享同一 store 实例')
-    assert.equal(writerDefault.stigmergy, undefined, '写工默认不挂（守护实现独立性）')
-    assert.ok(writerOptIn.stigmergy, '写工显式 opt-in 后挂')
-    assert.equal(writerOptIn.stigmergy, read0.stigmergy, 'opt-in 写工与读工共享同一批级实例')
+    assert.ok(read0.stigmergy, '?????????? store')
+    assert.equal(read1.stigmergy, read0.stigmergy, '???????? store ??')
+    assert.equal(writerDefault.stigmergy, undefined, '???????????????')
+    assert.ok(writerOptIn.stigmergy, '???? opt-in ??')
+    assert.equal(writerOptIn.stigmergy, read0.stigmergy, 'opt-in ?????????????')
     rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('S1 ???explore ???? maxWorkers?write ?? maxWriteWorkers', async () => {
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+    let exploreActive = 0
+    let writeActive = 0
+    let explorePeak = 0
+    let writePeak = 0
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 2,
+      maxExploreWorkers: 4,
+      maxWriteWorkers: 1,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      runWorker: async config => {
+        const isWrite = classifyProfile(config.order.profile) === 'hands'
+        if (isWrite) { writeActive++; writePeak = Math.max(writePeak, writeActive) }
+        else { exploreActive++; explorePeak = Math.max(explorePeak, exploreActive) }
+        await sleep(40)
+        if (isWrite) writeActive--
+        else exploreActive--
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+      runHands: async config => {
+        writeActive++; writePeak = Math.max(writePeak, writeActive)
+        await sleep(40)
+        writeActive--
+        return {
+          result: resultFor(config.order.id),
+          session: { getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    const run = await coordinator.delegateBatch([
+      { parentTurnId: 'pool:e0', objective: 'Explore module A for routing seams and risk patterns.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/a.ts'] } },
+      { parentTurnId: 'pool:e1', objective: 'Explore module B for cache affinity and hot paths.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/b.ts'] } },
+      { parentTurnId: 'pool:e2', objective: 'Explore module C for delegation boundaries and gates.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/c.ts'] } },
+      { parentTurnId: 'pool:e3', objective: 'Explore module D for evidence flow and verification debt.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/d.ts'] } },
+      { parentTurnId: 'pool:w0', objective: 'Implement feature W0 with tests and typecheck verification.', kind: 'patch_proposal', profile: 'patcher', scope: { files: ['src/w0.ts'] } },
+      { parentTurnId: 'pool:w1', objective: 'Implement feature W1 with tests and typecheck verification.', kind: 'patch_proposal', profile: 'patcher', scope: { files: ['src/w1.ts'] } },
+    ])
+
+    assert.equal(run.status, 'completed')
+    assert.equal(run.results.length, 6)
+    assert.equal(explorePeak, 4, 'explore ???? maxWorkers=2 ?? 4 ??')
+    assert.equal(writePeak, 1, 'write ?? maxWriteWorkers=1')
+    assert.ok(run.results.every(r => typeof r.durationMs === 'number'), 'M2: settle ???? wall-clock ??')
+  })
+
+  it('S1 ???????????????????? ? maxWorkers?', async () => {
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+    let active = 0
+    let peak = 0
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 2,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      runWorker: async config => {
+        active++
+        peak = Math.max(peak, active)
+        await sleep(40)
+        active--
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    await coordinator.delegateBatch([
+      { parentTurnId: 'pool:r0', objective: 'Explore module A for routing seams and risk patterns.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/a.ts'] } },
+      { parentTurnId: 'pool:r1', objective: 'Explore module B for cache affinity and hot paths.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/b.ts'] } },
+      { parentTurnId: 'pool:r2', objective: 'Explore module C for delegation boundaries and gates.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/c.ts'] } },
+      { parentTurnId: 'pool:r3', objective: 'Explore module D for evidence flow and verification debt.', kind: 'code_search', profile: 'code_scout', scope: { files: ['src/d.ts'] } },
+    ])
+
+    assert.ok(peak <= 2, `??????????? ? maxWorkers??? ${peak}`)
   })
 })

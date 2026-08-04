@@ -2,6 +2,8 @@ export type FailureClass =
   | 'type_error'
   | 'assertion'
   | 'missing_dep'
+  /** Runtime lifecycle gate (shutdown/handoff), not a model or code failure. */
+  | 'runtime_gate'
   | 'timeout'
   | 'snapshot'
   | 'module_resolution'
@@ -14,10 +16,10 @@ export type FailureClass =
   | 'api_error'
   | 'syntax_error'
   | 'format_error'
-  /** TDD test-run failures (run_tests tool) — expected RED step, not a code error. */
+  /** TDD test-run failures (run_tests tool) ? expected RED step, not a code error. */
   | 'test_red'
-  /** 只读探测工具对不存在路径的 not-found（A5 信号互扰治理 M3）——
-   *  反幻影探针证实"不存在"是有效信息收集，不是认知失败，vigor 减罚 0.3。 */
+  /** ????????????? not-found?A5 ?????? M3???
+   *  ???????"???"???????????????vigor ?? 0.3? */
   | 'probe_miss'
 
 export interface ClassifiedFailure {
@@ -34,9 +36,9 @@ const TEST_COMMAND_PATTERN =
   /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|\b(?:node|tsx)\b[^\n|;&]*\s--test\b|\b(?:vitest|jest|mocha|pytest)\b|\bgo\s+test\b|\bcargo\s+test\b|\bplaywright\s+test\b/
 
 /**
- * Whether a tool invocation is a test run — for TDD RED detection.
+ * Whether a tool invocation is a test run ? for TDD RED detection.
  * run_tests always is; bash counts when the command invokes a known
- * test runner (`npm test`, `npx tsx --test`, `pytest`, …). Without the
+ * test runner (`npm test`, `npx tsx --test`, `pytest`, ?). Without the
  * bash branch, TDD via bash still gets full vigor penalty (1b509acc gap).
  */
 export function isTestRunInvocation(toolName: string, input: Record<string, unknown> | undefined): boolean {
@@ -46,25 +48,26 @@ export function isTestRunInvocation(toolName: string, input: Record<string, unkn
   return TEST_COMMAND_PATTERN.test(cmd)
 }
 
-/** 只读探测类工具——not-found 失败走 probe_miss 减罚（A5/M3）。
- *  刻意不含 bash：`cat` 缺文件可能是构建/脚本的真失败，保守全额罚。 */
+/** ?????????not-found ??? probe_miss ???A5/M3??
+ *  ???? bash?`cat` ????????/????????????? */
 const READ_PROBE_TOOLS: ReadonlySet<string> = new Set([
   'read_file', 'read_section', 'glob', 'grep', 'list_dir', 'file_info',
 ])
 
-/** Whether a tool invocation is a read-only probe — for probe_miss classification. */
+/** Whether a tool invocation is a read-only probe ? for probe_miss classification. */
 export function isReadProbeInvocation(toolName: string): boolean {
   return READ_PROBE_TOOLS.has(toolName)
 }
 
 const NOT_FOUND_PATTERN = /ENOENT|File not found|no such file or directory|does not exist|Path not found/i
 
-/** 结构化短路的每类别规范建议——与 classifyFailure 各分支文案对齐。
- *  工具自报 errorKind 时置信度 1.0（工具比正则更知道自己为何失败）。 */
+/** ???????????????? classifyFailure ????????
+ *  ???? errorKind ???? 1.0????????????????? */
 const CANONICAL: Record<FailureClass, { suggestion: string; retryable: boolean }> = {
   type_error: { suggestion: 'Fix type annotation or interface. Do not change business logic.', retryable: false },
   assertion: { suggestion: 'Compare expected vs actual. Determine if test expectation is wrong or implementation is buggy before changing code.', retryable: false },
   missing_dep: { suggestion: 'Report missing dependency. Do not silently change the test command.', retryable: false },
+  runtime_gate: { suggestion: 'Runtime lifecycle gate is active. Wait for shutdown/handoff to settle, then retry manually; do not change code.', retryable: false },
   timeout: { suggestion: 'Check for infinite loops, unawaited async, or slow operations. Consider increasing timeout.', retryable: true },
   snapshot: { suggestion: 'Review snapshot diff. If change is intentional, update snapshots.', retryable: false },
   module_resolution: { suggestion: 'Check import path, file existence, and package.json exports.', retryable: false },
@@ -76,13 +79,13 @@ const CANONICAL: Record<FailureClass, { suggestion: string; retryable: boolean }
   api_error: { suggestion: 'Transient API error. Retry after cooldown.', retryable: true },
   syntax_error: { suggestion: 'Fix the syntax or reference error in the code.', retryable: false },
   format_error: { suggestion: 'Model output was malformed. Retry with clearer format instructions.', retryable: true },
-  test_red: { suggestion: 'TDD RED — 这是预期中的测试红灯，实现代码后应转绿。', retryable: false },
-  probe_miss: { suggestion: '探测确认路径不存在——这本身是有效信息，记录结论即可，不要重试同一路径。', retryable: false },
+  test_red: { suggestion: 'TDD RED ? ????????????????????', retryable: false },
+  probe_miss: { suggestion: '????????????????????????????????????', retryable: false },
 }
 
-/** 从 ToolResult 的结构字段解析失败类别：errorKind 直读；
- *  bash 的 errorClass 三态桥接（timeout→timeout、environment→missing_dep）。
- *  exec-failure 不桥接——语义太宽，留给文本正则细分。 */
+/** ? ToolResult ????????????errorKind ???
+ *  bash ? errorClass ?????timeout?timeout?environment?missing_dep??
+ *  exec-failure ??????????????????? */
 export function resolveErrorKind(
   result: { errorKind?: FailureClass; errorClass?: 'environment' | 'exec-failure' | 'timeout' } | undefined,
 ): FailureClass | undefined {
@@ -94,10 +97,10 @@ export function resolveErrorKind(
 }
 
 /**
- * 结构优先的工具失败分类（中文化第二波解耦层）。
- * 工具自报的 errorKind/errorClass 短路文本正则——消息文案中文化后
- * classifyFailure 的英文模式会失灵，结构字段是失效防线。
- * 无结构信号时回退 classifyFailure(content) 文本匹配，行为不变。
+ * ???????????????????????
+ * ????? errorKind/errorClass ????????????????
+ * classifyFailure ???????????????????
+ * ???????? classifyFailure(content) ??????????
  */
 export function classifyToolFailure(
   result: { errorKind?: FailureClass; errorClass?: 'environment' | 'exec-failure' | 'timeout' } | undefined,
@@ -118,11 +121,11 @@ export function classifyFailure(
 ): ClassifiedFailure {
   // Priority order: most specific patterns first
 
-  // 0. 反幻影探针脱靶（A5/M3）：只读探测对不存在路径的 not-found 是信息收集
-  //（证实"不存在"），不是认知失败——此前落 unknown 全额罚 vigor，
-  // 系统一边教"读前探测"一边罚探测行为。
+  // 0. ????????A5/M3????????????? not-found ?????
+  //???"???"????????????? unknown ??? vigor?
+  // ?????"????"????????
   if (opts?.isReadProbe && NOT_FOUND_PATTERN.test(errorText)) {
-    return { class: 'probe_miss', suggestion: '探测确认路径不存在——这本身是有效信息，记录结论即可，不要重试同一路径。', confidence: 0.85, retryable: false }
+    return { class: 'probe_miss', suggestion: '????????????????????????????????????', confidence: 0.85, retryable: false }
   }
 
   // 1. TypeScript type errors
@@ -160,7 +163,7 @@ export function classifyFailure(
     return { class: 'timeout', suggestion: 'Transient network error. Retry may succeed.', confidence: 0.85, retryable: true }
   }
 
-  // 7. API error — HTTP status codes (NEW, after timeout to avoid double-match on network errors)
+  // 7. API error ? HTTP status codes (NEW, after timeout to avoid double-match on network errors)
   if (/429|500|502|503|rate limit|Too Many Requests|Bad Gateway|Internal Server Error|Service Unavailable/i.test(errorText)) {
     return { class: 'api_error', suggestion: 'Transient API error. Retry after cooldown.', confidence: 0.85, retryable: true }
   }
@@ -180,15 +183,15 @@ export function classifyFailure(
     return { class: 'env_missing', suggestion: 'Mark as blocked. Required environment or credentials are missing.', confidence: 0.8, retryable: false }
   }
 
-  // 11. Assertion failure — run_tests 来源走 test_red（TDD RED 是预期中的，不扣分）
+  // 11. Assertion failure ? run_tests ??? test_red?TDD RED ??????????
   if (/\bassert|\bexpect\b|AssertionError|\bExpected\b|expected.*but got/.test(errorText) || /not ok \d+/.test(errorText)) {
     if (opts?.isTestRun) {
-      return { class: 'test_red', suggestion: 'TDD RED — 这是预期中的测试红灯，实现代码后应转绿。', confidence: 0.9, retryable: false }
+      return { class: 'test_red', suggestion: 'TDD RED ? ????????????????????', confidence: 0.9, retryable: false }
     }
     return { class: 'assertion', suggestion: 'Compare expected vs actual. Determine if test expectation is wrong or implementation is buggy before changing code.', confidence: 0.7, retryable: false }
   }
 
-  // 12. Format error (near bottom — broadest format catch)
+  // 12. Format error (near bottom ? broadest format catch)
   if (/JSON[.\s]parse|malformed|Unterminated string|Unexpected end of JSON|Invalid character in JSON/i.test(errorText)) {
     return { class: 'format_error', suggestion: 'Model output was malformed. Retry with clearer format instructions.', confidence: 0.75, retryable: true }
   }

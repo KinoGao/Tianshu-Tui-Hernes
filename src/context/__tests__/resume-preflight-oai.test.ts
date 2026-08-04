@@ -76,13 +76,35 @@ describe('runResumePreflightOai', () => {
     assert.strictEqual(report.syntheticResultsInserted, 0)
   })
 
+  it('removes an empty tool_calls array on the clean fast path', () => {
+    const messages: OaiMessage[] = [
+      { role: 'user', content: 'continue' },
+      { role: 'assistant', content: 'already answered', tool_calls: [] },
+    ]
+
+    const report = runResumePreflightOai(messages)
+    assert.strictEqual(report.repaired, true)
+    assert.strictEqual(report.safe, true)
+    assert.deepStrictEqual(report.messages[1], { role: 'assistant', content: 'already answered' })
+    assert.equal('tool_calls' in report.messages[1]!, false)
+  })
+
+  it('keeps recovered null-content assistants valid after empty tool_calls removal', () => {
+    const report = runResumePreflightOai([
+      { role: 'assistant', content: null, tool_calls: [] },
+    ])
+
+    assert.deepStrictEqual(report.messages, [{ role: 'assistant', content: '' }])
+    assert.strictEqual(report.safe, true)
+  })
+
   it('repairs orphan tool_calls by inserting synthetic results', () => {
     const messages: OaiMessage[] = [
       { role: 'user', content: 'read file' },
       { role: 'assistant', content: null, tool_calls: [
         { id: 'tc_1', type: 'function', function: { name: 'read_file', arguments: '{}' } },
       ]},
-      // tc_1 has no result — orphan
+      // tc_1 has no result ? orphan
     ]
     const report = runResumePreflightOai(messages)
     assert.strictEqual(report.repaired, true)
@@ -92,7 +114,7 @@ describe('runResumePreflightOai', () => {
     const toolResult = report.messages.find(m => m.role === 'tool')
     assert.ok(toolResult)
     assert.strictEqual(toolResult.tool_call_id, 'tc_1')
-    assert.ok(toolResult.content.includes('会话中断'))
+    assert.ok(toolResult.content.includes('????'))
   })
 
   it('names the target file in a write-tool orphan recovery hint', () => {
@@ -110,7 +132,7 @@ describe('runResumePreflightOai', () => {
     // Actionable: names the exact file to verify, and stays non-destructive.
     assert.ok(text.includes('src/App.tsx'), 'should name the target file')
     assert.ok(text.includes('read_file'))
-    assert.ok(text.includes('不要盲目重写'))
+    assert.ok(text.includes('??????'))
   })
 
   it('falls back to a generic hint when the write args are unparseable', () => {
@@ -123,8 +145,8 @@ describe('runResumePreflightOai', () => {
     const toolResult = report.messages.find(m => m.role === 'tool' && m.tool_call_id === 'tc_bad')
     assert.ok(toolResult)
     const text = String((toolResult as { content: string }).content)
-    assert.ok(text.includes('会话中断'))
-    assert.ok(text.includes('目标文件'))
+    assert.ok(text.includes('????'))
+    assert.ok(text.includes('????'))
   })
 
   it('preserves existing tool results', () => {
@@ -158,12 +180,12 @@ describe('runResumePreflightOai', () => {
     const report = runResumePreflightOai(messages)
     assert.strictEqual(report.repaired, false)
     assert.strictEqual(report.safe, true)
-    assert.strictEqual(report.messages, messages) // identical reference → prefix cache intact
+    assert.strictEqual(report.messages, messages) // identical reference ? prefix cache intact
   })
 
   // Regression: the Esc-during-tools bug. A tool batch aborted mid-flight commits
-  // its result LATE (via a detached addToolResults) — after the next turn already
-  // appended messages — so the result lands out of order. Its id still matches, so
+  // its result LATE (via a detached addToolResults) ? after the next turn already
+  // appended messages ? so the result lands out of order. Its id still matches, so
   // the old id-presence guard reported "safe" and the provider rejected the next
   // request with "insufficient tool messages following tool_calls". The adjacency
   // repair must MOVE the stray result back into position, preserving its content.
@@ -173,12 +195,12 @@ describe('runResumePreflightOai', () => {
         { id: 'tc_A', type: 'function', function: { name: 'bash', arguments: '{}' } },
       ]},
       // next turn's messages landed BEFORE tc_A's (late) result
-      { role: 'user', content: '继续' },
+      { role: 'user', content: '??' },
       { role: 'assistant', content: 'ok' },
       // the aborted batch's real result, appended out of order at the end
       { role: 'tool', tool_call_id: 'tc_A', content: 'real bash output' },
     ]
-    // The id exists, so the old id-only detector saw no orphan call…
+    // The id exists, so the old id-only detector saw no orphan call?
     assert.deepStrictEqual(detectOrphanToolCallsOai(messages), [])
 
     const report = runResumePreflightOai(messages)
@@ -218,7 +240,7 @@ describe('runResumePreflightOai', () => {
     assert.strictEqual((m[1] as { content: string }).content, 'A output')
     assert.strictEqual(m[2]!.role, 'tool')
     assert.strictEqual((m[2] as { tool_call_id: string }).tool_call_id, 'tc_B')
-    assert.ok((m[2] as { content: string }).content.includes('会话中断'))
+    assert.ok((m[2] as { content: string }).content.includes('????'))
     assert.strictEqual(m[3]!.role, 'user')
   })
 })

@@ -1,5 +1,5 @@
 /**
- * Heavy agent assembly for `rivet serve` — loaded via dynamic import after the
+ * Heavy agent assembly for `rivet serve` ? loaded via dynamic import after the
  * HTTP listener is up (or on first session), so /health cold-start does not pay
  * for AgentLoop / tools / Meridian / council / MCP SDK graph.
  */
@@ -69,41 +69,41 @@ export interface BuiltAgent {
 }
 
 /**
- * Wave J: sidecar 级共享运行时状态——跨 session + switchModel 保持，避免
- * createAgentRuntime per-call new 导致状态丢失。`runServe` 顶层创建一份，
- * 透传给每个 buildManagedAgent / assembleAgentLoop。
+ * Wave J: sidecar ??????????? session + switchModel ?????
+ * createAgentRuntime per-call new ???????`runServe` ???????
+ * ????? buildManagedAgent / assembleAgentLoop?
  *
- * 当前共享对象：
- * - providerHealth: 进程级单例，所有 session 共享 provider 健康统计
- *   （registerProvider 幂等，重复注册不重置）
- * - domainStores: cwd-keyed 缓存，同 cwd 多 session 复用同一个磁盘绑定的
- *   DomainKnowledgeStore（避免重复 load + 跨 session lessons 可见）
- * - sameCwdRunningCount: late-bound (Wave F)——RuntimeSessionManager 创建后
- *   回写。给 verificationSnapshotManager 做多 session worktree 冲突检测；
- *   修复硬编码 () => 0 假设（TUI 单 session 路径不受影响，sidecar 走真实计数）。
+ * ???????
+ * - providerHealth: ???????? session ?? provider ????
+ *   ?registerProvider ???????????
+ * - domainStores: cwd-keyed ???? cwd ? session ??????????
+ *   DomainKnowledgeStore????? load + ? session lessons ???
+ * - sameCwdRunningCount: late-bound (Wave F)??RuntimeSessionManager ???
+ *   ???? verificationSnapshotManager ?? session worktree ?????
+ *   ????? () => 0 ???TUI ? session ???????sidecar ???????
  *
- * 未来候选：bandit gates evaluation 结果缓存（避免 switchModel 重算）。
+ * ?????bandit gates evaluation ??????? switchModel ????
  */
 export interface SharedRuntime {
   providerHealth: ProviderHealthTracker
-  // per-cwd 资源统一用 Map<string, X> 模式（镜像 domainStores），防模式漂移。
+  // per-cwd ????? Map<string, X> ????? domainStores????????
   domainStores: Map<string, DomainKnowledgeStore>
-  /** per-cwd MeridianIndexer——SQLite 单写者，同 cwd 多 session 必须共享单实例。 */
+  /** per-cwd MeridianIndexer??SQLite ????? cwd ? session ???????? */
   meridianIndexers: Map<string, MeridianIndexer>
-  /** per-cwd LSP 管理器——语言服务器子进程池，重复 spawn 浪费且互踩。
-   *  entry.ready 是 initialize() 的完成 Promise（true=至少一个 server 可用）；
-   *  每次 assembleAgentLoop 都对它订阅 .then 以捕获当次 agent（switchModel 安全）。 */
+  /** per-cwd LSP ????????????????? spawn ??????
+   *  entry.ready ? initialize() ??? Promise?true=???? server ????
+   *  ?? assembleAgentLoop ????? .then ????? agent?switchModel ???? */
   lspManagers: Map<string, { manager: LspManager; ready: Promise<boolean> }>
-  /** late-bound: 在 sessions = new RuntimeSessionManager(...) 之后由 runServe
-   *  回写。值为 null 时退化为 0（sessions 尚未初始化的窗口期）。 */
+  /** late-bound: ? sessions = new RuntimeSessionManager(...) ??? runServe
+   *  ????? null ???? 0?sessions ??????????? */
   sameCwdRunningCount: ((cwd: string, excludeSessionId?: string) => number) | null
-  /** Server-level MCP manager — one connection pool for all sessions. */
+  /** Server-level MCP manager ? one connection pool for all sessions. */
   mcpManager: McpManager | null
   /** I4: late-bound RuntimeSessionManager so hooks can emit `hook_result` events. */
   sessions: RuntimeSessionManager | null
 }
 
-/** sidecar 内部：按 cwd 取/建 DomainKnowledgeStore，多 session 共享同一实例。 */
+/** sidecar ???? cwd ?/? DomainKnowledgeStore?? session ??????? */
 function getOrCreateDomainStore(shared: SharedRuntime, cwd: string): DomainKnowledgeStore {
   const existing = shared.domainStores.get(cwd)
   if (existing) return existing
@@ -112,28 +112,28 @@ function getOrCreateDomainStore(shared: SharedRuntime, cwd: string): DomainKnowl
   return store
 }
 
-/** 按 cwd 取/建 MeridianIndexer（镜像 getOrCreateDomainStore）。SQLite 单写者，
- *  同 cwd 多 session 共享同一实例；runServe close() 统一释放。exported for tests. */
+/** ? cwd ?/? MeridianIndexer??? getOrCreateDomainStore??SQLite ????
+ *  ? cwd ? session ???????runServe close() ?????exported for tests. */
 export function getOrCreateMeridianIndexer(shared: SharedRuntime, cwd: string): MeridianIndexer {
   const existing = shared.meridianIndexers.get(cwd)
   if (existing) return existing
   const indexer = new MeridianIndexer(cwd)
-  // Memory epoch reset（镜像 TUI bootstrapInteractiveSession）——桌面端会话
-  // 首次触达某 cwd 时清空中毒的跨会话学习存量，见 memory-epoch.ts。
+  // Memory epoch reset??? TUI bootstrapInteractiveSession????????
+  // ????? cwd ??????????????? memory-epoch.ts?
   try {
     resetLegacyMemoryIfNeeded(cwd, {
       clearMistakeEntries: () => indexer.getDb().clearMistakeEntries(),
     })
-  } catch { /* 清理绝不阻塞会话创建 */ }
+  } catch { /* ?????????? */ }
   shared.meridianIndexers.set(cwd, indexer)
-  // 后台闲时全量索引（镜像 CLI bootstrap）——同 cwd 多会话共享单例，天然只跑一次。
+  // ??????????? CLI bootstrap???? cwd ???????????????
   setImmediate(() => { scheduleMeridianBackfill(indexer, cwd) })
   return indexer
 }
 
-/** 按 cwd 取/建 LSP manager entry。首个触达某 cwd 的会话触发 initialize()
- *  （异步，不阻塞会话创建）；后续会话复用同一 entry。ready resolve 为
- *  isReady()——false 表示该 cwd 没有可用的语言服务器（工具不注册）。 */
+/** ? cwd ?/? LSP manager entry?????? cwd ????? initialize()
+ *  ????????????????????? entry?ready resolve ?
+ *  isReady()??false ??? cwd ?????????????????? */
 function getOrCreateLspEntry(
   shared: SharedRuntime,
   cwd: string,
@@ -150,12 +150,12 @@ function getOrCreateLspEntry(
   return entry
 }
 
-/** Wave G: LSP late-init 订阅（照 TUI bootstrap.ts initializeLsp 的 .then 语义）。
- *  设计约束（switchModel 安全性）：每次 assembleAgentLoop 调用时挂载——捕获
- *  当次的新 agent。Promise 已 resolve 时晚订阅立即触发，所以 switchModel
- *  重建的 agent 照样收到 updateTools()；重复 register 无害（ToolRegistry.register
- *  是 Map.set 幂等覆盖）。老 agent 的旧回调对废弃对象空刷一次，无害。
- *  exported for tests（注入 mock entry，不真实 spawn 语言服务器）。 */
+/** Wave G: LSP late-init ???? TUI bootstrap.ts initializeLsp ? .then ????
+ *  ?????switchModel ??????? assembleAgentLoop ?????????
+ *  ???? agent?Promise ? resolve ??????????? switchModel
+ *  ??? agent ???? updateTools()??? register ???ToolRegistry.register
+ *  ? Map.set ??????? agent ?????????????????
+ *  exported for tests??? mock entry???? spawn ??????? */
 export function attachLspTools(
   entry: { manager: LspManager; ready: Promise<boolean> },
   toolRegistry: Pick<ReturnType<typeof createDefaultToolRegistry>, 'register'>,
@@ -171,9 +171,9 @@ export function attachLspTools(
   })
 }
 
-/** Wave G: 释放 per-cwd 共享资源（runServe close()）。每个调用 try-catch
- *  包裹（防御习惯；MeridianDb.close 本身幂等，LspManager.dispose 内部已
- *  best-effort）。exported for tests. */
+/** Wave G: ?? per-cwd ?????runServe close()?????? try-catch
+ *  ????????MeridianDb.close ?????LspManager.dispose ???
+ *  best-effort??exported for tests. */
 export function disposeSharedCwdResources(shared: SharedRuntime): void {
   for (const indexer of shared.meridianIndexers.values()) {
     try { indexer.close() } catch { /* best-effort */ }
@@ -198,19 +198,19 @@ interface SessionStores {
   session: SessionContext
   taskLedger: ReturnType<typeof createTaskLedger>
   ownershipLedger: ReturnType<typeof createOwnershipLedger>
-  /** Outcome of the boot-time history restore — lets the session layer warn
+  /** Outcome of the boot-time history restore ? lets the session layer warn
    *  when the UI shows history but the model context came back empty. */
   historyRestore: HistoryRestoreInfo
-  /** RuntimeRefs 在 createInteractiveToolRegistry 中被工具体内闭包持有；
-   *  Wave C: assembleAgentLoop 通过 createAgentRuntime 装配 coordinator 后
-   *  回写 refs.coordinator，让 5 个 coordinator 依赖工具激活。 */
+  /** RuntimeRefs ? createInteractiveToolRegistry ???????????
+   *  Wave C: assembleAgentLoop ?? createAgentRuntime ?? coordinator ?
+   *  ?? refs.coordinator?? 5 ? coordinator ??????? */
   refs: RuntimeRefs
 }
 
 /**
  * Per-session SessionStores registry, keyed by sessionId. Used by
  * resolveGoalHandles (below) so the session-manager can reach the
- * RuntimeRefs.goalTrackerRef + sessionDir for goal mode wiring — without
+ * RuntimeRefs.goalTrackerRef + sessionDir for goal mode wiring ? without
  * exposing the full stores surface or coupling the generic manager to the
  * serve-agent module.
  *
@@ -226,10 +226,10 @@ const sessionStoresById = new Map<string, { stores: SessionStores; cwd: string }
  *  undefined when no stores have been built for this session yet (idle /
  *  rehydrated session whose agent hasn't been created).
  *
- *  注：`allProviders` 必须从 `config.provider.providers` 填入，否则
- *  `maybeAutoTitle` / `extractCriteria` 的 `!handles.allProviders` 守卫会恒
- *  早退——桌面 sidecar 路径的会话标题自动生成曾因此从未生效（详见
- *  commit `9835c856`）。TUI 路径在 `main.ts:366` 正确设置了此字段。 */
+ *  ??`allProviders` ??? `config.provider.providers` ?????
+ *  `maybeAutoTitle` / `extractCriteria` ? `!handles.allProviders` ????
+ *  ?????? sidecar ?????????????????????
+ *  commit `9835c856`??TUI ??? `main.ts:366` ????????? */
 export function resolveGoalHandles(
   sessionId: string,
   config: {
@@ -254,7 +254,7 @@ export function forgetSessionStores(sessionId: string): void {
 
 /** Late-bound review-gate ref for the session-manager's getReviewGate /
  *  setReviewGate. Undefined when no stores exist yet (idle / rehydrated
- *  session whose agent hasn't been built) — the manager's session override
+ *  session whose agent hasn't been built) ? the manager's session override
  *  still applies once stores are built (applySelections re-push). */
 export function resolveReviewGateRef(sessionId: string): { current: 'auto' | 'off' } | undefined {
   return sessionStoresById.get(sessionId)?.stores.refs.reviewGateRef
@@ -287,13 +287,13 @@ function buildSessionStores(
   const fileHistory = new FileHistory(persist.getBackupDir(), sessionId)
   const session = new SessionContext()
   // Restore prior conversation from disk (sidecar restart recovery).
-  // Matches TUI bootstrap.ts:1461 — loadOai returns [] for new sessions.
+  // Matches TUI bootstrap.ts:1461 ? loadOai returns [] for new sessions.
   const historyRestore = restoreHistoryMessages(persist, session)
 
-  // sidecar 工具装配——复用 bootstrap 的 createInteractiveToolRegistry，与 TUI 端
-  // 共享一套装配链。Wave C 后所有工具（含 coordinator 依赖工具）均通过
-  // refs 闭包后绑定 coordinator，assembleAgentLoop 通过 createAgentRuntime
-  // 装配 coordinator 后回写 refs.coordinator，工具被激活。
+  // sidecar ???????? bootstrap ? createInteractiveToolRegistry?? TUI ?
+  // ????????Wave C ??????? coordinator ????????
+  // refs ????? coordinator?assembleAgentLoop ?? createAgentRuntime
+  // ?? coordinator ??? refs.coordinator???????
   const refs: RuntimeRefs = {
     coordinator: null,
     fileHistory,
@@ -304,59 +304,59 @@ function buildSessionStores(
     ownershipLedger: null,
     verificationSnapshotManager: null,
     deliveryGate: null,
-    // Wave G: per-cwd 共享 Meridian——repo_graph/related_tests 惰性读 refs，
-    // 但在 createInteractiveToolRegistry 之前设值（代码清晰）。legacy /prompt
-    // 路径（无 shared）保持 null。
+    // Wave G: per-cwd ?? Meridian??repo_graph/related_tests ??? refs?
+    // ?? createInteractiveToolRegistry ???????????legacy /prompt
+    // ???? shared??? null?
     meridianIndexer: shared ? getOrCreateMeridianIndexer(shared, cwd) : null,
-    // 对称性回写：sidecar 无功能性消费者（服务器级 MCP 走 SharedRuntime），
-    // 但避免 refs 硬编码 null 造成读到假状态。
+    // ??????sidecar ???????????? MCP ? SharedRuntime??
+    // ??? refs ??? null ????????
     mcpManager: shared?.mcpManager ?? null,
-    // Wave G: LSP 是异步 init——assembleAgentLoop 在 entry.ready 后回写。
+    // Wave G: LSP ??? init??assembleAgentLoop ? entry.ready ????
     lspManager: null,
     banditState: null,
     promptEngine: null,
-    // Wave F: 通过 SharedRuntime → RuntimeSessionManager.sameCwdRunningCount
-    // 注入真实计数；shared 缺失或 manager 未就绪退化为 0（保持 TUI 兼容行为）。
+    // Wave F: ?? SharedRuntime ? RuntimeSessionManager.sameCwdRunningCount
+    // ???????shared ??? manager ?????? 0??? TUI ??????
     getSameCwdRunningSessions: shared
       ? () => shared.sameCwdRunningCount?.(cwd, sessionId) ?? 0
       : undefined,
     goalTrackerRef: { current: null },
-    // 域知识库引用：buildAgentLoop 解析 store（SharedRuntime.domainStores 优先）
-    // 后回写——galaxy 路由学习经此存取。
+    // ???????buildAgentLoop ?? store?SharedRuntime.domainStores ???
+    // ?????galaxy ?????????
     domainKnowledgeStoreRef: { current: null },
     obligationTrackerRef: { current: null },
-    // 会话级审查门开关：初始值取 review.skipAuto 配置快照。sidecar 无 /review off
-    // 本地命令，运行期不变更（桌面端经 Settings 修改配置后新会话生效）。
+    // ????????????? review.skipAuto ?????sidecar ? /review off
+    // ???????????????? Settings ????????????
     reviewGateRef: { current: ctx.config.agent.review.skipAuto ? 'off' : 'auto' },
-    // 插件 hooks/commands：sidecar 暂不加载插件（TUI bootstrap 专属装配链），
-    // 保持空数组与 RuntimeRefs 契约对齐——消费方按空集处理，不影响会话。
+    // ?? hooks/commands?sidecar ???????TUI bootstrap ???????
+    // ?????? RuntimeRefs ?????????????????????
     pluginHooks: [],
     pluginCommands: [],
-    // 多会话隔离：每会话独立内存态 TodoStore，杜绝并发会话清单串台（提示词注入污染）。
-    // 不做磁盘持久化（按决策），展示与跨重启恢复靠事件日志重放。
+    // ?????????????? TodoStore?????????????????????
+    // ?????????????????????????????
     todoStore: new TodoStore(),
   }
-  // Goal mode restore — recover an in-flight goal across sidecar restarts.
-  // restoreGoalTracker internally normalizes active→paused (safe downgrade)
+  // Goal mode restore ? recover an in-flight goal across sidecar restarts.
+  // restoreGoalTracker internally normalizes active?paused (safe downgrade)
   // so a restarted sidecar never auto-resumes a goal without user opt-in.
   // Aligns with the TUI bootstrap path (bootstrap.ts:1739-1745).
   const sessionDir = getSessionDir(cwd)
   try {
     const restored = restoreGoalTracker(sessionDir, sessionId, { maxJudgeRuns: ctx.config.agent?.goal?.judge?.maxRuns })
     if (restored) refs.goalTrackerRef.current = restored
-  } catch { /* non-fatal — start without a restored goal */ }
+  } catch { /* non-fatal ? start without a restored goal */ }
   const { registry: toolRegistry } = createInteractiveToolRegistry(refs, ctx.config, cwd)
 
-  // memory (unified recall + remember)：bootstrap 在 createInteractiveToolRegistry 外装的工具，
-  // 这里复用 sidecar 已有的 claimStore + session 完成对齐。
+  // memory (unified recall + remember)?bootstrap ? createInteractiveToolRegistry ??????
+  // ???? sidecar ??? claimStore + session ?????
   toolRegistry.register(createMemoryTool(claimStore, {
     sessionId,
     getTurn: () => session.getTurnCount(),
     cwd,
   }))
 
-  // taskLedger / ownershipLedger 由 createInteractiveToolRegistry 的 B1 装配段
-  // 原地填入 refs；fallback 仅用于装配失败时不破坏 assembleAgentLoop 的 deps。
+  // taskLedger / ownershipLedger ? createInteractiveToolRegistry ? B1 ???
+  // ???? refs?fallback ??????????? assembleAgentLoop ? deps?
   const taskLedger = refs.taskLedger ?? createTaskLedger({ taskId: sessionId })
   const ownershipLedger = refs.ownershipLedger ?? createOwnershipLedger({
     baseline: createWorktreeBaseline(captureGitBaseline(cwd)),
@@ -379,12 +379,12 @@ function buildSessionStores(
 
 /**
  * Merge project-level .rivet-config.json agent block into the startup config.
- * Only agent fields are merged — provider/model/auth stay on the startup snapshot
+ * Only agent fields are merged ? provider/model/auth stay on the startup snapshot
  * (the sidecar may have been started unconfigured, and the key was set later via
  * Settings). toolGating is deep-merged so project config can add extraCore without
  * clobbering the startup snapshot's other gating fields (enabled, disabledTools).
  *
- * Only reads the project config FILE (if it exists) — does NOT call loadConfig()
+ * Only reads the project config FILE (if it exists) ? does NOT call loadConfig()
  * which merges user-level + defaults, which would clobber the startup snapshot
  * with unrelated user settings.
  *
@@ -430,11 +430,11 @@ export function mergeProjectAgentConfig(
  * Reusing `stores.session` across calls is what lets switchModel hot-swap the
  * model while keeping the conversation history intact.
  *
- * Wave C: 通过 bootstrap.createAgentRuntime 装配——它会构造 DelegationCoordinator
- * 并填到 stores.refs.coordinator，激活之前注册占位的 5 个 coordinator 依赖工具
- * （delegate_task / delegate_batch / team_orchestrate / council_convene /
- * plan_task）以及 deliver_task 的审查 worker spawn 路径。与 TUI bootstrap 路径
- * 共享同一份装配逻辑，行为完全等价。
+ * Wave C: ?? bootstrap.createAgentRuntime ???????? DelegationCoordinator
+ * ??? stores.refs.coordinator?????????? 5 ? coordinator ????
+ * ?delegate_task / delegate_batch / team_orchestrate / council_convene /
+ * plan_task??? deliver_task ??? worker spawn ???? TUI bootstrap ??
+ * ?????????????????
  */
 function assembleAgentLoop(
   ctx: ServeContext,
@@ -446,17 +446,17 @@ function assembleAgentLoop(
   registry?: SessionRegistry,
   shared?: SharedRuntime,
 ): AgentLoop {
-  // Wave J: domainKnowledgeStore 优先从 sidecar SharedRuntime.domainStores
-  // 按 cwd 取；fallback 是 per-call new（与 bootstrap 单 session 行为一致——
-  // 用于 buildAgentLoop legacy /prompt 路径未传 shared 的情况）。
+  // Wave J: domainKnowledgeStore ??? sidecar SharedRuntime.domainStores
+  // ? cwd ??fallback ? per-call new?? bootstrap ? session ??????
+  // ?? buildAgentLoop legacy /prompt ???? shared ?????
   const domainKnowledgeStore = shared
     ? getOrCreateDomainStore(shared, cwd)
     : new DomainKnowledgeStore(join(cwd, '.rivet', 'knowledge'))
   if (stores.refs.domainKnowledgeStoreRef) stores.refs.domainKnowledgeStoreRef.current = domainKnowledgeStore
 
-  // sessionRegistry 透传：bootstrap.createAgentRuntime 通过 refs.sessionRegistry
-  // 间接接到 AgentLoop，所以在调装配前先回写 refs（buildSessionStores 已经接收
-  // 过 registry，但 switchModel 重建路径需要在每次调用都确保 refs 同步）。
+  // sessionRegistry ???bootstrap.createAgentRuntime ?? refs.sessionRegistry
+  // ???? AgentLoop??????????? refs?buildSessionStores ????
+  // ? registry?? switchModel ?????????????? refs ????
   if (registry) stores.refs.sessionRegistry = registry
 
   const mergedConfig = mergeProjectAgentConfig(ctx.config, cwd)
@@ -476,30 +476,30 @@ function assembleAgentLoop(
     domainKnowledgeStore,
     modelId: spec.model.id,
     session: stores.session,
-    // Wave J: 跨 session 复用 ProviderHealthTracker，让 switchModel 不丢
-    // provider 健康累积；coordinator 冷层路由有正确依据。
+    // Wave J: ? session ?? ProviderHealthTracker?? switchModel ??
+    // provider ?????coordinator ??????????
     sharedProviderHealth: shared?.providerHealth,
-    // I4: user hook results → desktop event stream via the session manager.
+    // I4: user hook results ? desktop event stream via the session manager.
     emitHookResult: (results, meta) => shared?.sessions?.emitHookResult(sessionId, results, meta),
   })
 
-  // approvalMode 在 createAgentRuntime 内部未接收；构造后立即覆盖
-  // （setApprovalMode 直接 mutate config.approvalMode，与构造时设等价）。
+  // approvalMode ? createAgentRuntime ?????????????
+  // ?setApprovalMode ?? mutate config.approvalMode??????????
   if (approvalMode) {
     agent.setApprovalMode(approvalMode)
-    // 自治级别（dangerously-skip-permissions）联动无限轮次：真正全自动。
+    // ?????dangerously-skip-permissions??????????????
     if (approvalMode === 'dangerously-skip-permissions') {
       agent.config.maxTurns = 0
     }
   }
 
-  // 交付门禁的影响测试覆盖检查（delivery-gate-v2.ts:330）读的是 ctx.getImpactedTests。
-  // TUI 在 bootstrapInteractiveSession 里赋值，sidecar 走 createAgentRuntime 不经过那里——
-  // 不补这一行，桌面端与插件的 moduleCoverage 恒为 undefined，该检查整体不执行。
+  // ??????????????delivery-gate-v2.ts:330???? ctx.getImpactedTests?
+  // TUI ? bootstrapInteractiveSession ????sidecar ? createAgentRuntime ???????
+  // ????????????? moduleCoverage ?? undefined??????????
   stores.refs.getImpactedTests = () => [...agent.getEvidenceState().impactedTests]
 
-  // Wave G: LSP late-init——per-assemble 订阅（见 attachLspTools 的设计约束注释）。
-  // 不阻塞会话创建（LSP spawn 可能秒级）。
+  // Wave G: LSP late-init??per-assemble ???? attachLspTools ?????????
+  // ????????LSP spawn ??????
   if (shared) {
     void attachLspTools(
       getOrCreateLspEntry(shared, cwd),
@@ -509,8 +509,8 @@ function assembleAgentLoop(
     )
   }
 
-  // Phase 2: 注册 coordinator 引用到 session-manager，让桌面 per-worker steer/kill 路由可达。
-  // 闭包每次实时读 stores.refs.coordinator——switchModel 会替换 coordinator，闭包必须跟到新实例。
+  // Phase 2: ?? coordinator ??? session-manager???? per-worker steer/kill ?????
+  // ??????? stores.refs.coordinator??switchModel ??? coordinator???????????
   shared?.sessions?.setCoordinatorRef(sessionId, () => stores.refs.coordinator ?? undefined)
 
   return agent
@@ -520,7 +520,7 @@ function assembleAgentLoop(
  * Build a fully-wired AgentLoop for one session rooted at `cwd`. Each call gets
  * its own SessionPersist / claim store / FileHistory / PlaybookStore / tool
  * registry / PromptEngine (via createAgentConfig) and its own ArtifactStore
- * (created internally by AgentLoop, keyed by sessionId) — so concurrent
+ * (created internally by AgentLoop, keyed by sessionId) ? so concurrent
  * sessions never share prompt cache state or artifacts.
  *
  * R1: when a shared `registry` is supplied (desktop multi-session path), each
@@ -532,13 +532,13 @@ function assembleAgentLoop(
 /**
  * Resolve the initial model spec for a new session. When the server started
  * in setup mode (ctx.configured=false), the user may have since configured
- * an API key via /config routes — re-read from disk to pick it up. Falls
+ * an API key via /config routes ? re-read from disk to pick it up. Falls
  * back to ctx.apiKey when the key is still unavailable.
  */
 /** A resolved spec can actually authenticate when it carries either an inline
  *  API key or an OAuth provider. After a sidecar crash-restart, a provider that
  *  relies on `apiKeyEnv` whose variable is not present in the respawned process
- *  resolves to apiKey='' — running against it produces a raw upstream 401. */
+ *  resolves to apiKey='' ? running against it produces a raw upstream 401. */
 function specOfContext(ctx: ServeContext): ResolvedModelSpec {
   return {
     provider: ctx.provider,
@@ -552,7 +552,7 @@ function specOfContext(ctx: ServeContext): ResolvedModelSpec {
  * Resolve the spec a new session starts on. When `reload` is provided (the
  * production sidecar path), prefer a fresh on-disk read so a key rotated via
  * desktop Settings takes effect for the next session WITHOUT a sidecar restart
- * — the startup snapshot's key may be stale or revoked. Tests that inject a
+ * ? the startup snapshot's key may be stale or revoked. Tests that inject a
  * synthetic context pass no `reload` and keep the deterministic snapshot.
  */
 function resolveInitialSpec(ctx: ServeContext, reload?: () => ServeContext): ResolvedModelSpec {
@@ -560,10 +560,10 @@ function resolveInitialSpec(ctx: ServeContext, reload?: () => ServeContext): Res
     try {
       const fresh = reload()
       if (fresh.configured) return specOfContext(fresh)
-    } catch { /* mid-edit / broken config on disk — fall back to the snapshot */ }
+    } catch { /* mid-edit / broken config on disk ? fall back to the snapshot */ }
   }
   if (ctx.configured) return specOfContext(ctx)
-  // Re-read config — the user may have called POST /config/providers since startup.
+  // Re-read config ? the user may have called POST /config/providers since startup.
   return specOfContext(resolveServeContext())
 }
 
@@ -605,9 +605,9 @@ export function buildManagedAgent(
   // stale entry from a prior build of the same session (switchModel rebuild).
   sessionStoresById.set(sessionId, { stores, cwd })
   // Model affinity: a rehydrated session carries the model its prefix cache
-  // was built on (record.model → preferredModelId). Build directly on it so a
+  // was built on (record.model ? preferredModelId). Build directly on it so a
   // resumed conversation never silently lands on the default model. Falls back
-  // to the default only when the preferred id no longer resolves — resumeRun()
+  // to the default only when the preferred id no longer resolves ? resumeRun()
   // gates that case fail-closed before it ever reaches a run.
   let spec: ResolvedModelSpec =
     (preferredModelId
@@ -640,7 +640,7 @@ export function buildManagedAgent(
       if (!isModelSpecUsable(spec)) {
         // Self-heal first: the key may have been configured or rotated via
         // Settings AFTER this agent was built. Re-resolve the same model
-        // against the live config and rebuild in place — the session then
+        // against the live config and rebuild in place ? the session then
         // just works instead of demanding a sidecar restart.
         const healed = reload ? resolveModelSpecWithReload(ctx, spec.model.id, reload) : null
         if (healed && isModelSpecUsable(healed)) {
@@ -654,7 +654,7 @@ export function buildManagedAgent(
     abort: () => agent.abort(),
     setApprovalMode: (mode) => {
       agent.setApprovalMode(mode)
-      // 自治联动无限轮次，非自治恢复默认 200
+      // ???????????????? 200
       agent.config.maxTurns = mode === 'dangerously-skip-permissions' ? 0 : 200
     },
     enterPlanMode: () => agent.enterPlanMode(),
@@ -667,52 +667,52 @@ export function buildManagedAgent(
     replaceMessages: (msgs) => { agent.session.replaceMessages(msgs); agent.config.promptEngine.resetAppendixBaseline() },
     rewindToMessages: (msgs) => { agent.session.rewindToMessages(msgs); agent.config.promptEngine.resetAppendixBaseline() },
     getFileHistory: () => agent.getFileHistory(),
-    // PlusMenu — star domain (delegate to the live agent).
+    // PlusMenu ? star domain (delegate to the live agent).
     setSessionDomain: (domain) => agent.setSessionDomain(domain),
     resetSessionDomain: () => agent.resetSessionDomain(),
     getSessionDomain: () => agent.getSessionDomain(),
-    // PlusMenu — skills (per-session discovery filter on the live agent).
+    // PlusMenu ? skills (per-session discovery filter on the live agent).
     setDisabledSkills: (names) => agent.setDisabledSkills(names),
-    // PlusMenu — model hot-switch (rebuild on the same SessionContext).
-    // Wave C-followup P0: createAgentRuntime 在 refs 上原地装新 coordinator/
-    // providerHealth/runtimeFactory，但旧 coordinator 的 stallSweep 定时器与
-    // 在途 worker AbortController 仍持有句柄。sidecar 长驻进程 + 频繁
-    // switchModel 会累积泄漏。先 capture old，装新后调 shutdown 释放。
-    // Wave J: 透传 shared 让 switchModel 后仍复用 providerHealth/domainStore，
-    // 健康数据不丢、knowledge 不重 load。
+    // PlusMenu ? model hot-switch (rebuild on the same SessionContext).
+    // Wave C-followup P0: createAgentRuntime ? refs ????? coordinator/
+    // providerHealth/runtimeFactory??? coordinator ? stallSweep ????
+    // ?? worker AbortController ??????sidecar ???? + ??
+    // switchModel ??????? capture old????? shutdown ???
+    // Wave J: ?? shared ? switchModel ???? providerHealth/domainStore?
+    // ???????knowledge ?? load?
     switchModel: (modelId) => {
       // First-install / post-startup config edits: resolve against the live
       // config, not just the startup snapshot. See resolveModelSpecWithReload.
       const next = resolveModelSpecWithReload(ctx, modelId)
       if (!next) return null
       // Audit: capture the outgoing model before the rebuild replaces it.
-      // (rebuildOnSpec cancels the old loop's idle compaction — it shares this
-      // SessionContext with the incoming loop — and preserves the live
+      // (rebuildOnSpec cancels the old loop's idle compaction ? it shares this
+      // SessionContext with the incoming loop ? and preserves the live
       // approvalMode the user may have switched since session creation.)
       const oldAgent = rebuildOnSpec(next)
       let fromModel: string | undefined
-      try { fromModel = oldAgent.config.promptEngine.getModel() } catch { /* idle/未初始化 */ }
-      // 持久化切换（与 TUI bootstrap.switchAgentRuntime 同源）：metadata.model/
-      // provider 反映当前模型，JSONL 落 model_switch 审计行——没有这两笔，
-      // 桌面端换模型在会话日志里是隐形的。best-effort，不阻塞切换。
+      try { fromModel = oldAgent.config.promptEngine.getModel() } catch { /* idle/???? */ }
+      // ??????? TUI bootstrap.switchAgentRuntime ????metadata.model/
+      // provider ???????JSONL ? model_switch ???????????
+      // ?????????????????best-effort???????
       try {
         stores.persist.updateMetadata({ model: spec.model.id, provider: spec.provider.name })
         stores.persist.appendModelSwitch({ from: fromModel, to: spec.model.id, provider: spec.provider.name })
-      } catch { /* persistence is best-effort — never block a model switch */ }
+      } catch { /* persistence is best-effort ? never block a model switch */ }
       return spec.model.id
     },
-    // Context usage display (desktop header progress bar) — real occupancy
+    // Context usage display (desktop header progress bar) ? real occupancy
     // (last API prompt_tokens + tail estimate), provider-agnostic.
     getEstimatedTokens: () => agent.session.getRealOccupancy(),
     getContextWindow: () => spec.model.contextWindow,
     getReasoningEffort: () => agent.getReasoningEffort(),
-    // 识图桥真实状态（供桌面端准确显示，而非只看 config 有没有 visionModel 键）。
-    // 依赖当前会话模型，故取活 agent 的 config 而非静态 config。
+    // ????????????????????? config ??? visionModel ???
+    // ???????????? agent ? config ???? config?
     getVisionBridge: () => agent.config.visionBridge,
     // Cockpit snapshot for the desktop cockpit panel. Assembles the full
     // runtime state (safety/verify/context/model/advisory) via the pure
-    // buildCockpitSnapshot function — same source the TUI uses (main.ts:706).
-    // try/catch: the agent may be mid-rebuild (switchModel) — degrade to null
+    // buildCockpitSnapshot function ? same source the TUI uses (main.ts:706).
+    // try/catch: the agent may be mid-rebuild (switchModel) ? degrade to null
     // instead of 500'ing the cockpit poll.
     getCockpitSnapshot: () => {
       try {
@@ -727,25 +727,36 @@ export function buildManagedAgent(
           cost,
           mcpManager: shared?.mcpManager ?? null,
           reasoningEffort: agent.getReasoningEffort(),
-          // claimCounts / advisoryStatusNotices omitted — safe degradation
+          // claimCounts / advisoryStatusNotices omitted ? safe degradation
           // (claimCounts defaults to zero counts, statusNotices to []).
         })
       } catch {
         return null
       }
     },
-    // Wave L: 进程退出释放本 session 的 coordinator timer + in-flight worker
-    // 句柄。abort() 仅中止当前 turn；shutdown() 是终结性操作。
-    shutdown: () => {
+    // Wave L: ??????? session ? coordinator timer + in-flight worker
+    // ???abort() ????? turn?shutdown() ???????
+    shutdown: async () => {
       try { void agent.cancelIdleCompaction() } catch { /* best-effort */ }
-      try { stores.refs.coordinator?.shutdown() } catch { /* best-effort */ }
+      const coordinator = stores.refs.coordinator
+      let settled = !coordinator
+      try {
+        if (coordinator?.shutdownAndWait) settled = await coordinator.shutdownAndWait()
+        else if (coordinator) {
+          coordinator.shutdown()
+          settled = false
+        }
+      } catch {
+        settled = false
+      }
       shared?.sessions?.clearCoordinatorRef(sessionId)
+      return settled
     },
-    // I1: 桌面端议事会入口，直接评审 artifact 中的 council-plan-json。
+    // I1: ????????????? artifact ?? council-plan-json?
     conveneCouncil: (input) => conveneCouncilOnCoordinator(agent, stores.refs.coordinator, stores.refs, input),
-    // 用户主动派后台子代理：独立 AbortSignal，跑在隔离子会话，不碰主历史。
+    // ????????????? AbortSignal???????????????
     delegateWorker: (input, opts) => delegateWorkerOnCoordinator(stores.refs.coordinator, input, opts),
-    // P0-2: plan_task 成功后 onToolResult 通过此方法读取 TodoStore 发 todo_state SSE
+    // P0-2: plan_task ??? onToolResult ??????? TodoStore ? todo_state SSE
     getTodos: () => stores.refs.todoStore.read(),
     // Hot-inject MCP tools discovered after this agent was built (mid-session
     // connector enable). register is Map.set-idempotent; updateTools refreshes
@@ -767,9 +778,9 @@ class CouncilError extends Error {
 }
 
 /**
- * I1: 在指定 session 上召集议事会。输入 artifactId 必须指向一个包含
- * ```council-plan-json 代码块的可执行计划；后端从 raw 中提取 UnifiedPlan
- * 作为 draftItems。并发安全：agent 正在跑 turn 时直接拒绝。
+ * I1: ??? session ????????? artifactId ????????
+ * ```council-plan-json ????????????? raw ??? UnifiedPlan
+ * ?? draftItems??????agent ??? turn ??????
  */
 async function conveneCouncilOnCoordinator(
   agent: AgentLoop,
@@ -826,7 +837,7 @@ async function conveneCouncilOnCoordinator(
         kind: r.kind,
         profile: r.profile,
         scope: r.scope,
-        // 席位路由字段透传：曾在此处丢弃，桌面路由的异构席/瑶光门失效。
+        // ????????????????????????/??????
         authority: r.authority,
         ...(r.modelOverride ? { modelOverride: r.modelOverride } : {}),
         ...(r.tierFloor ? { tierFloor: r.tierFloor } : {}),
@@ -846,7 +857,7 @@ async function conveneCouncilOnCoordinator(
   const runner = councilInput.maxRounds && councilInput.maxRounds >= 2 ? runCouncilDebate : runCouncil
   const plan = await runner(councilInput, deps)
   const planMarkdown = renderCouncilPlan(plan)
-  // Da'at 编译门（与 council_convene 工具同款）：否决态不嵌可执行 planJson。
+  // Da'at ????? council_convene ?????????????? planJson?
   const compiled = plan.aggregate.mergedItems.length > 0 ? compileCouncilPlan(plan) : undefined
   const sealed = compiled?.ok && compiled.plan
     ? sealPlan(attachObligations(compiled.plan, extractObligations(plan)))
@@ -854,7 +865,7 @@ async function conveneCouncilOnCoordinator(
   const outputRaw = sealed
     ? [planMarkdown, '', '```council-plan-json', serializeUnifiedPlan(sealed), '```'].join('\n')
     : compiled && !compiled.ok
-      ? [planMarkdown, '', '## ⛔ 议事会否决（blocking challenge 未化解）', ...compiled.vetoes.map(v => `- ${v.description}: ${v.left}`)].join('\n')
+      ? [planMarkdown, '', '## ? ??????blocking challenge ????', ...compiled.vetoes.map(v => `- ${v.description}: ${v.left}`)].join('\n')
       : planMarkdown
   const savedArtifactId = await agent.artifactStore?.save({
     tool: 'council_convene',
@@ -864,15 +875,15 @@ async function conveneCouncilOnCoordinator(
     sections: [],
   })
   try {
-    // 复用 buildCouncilSessionEvent（与 council_convene 工具同一构造器），
-    // 避免手工展开字段随 schema 演进漂移（Phase 2 新增分歧度指标即此教训）。
+    // ?? buildCouncilSessionEvent?? council_convene ?????????
+    // ????????? schema ?????Phase 2 ?????????????
     recordCouncilSession(refs.meridianIndexer?.getDb(), buildCouncilSessionEvent({
       sessionId: refs.sessionId ?? 'unknown',
       plan,
       timestamp: Date.now(),
     }))
   } catch {
-    // 遥测失败不影响交付
+    // ?????????
   }
   if (!savedArtifactId) {
     throw new Error('Failed to save council plan artifact')
@@ -922,8 +933,8 @@ function kindForProfile(profile: string): import('../agent/coordinator.js').Dele
 }
 
 /** Build the terminal digest shown in the panel + adopted into the composer by
- *  the "汇入主会话" button. Markdown: objective + outcome + changed files +
- *  worker summary (truncated). Pure — easy to unit test. */
+ *  the "?????" button. Markdown: objective + outcome + changed files +
+ *  worker summary (truncated). Pure ? easy to unit test. */
 /** User-dispatched background subagent runner. Mirrors delegate_task's request
  *  shaping but bridges activity to a plain callback (no tool pipeline) and
  *  produces a terminal summary for the adopt-to-composer flow. */
@@ -979,7 +990,7 @@ async function delegateWorkerOnCoordinator(
     model: run.selectedModel ?? result?.model,
     provider: result?.provider,
     usage: result?.usage,
-    // 终态证据摘要（与 delegate_task 的 emitTerminal 对齐）。
+    // ???????? delegate_task ? emitTerminal ????
     findingsCount: result?.findings && result.findings.length > 0 ? result.findings.length : undefined,
     topFinding: result?.findings?.[0]?.claim,
     verificationBrief: result?.verification
@@ -988,4 +999,3 @@ async function delegateWorkerOnCoordinator(
     evidenceStatus: result?.evidenceStatus,
   })
 }
-

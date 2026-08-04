@@ -81,93 +81,93 @@ import { createCoordinatorReviewDeps } from '../agent/review-coordinator-deps.js
 import { routeReviewWorkflow, type ReviewMode, type ReviewOutcome } from '../agent/review-router.js'
 import type { ChangeSet } from '../agent/review-discipline.js'
 const HELP_TEXT = `Available commands:
-/help — Show this help
-/exit — Exit Rivet
-/quit — Exit
-/update — Check and install the latest Rivet release
-/btw <问题> — 侧问：就当前会话问一句，回答显示在浮层，不进对话历史
-/compact [status|llm] — Micro-compact context (/compact status for stats)
-/model [name|list] — Show or switch model
-/domain [list|<name>|auto|off] — Show or switch star domain personality
-/verbose — Toggle verbose tool output
-/permission [manual|auto|yolo|allow|deny|bash|remove|reset|test] — 权限模式：统一入口（Manual/Auto/YOLO 三档）
-/grant [path] [read|write] — 授权并记住工作区外目录（无参列出本工作区已记住的授权）
-/theme [cobalt|gemini|antigravity|slate|ziwei|tianshu|midnight|pastel|cyberpunk|observatory|starfield|claude] — Switch color theme (default: cobalt)
-/vim — Toggle vim keybindings
-/effort [off|low|medium|high|max] — Set reasoning effort
-/undo [<number>|preview <number>] — Undo file changes with preview
-/clear — Clear screen
-/sessions — List all saved sessions
-/fork [name] — Fork current session into a new copy and switch to it
-/fork at <N> [name] — Fork from message line N (truncate after)
-/branch — Show branch tree (parent + children)
-/branch back — Switch back to parent session
-/memory [text|add|search|forget] — Session memory entries
-/mission — Show current task contract
-/constellation [view|init|update <summary>|history|shift <summary>] — Project blueprint & milestone chronicle
-/leave [symbol] <summary> — Leave your mark in the starmap as you depart
-/context [pin|claims|antibodies|conflicts|reload|export|import] — Context ledger
-/verify — Show verification status
-/evidence — Show last turn evidence summary
-/debug [prompt|fingerprint|cache|context-payload|mcp] — Debug info
-/mcp — Show MCP server status
-/cockpit [summary|trace|verify|context|safety|model|mcp|advisory|off] — Toggle cockpit panel
-/scroll — Browse session history in pager
-/skill [list|install <name>|import <name>|<name>|off <name>|review|approve <name>|reject <name>] — List/load skills; install from .claude/skills; review drafts
-/interview <topic> — Deep interview before coding
-/plan <feature> — Create implementation plan
-/plan close <file> --tasks <range|all> [--preview] — Close implementation plan tasks
-/team <task|plan> — Run team-mode workflow through team_orchestrate
-/team max <task> — Run team-mode max planning through team_orchestrate
-/council <task> [--seats id1,id2,...] [--rounds 1-2] — Convene a star-domain council (single round; --rounds 2 enables a rebuttal round)
-/scout <诊断目标> [--dims 前端,后端,集成] — 巡天侦察蜂群：并行只读诊断，交付实测核对清单（不写文件）
-/review — Manually trigger L2 review (single adversarial verifier) on current changes via deliver_task
-/review max — Manually trigger L3 review (Review Squadron, 5 inspectors) on current changes via deliver_task
-/review off|on|status — 会话级关闭/恢复/查看自动审查门（off 只抑制自动审查省 token，手动 /review 始终可用）
-(auto: every non-trivial deliver_task commit runs a single Wiring inspector — short budget, never blocks on infra failure)
-/sensorium — Show 天枢 3D self-awareness state
-/dream — Distill session decisions into project memory
-/index — Rebuild codebase index (modules + CLI entries)
-/diagram [list|<type>] — Generate a mermaid diagram skeleton (architecture|dataflow|sequence|flowchart|comparison|state)
-/model [id] — Switch model (no arg = open model picker)
-/domain [id|list] — Switch star domain (no arg = open domain picker)
-/status — Show agent status (model, domain, cache, tokens)
-/mirror [status|on|off|china|default] — Toggle domestic mirrors for GitHub/npm/pip/go/rust downloads
-/python [status|setup] — Check Python/uv/Git environment or auto-setup a Python project with uv
-/doctor — Environment health check (Node/Git/Python/uv) + which shell the bash tool uses
-/logs [open [desktop]] — 本会话日志落点（会话 / 缓存 / 六维 / 桌面 sidecar），带写入门控与回收策略；open 直接在文件管理器里打开
-/init [verify] — 交互式项目初始化（verify 声明 / skills / hooks 脚手架）；verify 子命令直执行声明补缺
-/cd [<path>] — 会话中途切换工作目录（无参显示当前目录）；历史前缀缓存保留，会话归属迁往新项目
-/tools — Show available tools and their descriptions
-/prefix-budget — 前缀预算归因：各块字符/token 占比 + 当前档位
-/compact — Compact context (summarize old messages)
-/workflow [list|<name>|replay <id>] — YAML workflow orchestration + trace replay
-/todo [list|add <content>|done <id>|skip <id>|move <id> up|down] — Manage task list
-/plan-template [list|<name>|save <name>] — Reusable plan templates
-/ask — Enter/exit Ask mode (read-only Q&A)
-/team-resume [groupId] — Resume team execution from wave checkpoint
-/goal <objective> [--max N] [--budget M] [--criteria '["..."]'] — Set autonomous goal
-/goal-status — Show current goal state
-/goal-pause — Pause active goal
-/goal-resume — Resume paused/blocked goal
-/goal-cancel — Cancel autonomous goal
-/goal-criteria [set '["..."]'] — View or set success criteria
-/rollback [<N>] — Rollback file changes (alias of /undo)
-/write-plan — Write current plan to file
-Ctrl+C — Interrupt current turn (press twice to exit)
-Ctrl+P / Ctrl+N — 翻历史命令（上一条 / 下一条；多行编辑时方向键不翻历史，用这组）
-Ctrl+Esc — 命令面板（模糊搜索全部命令与界面动作）
+/help ? Show this help
+/exit ? Exit Rivet
+/quit ? Exit
+/update ? Check and install the latest Rivet release
+/btw <??> ? ??????????????????????????
+/compact [status|llm] ? Micro-compact context (/compact status for stats)
+/model [name|list] ? Show or switch model
+/domain [list|<name>|auto|off] ? Show or switch star domain personality
+/verbose ? Toggle verbose tool output
+/permission [manual|auto|yolo|allow|deny|bash|remove|reset|test] ? ??????????Manual/Auto/YOLO ???
+/grant [path] [read|write] ? ???????????????????????????
+/theme [cobalt|gemini|antigravity|slate|ziwei|tianshu|midnight|pastel|cyberpunk|observatory|starfield|claude] ? Switch color theme (default: cobalt)
+/vim ? Toggle vim keybindings
+/effort [off|low|medium|high|max] ? Set reasoning effort
+/undo [<number>|preview <number>] ? Undo file changes with preview
+/clear ? Clear screen
+/sessions ? List all saved sessions
+/fork [name] ? Fork current session into a new copy and switch to it
+/fork at <N> [name] ? Fork from message line N (truncate after)
+/branch ? Show branch tree (parent + children)
+/branch back ? Switch back to parent session
+/memory [text|add|search|forget] ? Session memory entries
+/mission ? Show current task contract
+/constellation [view|init|update <summary>|history|shift <summary>] ? Project blueprint & milestone chronicle
+/leave [symbol] <summary> ? Leave your mark in the starmap as you depart
+/context [pin|claims|antibodies|conflicts|reload|export|import] ? Context ledger
+/verify ? Show verification status
+/evidence ? Show last turn evidence summary
+/debug [prompt|fingerprint|cache|context-payload|mcp] ? Debug info
+/mcp ? Show MCP server status
+/cockpit [summary|trace|verify|context|safety|model|mcp|advisory|off] ? Toggle cockpit panel
+/scroll ? Browse session history in pager
+/skill [list|install <name>|import <name>|<name>|off <name>|review|approve <name>|reject <name>] ? List/load skills; install from .claude/skills; review drafts
+/interview <topic> ? Deep interview before coding
+/plan <feature> ? Create implementation plan
+/plan close <file> --tasks <range|all> [--preview] ? Close implementation plan tasks
+/team <task|plan> ? Run team-mode workflow through team_orchestrate
+/team max <task> ? Run team-mode max planning through team_orchestrate
+/council <task> [--seats id1,id2,...] [--rounds 1-2] ? Convene a star-domain council (single round; --rounds 2 enables a rebuttal round)
+/scout <????> [--dims ??,??,??] ? ????????????????????????????
+/review ? Manually trigger L2 review (single adversarial verifier) on current changes via deliver_task
+/review max ? Manually trigger L3 review (Review Squadron, 5 inspectors) on current changes via deliver_task
+/review off|on|status ? ?????/??/????????off ???????? token??? /review ?????
+(auto: every non-trivial deliver_task commit runs a single Wiring inspector ? short budget, never blocks on infra failure)
+/sensorium ? Show ?? 3D self-awareness state
+/dream ? Distill session decisions into project memory
+/index ? Rebuild codebase index (modules + CLI entries)
+/diagram [list|<type>] ? Generate a mermaid diagram skeleton (architecture|dataflow|sequence|flowchart|comparison|state)
+/model [id] ? Switch model (no arg = open model picker)
+/domain [id|list] ? Switch star domain (no arg = open domain picker)
+/status ? Show agent status (model, domain, cache, tokens)
+/mirror [status|on|off|china|default] ? Toggle domestic mirrors for GitHub/npm/pip/go/rust downloads
+/python [status|setup] ? Check Python/uv/Git environment or auto-setup a Python project with uv
+/doctor ? Environment health check (Node/Git/Python/uv) + which shell the bash tool uses
+/logs [open [desktop]] ? ?????????? / ?? / ?? / ?? sidecar?????????????open ???????????
+/init [verify] ? ?????????verify ?? / skills / hooks ?????verify ??????????
+/cd [<path>] ? ???????????????????????????????????????
+/tools ? Show available tools and their descriptions
+/prefix-budget ? ???????????/token ?? + ????
+/compact ? Compact context (summarize old messages)
+/workflow [list|<name>|replay <id>] ? YAML workflow orchestration + trace replay
+/todo [list|add <content>|done <id>|skip <id>|move <id> up|down] ? Manage task list
+/plan-template [list|<name>|save <name>] ? Reusable plan templates
+/ask ? Enter/exit Ask mode (read-only Q&A)
+/team-resume [groupId] ? Resume team execution from wave checkpoint
+/goal <objective> [--max N] [--budget M] [--criteria '["..."]'] ? Set autonomous goal
+/goal-status ? Show current goal state
+/goal-pause ? Pause active goal
+/goal-resume ? Resume paused/blocked goal
+/goal-cancel ? Cancel autonomous goal
+/goal-criteria [set '["..."]'] ? View or set success criteria
+/rollback [<N>] ? Rollback file changes (alias of /undo)
+/write-plan ? Write current plan to file
+Ctrl+C ? Interrupt current turn (press twice to exit)
+Ctrl+P / Ctrl+N ? ????????? / ?????????????????????
+Ctrl+Esc ? ???????????????????
 
-▌▌ 上下文与缓存（DeepSeek V4 成本关键）▌▌
+?? ???????DeepSeek V4 ???????
 
-⚠ 上下文占用直接影响 token 成本——尽早 /handoff 比触发压缩划算得多。
+? ????????? token ?????? /handoff ??????????
 
-  · 50% 以上 → 建议 /handoff 写交接文档后开新会话（交接自动注入，比续跑省前缀重建成本）
-  · 70%-78% → 触发自动压缩，压缩本身 token 支出很高（整段历史重写一次）
-  · 80% 以上 → 压缩 + 前缀缓存大概率碎裂，每轮 cache miss，成本数倍
-  · 版本升级后请勿连接旧会话——提示词结构变化会让缓存整体碎裂
+  ? 50% ?? ? ?? /handoff ?????????????????????????????
+  ? 70%-78% ? ??????????? token ??????????????
+  ? 80% ?? ? ?? + ???????????? cache miss?????
+  ? ?????????????????????????????
 
-  会话内切星域 / 改工具集 / 热加载 skill 也会碎缓存。保护缓存就是保护成本。`
+  ?????? / ???? / ??? skill ?????????????????`
 
 /**
  * Framework-agnostic mutable ref. Structurally compatible with React's
@@ -195,21 +195,21 @@ export interface SlashHandlerContext {
   /**
    * Runtime session identity switch for /resume <id>. Rebuilds the agent runtime
    * against the target session so subsequent messages/logs write to the SAME id.
-   * Returns the loaded message count or an error. Undefined → /resume falls back
+   * Returns the loaded message count or an error. Undefined ? /resume falls back
    * to the legacy in-memory-only restore (no identity switch).
    */
   onSessionSwitch?: (targetId: string) => { ok: boolean; error?: string; messageCount?: number; repaired?: boolean; safe?: boolean }
   /** Open the interactive session picker overlay (Chronicle). Wired by the TUI;
    *  /resume with no argument opens it instead of printing usage (Claude Code
-   *  parity). Undefined → fall back to the usage hint (tests / headless). */
+   *  parity). Undefined ? fall back to the usage hint (tests / headless). */
   openSessionPicker?: () => void
   /** Open the interactive /init scaffolding wizard (verify / skills / hooks).
-   *  Wired by the TUI; undefined → /init prints a hint to use /init verify. */
+   *  Wired by the TUI; undefined ? /init prints a hint to use /init verify. */
   openInitFlow?: () => void
   /** Runtime cwd switch for /cd <path>. Rebuilds the agent runtime against the
    *  new working directory with frozen-snapshot inheritance (prefix cache only
    *  tail-cuts at the next user boundary). Async: drains pending persist writes
-   *  before migrating session files. Undefined → /cd prints current cwd
+   *  before migrating session files. Undefined ? /cd prints current cwd
    *  and a hint that switching is unavailable (tests / headless). */
   onCwdSwitch?: (target: string) => Promise<{ ok: boolean; error?: string; from?: string; to?: string; movedFiles?: string[] }>
   cost: number
@@ -218,17 +218,17 @@ export interface SlashHandlerContext {
   verboseRef: MutableRefLike<boolean>
   setVerbose: (v: boolean) => void
   setAutoSafe: (v: boolean) => void
-  /** 持久化审批模式为默认（写 ~/.rivet/config.json），重启后仍生效。
-   *  注入而非直接调用 config manager，便于测试隔离（默认 no-op，不落盘）。 */
+  /** ???????????? ~/.rivet/config.json?????????
+   *  ???????? config manager?????????? no-op?????? */
   persistApprovalMode?: (mode: string) => void
   rollbackTokenRef: MutableRefLike<string | null>
   setCockpitPanel: (v: Panel | ((prev: Panel) => Panel)) => void
   activeOverlay?: string | null
   surfacePush?: (id: string) => void
-  /** `/btw` 侧问：开浮层并流式作答。问答只活在浮层里，不进对话历史。
-   *  未注入（headless / 测试）时 `/btw` 打印提示而非静默失败。 */
+  /** `/btw` ????????????????????????????
+   *  ????headless / ???? `/btw` ??????????? */
   askSideQuestion?: (question: string) => void
-  /** 设置 choice-panel 类型（effort / permission），供选择面板渲染器读取。 */
+  /** ?? choice-panel ???effort / permission????????????? */
   setChoicePanelKind?: (kind: 'effort' | 'permission') => void
   surfacePop?: () => void
   pushStatic: (entry: LogEntry) => void
@@ -242,23 +242,23 @@ export interface SlashHandlerContext {
   onDomainChange?: (domainName: string | undefined) => void
   /** T5: bandit promotion state for /status observability. */
   banditState?: import('../server/routes.js').BanditStatusEntry[]
-  /** 独立审查回调——/review 不经过 deliver_task 直接调 routeReviewWorkflow。
-   *  未注入时 /review fallback 到 resolveAppPromptInput → deliver_task 旧路径。 */
+  /** ????????/review ??? deliver_task ??? routeReviewWorkflow?
+   *  ???? /review fallback ? resolveAppPromptInput ? deliver_task ???? */
   runReview?: (change: import('../agent/review-discipline.js').ChangeSet, mode: import('../agent/review-router.js').ReviewMode, focus?: string) => Promise<import('../agent/review-router.js').ReviewOutcome>
   /** Submit a prompt directly to the agent pipeline, bypassing slash routing.
    *  Used by commands that need to transform the input before sending (e.g. /goal). */
   submitToAgent?: (prompt: string) => void
-  /** /handoff 发起时登记归档任务（src=项目内 .rivet/HANDOFF.md，dest=会话目录 <id>.handoff.md）——
-   *  TUI 在交接 turn 完成后把 src 拷贝归档到 dest（loadPrevHandoff 注入管线认 dest）。 */
+  /** /handoff ??????????src=??? .rivet/HANDOFF.md?dest=???? <id>.handoff.md???
+   *  TUI ??? turn ???? src ????? dest?loadPrevHandoff ????? dest?? */
   onHandoffStart?: (src: string, dest: string) => void
   /** Mutable ref to the current GoalTracker. Set when /goal creates a tracker;
    *  read by deliver_task's B1Context for auto-review gating. */
   goalTrackerRef?: { current: import('../agent/goal-tracker.js').GoalTracker | null }
-  /** 会话级审查门开关：/review off|on 写入；deliver_task 经 isAutoReviewOff 读取。 */
+  /** ?????????/review off|on ???deliver_task ? isAutoReviewOff ??? */
   reviewGateRef?: { current: 'auto' | 'off' }
 }
 
-/** 收集当前工作区未提交的改动文件（unstaged + staged + untracked）。 */
+/** ????????????????unstaged + staged + untracked?? */
 async function collectDirtyFiles(cwd: string): Promise<string[]> {
   const { spawnGitSync } = await import('../tools/spawn-git.js')
   const run = (gitArgs: string[]): string[] => {
@@ -282,8 +282,8 @@ interface ParsedGoalArgs {
   criteria?: string[]
 }
 
-/** 解析 /goal 命令行参数，支持 --max N / --budget M / --criteria '["..."]'
- *  其余部分合并为目标描述。 */
+/** ?? /goal ???????? --max N / --budget M / --criteria '["..."]'
+ *  ???????????? */
 function parseGoalArgs(parts: string[]): ParsedGoalArgs {
   const out: ParsedGoalArgs = { goalText: '' }
   const textParts: string[] = []
@@ -317,7 +317,7 @@ function parseGoalArgs(parts: string[]): ParsedGoalArgs {
   return out
 }
 
-/** 把 GoalTracker 状态持久化到会话目录（best-effort）。 */
+/** ? GoalTracker ???????????best-effort?? */
 async function persistGoalState(ctx: SlashHandlerContext, tracker: import('../agent/goal-tracker.js').GoalTracker): Promise<void> {
   if (!ctx.currentSessionId) return
   try {
@@ -327,26 +327,26 @@ async function persistGoalState(ctx: SlashHandlerContext, tracker: import('../ag
   } catch { /* best-effort */ }
 }
 
-/** 格式化当前 goal 状态供 /goal-status 使用。 */
+/** ????? goal ??? /goal-status ??? */
 function formatGoalStatus(tracker: import('../agent/goal-tracker.js').GoalTracker): string {
   const status = tracker.getStatus()
-  const statusLabels: Record<string, string> = { active: '进行中', paused: '已暂停', blocked: '已阻塞', complete: '已完成' }
+  const statusLabels: Record<string, string> = { active: '???', paused: '???', blocked: '???', complete: '???' }
   const lines = [
-    `🎯 ${tracker.getGoal()}`,
-    `状态: ${statusLabels[status] ?? status}`,
-    `迭代: ${tracker.getIteration()}/${tracker.getMaxIterations()}`,
-    `已用时间: ${Math.round(tracker.getWallClockElapsedMs() / 1000)}s`,
+    `?? ${tracker.getGoal()}`,
+    `??: ${statusLabels[status] ?? status}`,
+    `??: ${tracker.getIteration()}/${tracker.getMaxIterations()}`,
+    `????: ${Math.round(tracker.getWallClockElapsedMs() / 1000)}s`,
   ]
   const budget = tracker.getWallClockBudgetMs()
-  if (budget !== undefined) lines.push(`时间预算: ${Math.round(budget / 60000)}m`)
+  if (budget !== undefined) lines.push(`????: ${Math.round(budget / 60000)}m`)
   const criteria = tracker.getSuccessCriteria()
   if (criteria.length > 0) {
-    lines.push('验收项:')
+    lines.push('???:')
     criteria.forEach((c, i) => lines.push(`  ${i + 1}. ${c}`))
   }
   const verdict = tracker.getLastVerdict()
   if (verdict) {
-    lines.push(`最近核验: ${verdict.overall} · ${verdict.criteriaMet}/${verdict.criteriaTotal} 项通过`)
+    lines.push(`????: ${verdict.overall} ? ${verdict.criteriaMet}/${verdict.criteriaTotal} ???`)
   }
   return lines.join('\n')
 }
@@ -367,13 +367,13 @@ export function formatVerificationStatus(agent: AgentLoop): string {
   const summary = agent.getVerificationSummary()
   if (summary.total === 0) return 'Verification Status\n\nNo modified files tracked in this turn.'
   const lines = summary.files.map(file => {
-    const icon = file.level === 'pending' ? '✗' : '✓'
+    const icon = file.level === 'pending' ? '?' : '?'
     return `  ${icon} ${file.path} (${file.level})`
   })
   const percent = Math.round((summary.verified / summary.total) * 100)
   const state = agent.getEvidenceState()
   const last = state.verifications.at(-1)
-  const lastLine = last ? `\nLast verification: ${last.status} — ${last.command}` : '\nLast verification: none'
+  const lastLine = last ? `\nLast verification: ${last.status} ? ${last.command}` : '\nLast verification: none'
   return `Verification Status\n\nModified files:\n${lines.join('\n')}\n\nVerification: ${summary.verified}/${summary.total} (${percent}%)${lastLine}`
 }
 
@@ -394,12 +394,12 @@ export function formatMemoryOverview(ctx: SlashHandlerContext): string {
   const memory = ctx.persist.loadMemory()
   const sessionLines = memory.entries.length === 0
     ? ['  (empty)']
-    : memory.entries.slice(-8).map(e => `  • [${e.id}] ${e.text}`)
+    : memory.entries.slice(-8).map(e => `  ? [${e.id}] ${e.text}`)
 
   const pheromones = ctx.agent.getLatestPheromones?.() ?? []
   const pheromoneLines = pheromones.length === 0
     ? ['  (none loaded yet)']
-    : pheromones.slice(0, 8).map(p => `  • ${p.path} — ${p.signal} (${p.strength.toFixed(2)})`)
+    : pheromones.slice(0, 8).map(p => `  ? ${p.path} ? ${p.signal} (${p.strength.toFixed(2)})`)
 
   const dir = knowledgeDir()
   const knowledgeFiles = existsSync(dir)
@@ -407,9 +407,9 @@ export function formatMemoryOverview(ctx: SlashHandlerContext): string {
     : []
   const knowledgeLines = knowledgeFiles.length === 0
     ? ['  (none)']
-    : knowledgeFiles.map(f => `  • ${f}`)
+    : knowledgeFiles.map(f => `  ? ${f}`)
 
-  return `天枢记忆\n\n📝 当前 session (${memory.entries.length} 条)\n${sessionLines.join('\n')}\n\n🧠 项目直觉 (${pheromones.length} 条)\n${pheromoneLines.join('\n')}\n\n📚 项目知识 (${knowledgeFiles.length} 篇)\n${knowledgeLines.join('\n')}\n\n命令: /memory add <内容> | /memory search <query> | /memory forget <id>`
+  return `????\n\n?? ?? session (${memory.entries.length} ?)\n${sessionLines.join('\n')}\n\n?? ???? (${pheromones.length} ?)\n${pheromoneLines.join('\n')}\n\n?? ???? (${knowledgeFiles.length} ?)\n${knowledgeLines.join('\n')}\n\n??: /memory add <??> | /memory search <query> | /memory forget <id>`
 }
 
 export function searchMemory(ctx: SlashHandlerContext, query: string): string {
@@ -433,7 +433,7 @@ export function searchMemory(ctx: SlashHandlerContext, query: string): string {
 
 export interface ResolvedPromptInput {
   prompt: string
-  /** 见 WorkflowResolveResult.requiredTools。仅 ecosystem workflow 路径可能非空。 */
+  /** ? WorkflowResolveResult.requiredTools?? ecosystem workflow ??????? */
   requiredTools?: readonly string[]
 }
 
@@ -450,12 +450,12 @@ export function resolveAppPromptInput(
   if (custom) return { prompt: custom }
   const skillPrompt = resolveSkillPrompt(input, cwd)
   if (skillPrompt !== null) return { prompt: skillPrompt }
-  // /review off|on|status 是 TUI 本地会话开关——本路径（server/headless 映射层）没有
-  // refs 可写。明确告知，而不是把 "off" 误当 focus 触发一次审查（白烧 worker token）。
+  // /review off|on|status ? TUI ????????????server/headless ??????
+  // refs ???????????? "off" ?? focus ????????? worker token??
   if (/^\/review\s+(?:off|on|status)\s*$/i.test(input)) {
-    return { prompt: `User typed "${input}". /review off|on|status is a TUI-local session toggle (auto-review gate) that this surface cannot flip. To disable auto review here, set review.skipAuto in config (desktop: Settings → Routing); manual /review [max] keeps working either way.` }
+    return { prompt: `User typed "${input}". /review off|on|status is a TUI-local session toggle (auto-review gate) that this surface cannot flip. To disable auto review here, set review.skipAuto in config (desktop: Settings ? Routing); manual /review [max] keeps working either way.` }
   }
-  // /review [max|l1|l2|l3] [focus description] — map to deliver_task instruction for the agent
+  // /review [max|l1|l2|l3] [focus description] ? map to deliver_task instruction for the agent
   const reviewMatch = input.match(/^\/review(?:\s+(max|l1|l2|l3))?(?:\s+(.*))?$/i)
   if (reviewMatch) {
     const kw = reviewMatch[1]?.toLowerCase()
@@ -469,14 +469,14 @@ export function resolveAppPromptInput(
     const focusInstruction = focusText ? ` Focus specifically on: ${focusText}.` : ''
     return { prompt: `Run code review on the current uncommitted changes: call deliver_task with commit=true and review_level="${level}". This triggers ${levelLabel}.${focusInstruction}` }
   }
-  // /review typos — don't silently drop user input
+  // /review typos ? don't silently drop user input
   if (/^\/review/i.test(input)) {
     return { prompt: `User typed "${input}" which looks like a /review command but didn't match the expected format. Usage: /review [max] [focus description]. Run /review max to trigger L3 Review Squadron.` }
   }
-  // Linux/WSL path like /etc, /mnt, /usr — not a recognized command, pass through
+  // Linux/WSL path like /etc, /mnt, /usr ? not a recognized command, pass through
   // as plain text so the agent can handle it (e.g. "look at /etc/hosts").
   if (looksLikeFilePath(input, isKnownCommand)) return { prompt: input }
-  // Unrecognized slash command — return null to signal "blocked"
+  // Unrecognized slash command ? return null to signal "blocked"
   return null
 }
 
@@ -534,14 +534,14 @@ export function resolveEnterWorkerInput(
 }
 
 
-// 批准闭环内核（校验+漂移复查+分波 kickoff）已下沉到共享模块，
-// server 桌面路由与 TUI 共用同一实现。此处保留 re-export 兼容既有导入。
+// ?????????+????+?? kickoff??????????
+// server ????? TUI ??????????? re-export ???????
 export { buildPlanKickoff } from '../plan/plan-approval.js'
 
 /**
- * 批准计划并自动 kickoff 分波执行的共享闭环。slash `/plan-approve` 与 plan-picker
- * overlay 回车共用:approve → setActivePlan(注入指针 + 退出 plan mode)→ 提交 kickoff。
- * 返回 false 表示计划不存在(调用方据此报错)。
+ * ??????? kickoff ??????????slash `/plan-approve` ? plan-picker
+ * overlay ????:approve ? setActivePlan(???? + ?? plan mode)? ?? kickoff?
+ * ?? false ???????(???????)?
  */
 export async function approvePlanAndKickoff(
   deps: {
@@ -556,7 +556,7 @@ export async function approvePlanAndKickoff(
   const result = await approvePlanWithGuards(deps.cwd, slug, resolvedApproach)
   if (!result.ok) {
     if (result.code === 'invalid-content') {
-      deps.notify(`无法批准 **${result.title}** (\`${slug}\`)：${result.reason} 未写入 APPROVED 标记，也未启动执行。`, true)
+      deps.notify(`???? **${result.title}** (\`${slug}\`)?${result.reason} ??? APPROVED ??????????`, true)
     } else {
       deps.notify(`Plan not found: "${slug}". Use /plan-list to see available plans.`, true)
     }
@@ -566,11 +566,11 @@ export async function approvePlanAndKickoff(
   deps.agent.setActivePlan({ slug, title: approved.title, selectedApproach: resolvedApproach })
   const approachLine = resolvedApproach ? `\nSelected approach: **${resolvedApproach}**` : ''
   const driftLine = driftNote
-    ? `\n\n⚠ 锚点漂移复查:计划中有引用与当前工作区不符(已注入执行提示,执行方将以现实为准):\n${driftNote}`
+    ? `\n\n? ??????:??????????????(???????,?????????):\n${driftNote}`
     : ''
   const tierWarnLine = tierWarning ? `\n\n${tierWarning}` : ''
   deps.notify(
-    `✅ Plan approved: **${approved.title}** (\`${slug}\`)${approachLine}\n\n方案指针已加载,正文在 \`.rivet/plans/${slug}.md\`。Plan Mode 已退出 — 开始自动分波执行。${tierWarnLine}${driftLine}`,
+    `? Plan approved: **${approved.title}** (\`${slug}\`)${approachLine}\n\n???????,??? \`.rivet/plans/${slug}.md\`?Plan Mode ??? ? ?????????${tierWarnLine}${driftLine}`,
   )
   deps.submitToAgent?.(kickoff)
   return true
@@ -583,7 +583,7 @@ interface TuiSlashCommandDef {
   readonly handler: (ctx: SlashHandlerContext) => boolean | Promise<boolean>
 }
 
-/** /plan-mode 退出时的二次确认时间戳（未批准计划放弃护栏）。 */
+/** /plan-mode ??????????????????????? */
 let planModeExitArmedAt = 0
 const PLAN_MODE_EXIT_CONFIRM_MS = 3000
 
@@ -600,14 +600,14 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         if (!toolName) {
           pushStatic(createLogEntry({ type: 'system', content: 'Usage: /tools enable <tool_name>\nMounts an EXTENDED-layer tool onto the primary agent at this turn boundary.\nAlternatively, use delegate_task to dispatch a worker with that tool (zero cache cost).' }))
         } else if (toolName.toLowerCase() === 'computer_use' && !isProFeatureEnabled(ctx.config, 'computerUse')) {
-          pushStatic(createLogEntry({ type: 'system', content: 'computer_use is a Pro feature. Enable Pro (desktop: upgrade in Settings → About & License; CLI: config.pro.enabled / RIVET_PRO=1 / ~/.rivet/pro.license) to mount this tool.' }))
+          pushStatic(createLogEntry({ type: 'system', content: 'computer_use is a Pro feature. Enable Pro (desktop: upgrade in Settings ? About & License; CLI: config.pro.enabled / RIVET_PRO=1 / ~/.rivet/pro.license) to mount this tool.' }))
         } else {
           const result = ctx.agent.enableTool(toolName)
           switch (result.status) {
             case 'mounted': {
               const costLine = result.cacheImpact === 'prefix-invalidated'
-                ? `⚠ Cache impact: provider "${result.prefixCacheStrategy}" uses exact-prefix caching — the NEXT request will be a full prefix-cache MISS (one-time cost; subsequent turns re-cache against the new tool set).`
-                : `✓ Cache impact: provider "${result.prefixCacheStrategy}" has no prefix cache — no cache penalty.`
+                ? `? Cache impact: provider "${result.prefixCacheStrategy}" uses exact-prefix caching ? the NEXT request will be a full prefix-cache MISS (one-time cost; subsequent turns re-cache against the new tool set).`
+                : `? Cache impact: provider "${result.prefixCacheStrategy}" has no prefix cache ? no cache penalty.`
               pushStatic(createLogEntry({ type: 'system', content: `Mounted EXTENDED tool "${toolName}" onto the primary agent.\n${costLine}` }))
               break
             }
@@ -615,13 +615,13 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
               pushStatic(createLogEntry({ type: 'system', content: `"${toolName}" is already mounted on the primary agent. No change.` }))
               break
             case 'not-extended':
-              pushStatic(createLogEntry({ type: 'system', content: `"${toolName}" is a CORE or already-visible tool — it's available without mounting. No change.` }))
+              pushStatic(createLogEntry({ type: 'system', content: `"${toolName}" is a CORE or already-visible tool ? it's available without mounting. No change.` }))
               break
             case 'unknown':
               pushStatic(createLogEntry({ type: 'system', content: `Unknown tool "${toolName}". Run /tools to list available tiers.` }))
               break
             case 'gating-off':
-              pushStatic(createLogEntry({ type: 'system', content: `Tool gating is disabled — all tools are already visible to the primary agent. No change.` }))
+              pushStatic(createLogEntry({ type: 'system', content: `Tool gating is disabled ? all tools are already visible to the primary agent. No change.` }))
               break
           }
         }
@@ -631,7 +631,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const active = new Set(ctx.agent.getActiveToolNames())
         const mountedExtras = [...active].filter(isExtendedTool)
         const disabled = new Set(ctx.config.agent?.toolGating?.disabledTools ?? [])
-        const lines: string[] = ['Tool Gating Tiers', '═════════════════════', '', `CORE (${CORE_TOOLS.length}):`, ...CORE_TOOLS.map(t => `  ${disabled.has(t) ? '✗' : '✓'} ${t}`), '', `EXTENDED (${EXTENDED_TOOLS.length}):`, ...EXTENDED_TOOLS.map(t => `  ${disabled.has(t) ? '✗' : active.has(t) ? '✓ (mounted)' : '·'} ${t}`), '']
+        const lines: string[] = ['Tool Gating Tiers', '?????????????????????', '', `CORE (${CORE_TOOLS.length}):`, ...CORE_TOOLS.map(t => `  ${disabled.has(t) ? '?' : '?'} ${t}`), '', `EXTENDED (${EXTENDED_TOOLS.length}):`, ...EXTENDED_TOOLS.map(t => `  ${disabled.has(t) ? '?' : active.has(t) ? '? (mounted)' : '?'} ${t}`), '']
         if (mountedExtras.length > 0) {
           lines.push(`Runtime-mounted EXTENDED: ${mountedExtras.join(', ')}`, '')
         }
@@ -663,7 +663,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      const lines: string[] = ['Bandit Promotion State', '═══════════════════════']
+      const lines: string[] = ['Bandit Promotion State', '???????????????????????']
       if (ctx.banditState && ctx.banditState.length > 0) {
         for (const b of ctx.banditState) {
           lines.push(`${b.source}: ${b.mode} (enabled=${b.enabled})`)
@@ -671,9 +671,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           lines.push(`  samples: ${b.totalShadowSamples}`)
         }
       } else {
-        lines.push('(no bandit state available — run bootstrap first)')
+        lines.push('(no bandit state available ? run bootstrap first)')
       }
-      lines.push('', 'Review Infra Health', '═══════════════════════')
+      lines.push('', 'Review Infra Health', '???????????????????????')
       lines.push(formatReviewHealthLine())
       pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
       setIsStreaming(false)
@@ -707,8 +707,8 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     },
   },
   {
-    // 侧问：subagent 的逆命题——看得见完整对话但没有工具。问答只活在浮层里，
-    // 一个字节都不进历史，所以主对话的前缀缓存分毫未动。
+    // ???subagent ????????????????????????????
+    // ?????????????????????????
     name: '/btw',
     immediate: true,
     handler(ctx) {
@@ -717,10 +717,10 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (!question) {
         pushStatic(createLogEntry({
           type: 'system',
-          content: '用法：/btw <问题>\n就当前会话上下文问一个侧问。回答显示在浮层里，不进入对话历史，也不打断正在进行的工作。',
+          content: '???/btw <??>\n???????????????????????????????????????????',
         }))
       } else if (!ctx.askSideQuestion) {
-        pushStatic(createLogEntry({ type: 'system', content: '侧问在当前环境不可用。' }))
+        pushStatic(createLogEntry({ type: 'system', content: '???????????' }))
       } else {
         ctx.askSideQuestion(question)
       }
@@ -744,14 +744,14 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const pct = ledger ? Math.round(ledger.tokenBudget.estimatedTokens / ledger.tokenBudget.maxTokens * 100) : 0
         const compactStr = compacts.length === 0
           ? 'No compact events yet.'
-          : compacts.slice(-5).map(e => `  turn ${e.turn}: tier ${e.tier}, ${e.beforeTokens.toLocaleString()}→${e.afterTokens.toLocaleString()}`).join('\n')
+          : compacts.slice(-5).map(e => `  turn ${e.turn}: tier ${e.tier}, ${e.beforeTokens.toLocaleString()}?${e.afterTokens.toLocaleString()}`).join('\n')
         pushStatic(createLogEntry({ type: 'system', content: `Compact status: ${beforeTokens.toLocaleString()}/${ctx.maxTokens.toLocaleString()} tokens (${pct}%)\n\nRecent events:\n${compactStr}\n\nUse /compact to micro-compact, /compact llm to resume LLM compact.` }))
         setIsStreaming(false)
         return true
       }
 
       if (sub === 'llm' || sub === 'deep') {
-        // LLM compact — deferred to next turn (triggers automatically at thresholds)
+        // LLM compact ? deferred to next turn (triggers automatically at thresholds)
         pushStatic(createLogEntry({ type: 'system', content: `LLM compact will trigger automatically at context thresholds (currently ${beforeTokens.toLocaleString()} tokens). Use /compact for immediate micro-compact.` }))
         setIsStreaming(false)
         return true
@@ -772,7 +772,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         createdAt: Date.now(),
       })
       const pctRemoved = beforeTokens > 0 ? Math.round((1 - afterTokens / beforeTokens) * 100) : 0
-      pushStatic(createLogEntry({ type: 'system', content: `Compacted: ${beforeTokens.toLocaleString()} → ${afterTokens.toLocaleString()} tokens (-${pctRemoved}%, ${truncated} msgs removed, ${compacted.length} remaining).` }))
+      pushStatic(createLogEntry({ type: 'system', content: `Compacted: ${beforeTokens.toLocaleString()} ? ${afterTokens.toLocaleString()} tokens (-${pctRemoved}%, ${truncated} msgs removed, ${compacted.length} remaining).` }))
       ctx.setSummaryState(prev => ({ ...prev, compactEvent: { beforeTokens, afterTokens } }))
       setTimeout(() => ctx.setSummaryState(prev => ({ ...prev, compactEvent: null })), 8000)
       ctx.setCacheHitRate(ctx.session.getCacheHitRate())
@@ -790,10 +790,10 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         setIsStreaming(false)
         return true
       }
-      // Pro gate（双层模式）：team max 的多视角规划 fanout 仅 Pro 可用。
-      // 入口早拦免得白跑一个模型轮次；标准 /team 不受影响。
+      // Pro gate???????team max ?????? fanout ? Pro ???
+      // ????????????????? /team ?????
       if (parts[1]?.toLowerCase() === 'max' && !isProFeatureEnabled(ctx.config, 'teamMax')) {
-        pushStatic(createLogEntry({ type: 'system', content: 'team max（多视角规划）是 Pro 功能。Basic 可用：/team <task> 标准模式，或先 plan_task 出计划再执行。升级 Pro 解锁。' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'team max???????? Pro ???Basic ???/team <task> ??????? plan_task ????????? Pro ???' }))
         setIsStreaming(false)
         return true
       }
@@ -805,7 +805,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       if (!parts.slice(1).join(' ').trim()) {
-        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /galaxy <任务描述>\n       启动星河集群——拆解为多个维度由不同星域并行执行。' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /galaxy <????>\n       ?????????????????????????' }))
         setIsStreaming(false)
         return true
       }
@@ -818,15 +818,15 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
       if (!parts.slice(1).join(' ').trim()) {
-        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /council <要会诊的计划/问题> [--seats id1,id2,...] [--rounds 1-2]' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /council <??????/??> [--seats id1,id2,...] [--rounds 1-2]' }))
         setIsStreaming(false)
         return true
       }
-      // Pro gate（双层模式）：rounds≥2（反驳轮）仅 Pro 可用。提示后放行——
-      // council_convene 工具侧会把 rounds 钳制回单轮，单轮议事会是 Basic 能力。
+      // Pro gate???????rounds?2?????? Pro ??????????
+      // council_convene ????? rounds ???????????? Basic ???
       const roundsMatch = /--rounds[\s=]+(\d+)/.exec(parts.slice(1).join(' '))
       if (roundsMatch && Number(roundsMatch[1]) >= 2 && !isProFeatureEnabled(ctx.config, 'councilMultiRound')) {
-        pushStatic(createLogEntry({ type: 'system', content: '提示：议事会第 2 轮（反驳轮）是 Pro 功能，本次将按单轮执行。升级 Pro 解锁多轮辩论。' }))
+        pushStatic(createLogEntry({ type: 'system', content: '??????? 2 ??????? Pro ?????????????? Pro ???????' }))
       }
       return false
     },
@@ -836,7 +836,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       if (!parts.slice(1).join(' ').trim()) {
-        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /scout <诊断目标> [--dims 前端,后端,集成]\n并行只读诊断蜂群：先摸底 → 按维度派 code_scout → 实测核对清单 + runbook。' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /scout <????> [--dims ??,??,??]\n???????????? ? ???? code_scout ? ?????? + runbook?' }))
         setIsStreaming(false)
         return true
       }
@@ -849,22 +849,22 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const { parts, pushStatic, setIsStreaming, submitToAgent } = ctx
       const task = parts.slice(1).join(' ').trim()
       if (!task) {
-        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /starflow <任务描述>\n       星流（Starflow）——需求澄清+环境基线 → council 评审 → team 波次 → galaxy 攻坚 → 交付门禁，从大白话到工业级可交付代码。' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /starflow <????>\n       ???Starflow???????+???? ? council ?? ? team ?? ? galaxy ?? ? ???????????????????' }))
         setIsStreaming(false)
         return true
       }
       if (submitToAgent) {
-        // 代码级星流：阶段流转由 starflow 工具的状态机硬门禁兜底（council→team→galaxy），
-        // 不再内嵌五阶段协议长 prompt——模型只负责需求澄清与交付叙述。
-        submitToAgent(`进入星流（Starflow）模式。任务：${task}
+        // ??????????? starflow ????????????council?team?galaxy??
+        // ?????????? prompt?????????????????
+        submitToAgent(`?????Starflow???????${task}
 
-先用大白话与我确认需求（目标/非目标/验收标准，至多一轮；任务已清楚就直接进入下一步）。需求不清时先对话澄清，不要急着调工具。
-需求清楚后调用 starflow 工具执行，阶段流转与门禁由工具状态机强制执行（council 评审 → team 波次 → galaxy 攻坚），不要手工模拟这些阶段：
-- 先 starflow({ objective, draftItems, rounds, confirm: false }) 展示执行方案；我确认后再调 confirm: true 点火。
-- draftItems 从澄清产出映射（id/title/detail/files），供 council 评审与 galaxy 维度派生；高风险任务 rounds: 2。
-- 返回 blocked 时按报告里的人话解释与下一步建议处理（修订草稿重跑 / resume: true 续跑），不要绕过门禁。
-- 工具全过后会输出交付检查清单——逐项自查后调用 deliver_task 完成交付门禁；未运行的验证就说"未验证"。
-全程用大白话同步"完成了什么/接下来什么"。`)
+??????????????/???/????????????????????????????????????????????
+??????? starflow ???????????????????????council ?? ? team ?? ? galaxy ???????????????
+- ? starflow({ objective, draftItems, rounds, confirm: false }) ????????????? confirm: true ???
+- draftItems ????????id/title/detail/files??? council ??? galaxy ?????????? rounds: 2?
+- ?? blocked ????????????????????????? / resume: true ???????????
+- ??????????????????????? deliver_task ???????????????"???"?
+????????"?????/?????"?`)
         return true
       }
       return false
@@ -875,31 +875,31 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     async handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      // /review off|on|status — 会话级自动审查门开关（即时生效，不写配置）。
-      // off 只抑制 deliver_task 提交后的系统自动审查：主控照常测试/验证/提交，
-      // 不再自动 spawn 审查 worker（省 token）；手动 /review [max] 不受影响。
+      // /review off|on|status ? ??????????????????????
+      // off ??? deliver_task ?????????????????/??/???
+      // ???? spawn ?? worker?? token???? /review [max] ?????
       const sub = parts[1]?.toLowerCase()
       if (sub === 'off' || sub === 'on' || sub === 'status') {
         const gateRef = ctx.reviewGateRef
         if (!gateRef) {
-          pushStatic(createLogEntry({ type: 'system', content: '当前环境不支持会话级审查门开关；请用配置 review.skipAuto（持久，新会话生效）。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '???????????????????? review.skipAuto???????????' }))
           setIsStreaming(false)
           return true
         }
         if (sub === 'status') {
-          const state = gateRef.current === 'off' ? '已关闭（off）' : '开启（auto）'
-          pushStatic(createLogEntry({ type: 'system', content: `审查门状态：${state}。/review off 关闭自动审查，/review on 恢复；手动 /review [max] 始终可用。` }))
+          const state = gateRef.current === 'off' ? '????off?' : '???auto?'
+          pushStatic(createLogEntry({ type: 'system', content: `??????${state}?/review off ???????/review on ????? /review [max] ?????` }))
         } else {
           gateRef.current = sub === 'off' ? 'off' : 'auto'
           pushStatic(createLogEntry({ type: 'system', content: sub === 'off'
-            ? '⏸ 自动审查门已关闭（本会话）：主控照常测试/验证/提交，不再自动 spawn 审查 worker。手动 /review [max] 仍可用；/review on 恢复。'
-            : '▶ 自动审查门已恢复（本会话）：交付后将按既有规则自动路由审查。' }))
+            ? '? ????????????????????/??/??????? spawn ?? worker??? /review [max] ????/review on ???'
+            : '? ??????????????????????????????' }))
         }
         setIsStreaming(false)
         return true
       }
-      // /review [max|l1|l2|l3] [focus] — 独立审查入口（不经过 deliver_task）。
-      // 当 ctx.runReview 可用时直接调 routeReviewWorkflow；否则 fallback 到旧路径。
+      // /review [max|l1|l2|l3] [focus] ? ?????????? deliver_task??
+      // ? ctx.runReview ?????? routeReviewWorkflow??? fallback ?????
       const levelKw = parts[1]?.toLowerCase()
       const forceLevel = levelKw === 'max' || levelKw === 'l3' ? 'L3' as const
         : levelKw === 'l1' ? 'L1' as const
@@ -909,20 +909,20 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const focus = parts.slice(forceLevel ? 2 : 1).join(' ').trim()
 
       if (!ctx.runReview) {
-        // Fallback: 让 resolveAppPromptInput 映射为 deliver_task 指令
+        // Fallback: ? resolveAppPromptInput ??? deliver_task ??
         return false
       }
 
-      // 动态导入避免循环依赖 + 避免顶层 import 增加初始 bundle
+      // ?????????? + ???? import ???? bundle
       const { isCrossModule, isFixContext } = await import('../agent/review-discipline.js')
       const { reviewWorkflowBudgetMs } = await import('../agent/review-router.js')
       type ChangeSet = import('../agent/review-discipline.js').ChangeSet
       type ReviewMode = import('../agent/review-router.js').ReviewMode
 
-      // 从 git diff 构造 ChangeSet
+      // ? git diff ?? ChangeSet
       const dirtyFiles = await collectDirtyFiles(ctx.agent.cwd)
       if (dirtyFiles.length === 0) {
-        pushStatic(createLogEntry({ type: 'system', content: '没有未提交的改动可以审查。' }))
+        pushStatic(createLogEntry({ type: 'system', content: '?????????????' }))
         setIsStreaming(false)
         return true
       }
@@ -939,21 +939,21 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         ? 0
         : Math.round(reviewWorkflowBudgetMs(mode, forceLevel === 'L3' ? 'L3' : forceLevel === 'L2' ? 'L2' : undefined) / 1000)
       const levelLabel = forceLevel === 'L3' ? 'L3 Squadron (5 inspectors)' : forceLevel ?? 'auto-classify'
-      pushStatic(createLogEntry({ type: 'system', content: `⏳ 审查启动中 (${levelLabel}, ≤${budgetSec}s)...\n` }))
+      pushStatic(createLogEntry({ type: 'system', content: `? ????? (${levelLabel}, ?${budgetSec}s)...\n` }))
 
       try {
         const outcome = await ctx.runReview(change, mode, focus || undefined)
-        const icon = outcome.verdict === 'verified' ? '🟢'
-                   : outcome.verdict === 'rejected' ? '🔴' : '🟡'
-        const lines = [`${icon} 审查结果 [${outcome.tier}]: ${outcome.verdict}`]
-        if (typeof outcome.rounds === 'number') lines.push(`   轮次：${outcome.rounds}`)
-        if (outcome.evidence) lines.push(`   证据：${outcome.evidence}`)
+        const icon = outcome.verdict === 'verified' ? '??'
+                   : outcome.verdict === 'rejected' ? '??' : '??'
+        const lines = [`${icon} ???? [${outcome.tier}]: ${outcome.verdict}`]
+        if (typeof outcome.rounds === 'number') lines.push(`   ???${outcome.rounds}`)
+        if (outcome.evidence) lines.push(`   ???${outcome.evidence}`)
         if (outcome.verdict === 'rejected' || outcome.escalated) {
-          lines.push('   → 请在后续提交中处理审查发现。')
+          lines.push('   ? ??????????????')
         }
         pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
       } catch (err) {
-        pushStatic(createLogEntry({ type: 'system', content: `审查失败：${(err as Error).message}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `?????${(err as Error).message}` }))
       }
       setIsStreaming(false)
       return true
@@ -969,14 +969,14 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (!targetModel || targetModel === 'list') {
         const lines: string[] = []
         for (const [provName, prov] of Object.entries(ctx.allProviders)) {
-          const marker = provName === ctx.currentProvider ? ' ← current' : ''
+          const marker = provName === ctx.currentProvider ? ' ? current' : ''
           lines.push(`[${provName}]${marker}`)
           for (const m of prov.models) {
             const isCurrent = m.alias === ctx.model || m.id === ctx.model
-            lines.push(`  ${m.alias} (${m.id})${isCurrent ? ' ←' : ''}`)
+            lines.push(`  ${m.alias} (${m.id})${isCurrent ? ' ?' : ''}`)
           }
         }
-        pushStatic(createLogEntry({ type: 'system', content: `Models:\n${lines.join('\n')}\n\nCurrent: ${ctx.model} [${ctx.currentProvider}]\nContext: ${ctx.maxTokens.toLocaleString()} tokens\nCost: ¥${ctx.cost.toFixed(4)}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `Models:\n${lines.join('\n')}\n\nCurrent: ${ctx.model} [${ctx.currentProvider}]\nContext: ${ctx.maxTokens.toLocaleString()} tokens\nCost: ?${ctx.cost.toFixed(4)}` }))
       } else {
         const result = ctx.onModelSwitch(targetModel)
         if (result.ok) {
@@ -1000,16 +1000,16 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
 
       if (sub === 'on') {
         const next = setMirrorConfig({ enabled: true, preset: current.preset === 'default' ? 'china' : current.preset })
-        pushStatic(createLogEntry({ type: 'system', content: `✅ Mirrors enabled.\n${formatMirrorStatus(next)}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `? Mirrors enabled.\n${formatMirrorStatus(next)}` }))
       } else if (sub === 'off') {
         const next = setMirrorConfig({ enabled: false })
-        pushStatic(createLogEntry({ type: 'system', content: `✅ Mirrors disabled.\n${formatMirrorStatus(next)}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `? Mirrors disabled.\n${formatMirrorStatus(next)}` }))
       } else if (sub === 'china') {
         const next = setMirrorConfig({ enabled: true, preset: 'china' })
-        pushStatic(createLogEntry({ type: 'system', content: `✅ Switched to China mirror preset.\n${formatMirrorStatus(next)}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `? Switched to China mirror preset.\n${formatMirrorStatus(next)}` }))
       } else if (sub === 'default') {
         const next = setMirrorConfig({ enabled: false, preset: 'default', github: 'default', npm: 'default', pypi: 'default', go: 'default', rust: 'default' })
-        pushStatic(createLogEntry({ type: 'system', content: `✅ Reset mirrors to default (off).\n${formatMirrorStatus(next)}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `? Reset mirrors to default (off).\n${formatMirrorStatus(next)}` }))
       } else {
         pushStatic(createLogEntry({ type: 'system', content: `${formatMirrorStatus(current)}\n\nUsage: /mirror [on|off|china|default]` }))
       }
@@ -1027,30 +1027,30 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
 
       if (sub === 'status') {
         const lines = [
-          `Python: ${env.python.available ? `${env.python.command} (${env.python.version ?? 'unknown'})` : '未安装'}`,
-          `uv: ${env.uv.available ? `已安装 (${env.uv.version ?? 'unknown'})` : '未安装'}`,
-          `Git: ${env.git.available ? `已安装 (${env.git.version ?? 'unknown'})` : '未安装'}`,
-          `Node: ${env.node.available ? `已安装 (${env.node.version ?? 'unknown'})` : '未安装'}`,
-          `平台: ${env.platform}`,
+          `Python: ${env.python.available ? `${env.python.command} (${env.python.version ?? 'unknown'})` : '???'}`,
+          `uv: ${env.uv.available ? `??? (${env.uv.version ?? 'unknown'})` : '???'}`,
+          `Git: ${env.git.available ? `??? (${env.git.version ?? 'unknown'})` : '???'}`,
+          `Node: ${env.node.available ? `??? (${env.node.version ?? 'unknown'})` : '???'}`,
+          `??: ${env.platform}`,
         ]
         const guidance = formatEnvGuidance(env)
         pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') + (guidance ? '\n\n' + guidance : '') }))
       } else if (sub === 'setup') {
         if (!env.python.available) {
-          pushStatic(createLogEntry({ type: 'system', content: '未检测到 Python，无法自动配置项目。\n\n' + formatEnvGuidance(env) }))
+          pushStatic(createLogEntry({ type: 'system', content: '???? Python??????????\n\n' + formatEnvGuidance(env) }))
         } else if (!env.uv.available) {
-          pushStatic(createLogEntry({ type: 'system', content: '已检测到 Python。推荐安装 uv 来自动管理依赖：\n\n' + formatEnvGuidance(env) }))
+          pushStatic(createLogEntry({ type: 'system', content: '???? Python????? uv ????????\n\n' + formatEnvGuidance(env) }))
         } else {
           const recommendation = recommendUvSetup(agent.cwd)
           if (recommendation.ok && recommendation.command) {
-            pushStatic(createLogEntry({ type: 'system', content: `${recommendation.message}\n即将执行：${recommendation.command}\n\n你可以直接粘贴该命令，或者说"执行 Python 项目初始化"。` }))
+            pushStatic(createLogEntry({ type: 'system', content: `${recommendation.message}\n?????${recommendation.command}\n\n??????????????"?? Python ?????"?` }))
           } else {
             pushStatic(createLogEntry({ type: 'system', content: recommendation.message }))
           }
         }
       } else {
         const hasProject = isPythonProject(agent.cwd)
-        pushStatic(createLogEntry({ type: 'system', content: `当前目录 ${hasProject ? '是' : '不像'} Python 项目。\n\nUsage: /python [status|setup]` }))
+        pushStatic(createLogEntry({ type: 'system', content: `???? ${hasProject ? '?' : '??'} Python ???\n\nUsage: /python [status|setup]` }))
       }
       setIsStreaming(false)
       return true
@@ -1062,38 +1062,38 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming, agent } = ctx
       const sub = parts[1]?.toLowerCase()
-      // 无参 → 交互式初始化向导（verify / skills / hooks 脚手架，分步确认）。
+      // ?? ? ?????????verify / skills / hooks ??????????
       if (!sub) {
         if (ctx.openInitFlow) {
           ctx.openInitFlow()
         } else {
-          pushStatic(createLogEntry({ type: 'system', content: '交互式初始化在当前界面不可用。脚本/无头场景请用 /init verify（直执行 verify 声明补缺）。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '?????????????????/?????? /init verify???? verify ??????' }))
         }
         setIsStreaming(false)
         return true
       }
       if (sub !== 'verify') {
-        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /init [verify] — 无参打开交互式初始化向导；verify 直执行 verify 声明补缺。', isError: true }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /init [verify] ? ?????????????verify ??? verify ?????', isError: true }))
         setIsStreaming(false)
         return true
       }
-      // /init verify — 直执行路径（脚本/无头可用，向后兼容）。
+      // /init verify ? ????????/???????????
       // A4: (re)generate the project verify declaration from the fingerprint.
-      // config → md single direction: .rivet-config.json is authoritative,
+      // config ? md single direction: .rivet-config.json is authoritative,
       // the .rivet.md Stack section is rendered from it.
       try {
         const decl = ensureVerifyDeclaration(agent.cwd)
         const lines: string[] = []
         if (decl.fingerprint.language === 'unknown') {
-          lines.push('未识别的项目类型（无 package.json / Cargo.toml / go.mod / pyproject.toml / gradle 标记）。')
-          lines.push('可手动在 .rivet-config.json 中声明：{"verify": {"test": "<命令>", "build": "<命令>"}}')
+          lines.push('?????????? package.json / Cargo.toml / go.mod / pyproject.toml / gradle ????')
+          lines.push('???? .rivet-config.json ????{"verify": {"test": "<??>", "build": "<??>"}}')
         } else {
-          lines.push(`项目指纹: ${decl.fingerprint.language}${decl.fingerprint.hasTestInfra ? '' : '（未检测到测试基础设施）'}`)
+          lines.push(`????: ${decl.fingerprint.language}${decl.fingerprint.hasTestInfra ? '' : '????????????'}`)
           const v = decl.verify
           for (const [k, val] of Object.entries({ test: v.test, build: v.build, typecheck: v.typecheck, lint: v.lint })) {
-            if (val) lines.push(`  verify.${k}: ${val}${decl.filledKeys.includes(k) ? '（新填入）' : '（已声明，保留）'}`)
+            if (val) lines.push(`  verify.${k}: ${val}${decl.filledKeys.includes(k) ? '?????' : '????????'}`)
           }
-          lines.push(decl.wrote ? '已写入 .rivet-config.json 的 verify 声明。' : 'verify 声明已是最新，未改动。')
+          lines.push(decl.wrote ? '??? .rivet-config.json ? verify ???' : 'verify ???????????')
           // Render the Stack section into .rivet.md (create when missing).
           try {
             const rivetMdPath = join(agent.cwd, '.rivet.md')
@@ -1102,16 +1102,16 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
             const next = upsertStackSection(body, stack)
             if (next !== body) {
               writeFileSync(rivetMdPath, next, 'utf-8')
-              lines.push('已同步 .rivet.md 的 Stack 段（由声明单向生成）。')
+              lines.push('??? .rivet.md ? Stack ???????????')
             }
-          } catch { lines.push('（.rivet.md 同步失败——声明本身已生效）') }
+          } catch { lines.push('?.rivet.md ??????????????') }
           if (!decl.fingerprint.hasTestInfra) {
-            lines.push('提示：未检测到测试。deliver_task 门禁将因缺验证证据降级为 YELLOW。可以让天枢帮你搭最小测试骨架。')
+            lines.push('??????????deliver_task ???????????? YELLOW????????????????')
           }
         }
         pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
       } catch (err) {
-        pushStatic(createLogEntry({ type: 'system', content: `/init 失败: ${err instanceof Error ? err.message : String(err)}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `/init ??: ${err instanceof Error ? err.message : String(err)}` }))
       }
       setIsStreaming(false)
       return true
@@ -1123,27 +1123,27 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     async handler(ctx) {
       const { parts, pushStatic, setIsStreaming, agent } = ctx
       const target = parts.slice(1).join(' ').trim()
-      // 无参 → 显示当前工作目录。
+      // ?? ? ?????????
       if (!target) {
-        pushStatic(createLogEntry({ type: 'system', content: `当前工作目录: ${agent.cwd}\n\nUsage: /cd <path> — 会话中途切换工作目录（历史前缀缓存保留，下一边界起按新项目计费）。` }))
+        pushStatic(createLogEntry({ type: 'system', content: `??????: ${agent.cwd}\n\nUsage: /cd <path> ? ?????????????????????????????????` }))
         setIsStreaming(false)
         return true
       }
       if (!ctx.onCwdSwitch) {
-        pushStatic(createLogEntry({ type: 'system', content: '当前界面不支持 /cd 切换（测试/无头环境）。', isError: true }))
+        pushStatic(createLogEntry({ type: 'system', content: '??????? /cd ?????/??????', isError: true }))
         setIsStreaming(false)
         return true
       }
       const res = await ctx.onCwdSwitch(target)
       if (!res.ok) {
-        pushStatic(createLogEntry({ type: 'system', content: `/cd 失败: ${res.error ?? '未知错误'}`, isError: true }))
+        pushStatic(createLogEntry({ type: 'system', content: `/cd ??: ${res.error ?? '????'}`, isError: true }))
         setIsStreaming(false)
         return true
       }
       const lines = [
-        `工作目录已切换: ${res.from} → ${res.to}`,
-        `会话归属已迁移（${res.movedFiles?.length ?? 0} 个文件）——新项目的 /resume 与 --continue 可见本会话。`,
-        '历史前缀缓存保留；下一条消息起按新项目重建边界（同 /domain 切换代价）。',
+        `???????: ${res.from} ? ${res.to}`,
+        `????????${res.movedFiles?.length ?? 0} ?????????? /resume ? --continue ??????`,
+        '????????????????????????? /domain ??????',
       ]
       pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
       setIsStreaming(false)
@@ -1157,15 +1157,15 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const { parts, pushStatic, setIsStreaming, agent } = ctx
       const note = parts.slice(1).join(' ').trim() || undefined
       if (!ctx.submitToAgent) {
-        pushStatic(createLogEntry({ type: 'system', content: '当前界面不支持 /handoff（测试/无头环境）。', isError: true }))
+        pushStatic(createLogEntry({ type: 'system', content: '??????? /handoff???/??????', isError: true }))
         setIsStreaming(false)
         return true
       }
-      // 项目内 .rivet/ 在工作区内（auto-safe 免审批）；会话目录在工作区外会触发路径审批。
+      // ??? .rivet/ ??????auto-safe ??????????????????????
       const projectPath = join(agent.cwd, '.rivet', 'HANDOFF.md')
       const archivePath = join(getSessionDir(agent.cwd), `${ctx.currentSessionId}.handoff.md`)
-      // 归档登记：交接 turn 完成后 TUI 把项目内文档拷贝归档到会话目录
-      // （loadPrevHandoff 注入管线认 <id>.handoff.md）。
+      // ??????? turn ??? TUI ???????????????
+      // ?loadPrevHandoff ????? <id>.handoff.md??
       ctx.onHandoffStart?.(projectPath, archivePath)
       ctx.submitToAgent(buildHandoffPrompt(projectPath, note))
       return true
@@ -1182,11 +1182,11 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const env = await detectEnv(agent.cwd, resolved)
       const shell = getShellCommand()
       const toolLine = (label: string, t: { available: boolean; command?: string; version?: string }): string =>
-        `${label} ${t.available ? `已安装 (${t.version ?? t.command ?? 'unknown'})` : '未安装 / 未在 PATH'}`
+        `${label} ${t.available ? `??? (${t.version ?? t.command ?? 'unknown'})` : '??? / ?? PATH'}`
       const lines = [
-        '环境体检 (/doctor)',
-        '═══════════════════════',
-        `平台: ${env.platform}`,
+        '???? (/doctor)',
+        '???????????????????????',
+        `??: ${env.platform}`,
         toolLine('Node:  ', env.node),
         toolLine('Git:   ', env.git),
         toolLine('Python:', env.python),
@@ -1195,27 +1195,27 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         toolLine('Maven: ', env.maven),
         toolLine('Gradle:', env.gradle),
         '',
-        'Shell (bash 工具实际使用)',
-        '───────────────────────',
+        'Shell (bash ??????)',
+        '???????????????????????',
         `kind: ${shell.kind}   cmd: ${shell.cmd}`,
       ]
       if (env.platform === 'win32' && shell.kind !== 'bash') {
-        lines.push('', '⚠ Windows 未使用 Git Bash — 命令执行已退回 ' + shell.kind + '。')
-        lines.push('  安装 Git for Windows 可获得更可靠的 POSIX 命令执行。')
+        lines.push('', '? Windows ??? Git Bash ? ??????? ' + shell.kind + '?')
+        lines.push('  ?? Git for Windows ??????? POSIX ?????')
       }
 
       // PATH recovery diff: show what the resolver added on top of the raw
       // process PATH, so the user knows whether GUI-launch recovery kicked in and
       // what to add to `env.extraPath` if a tool is still missing.
       const diff = getResolvedPathDiff(agent.cwd)
-      lines.push('', 'PATH 解析 (GUI 启动兜底)', '───────────────────────')
-      lines.push(`process PATH 条目: ${diff.processPath.length}   resolved PATH 条目: ${diff.resolvedPath.length}`)
+      lines.push('', 'PATH ?? (GUI ????)', '???????????????????????')
+      lines.push(`process PATH ??: ${diff.processPath.length}   resolved PATH ??: ${diff.resolvedPath.length}`)
       if (diff.added.length > 0) {
-        lines.push('已补全以下目录（进程 PATH 缺失）:')
+        lines.push('?????????? PATH ???:')
         for (const d of diff.added.slice(0, 20)) lines.push(`  + ${d}`)
-        if (diff.added.length > 20) lines.push(`  … 及另外 ${diff.added.length - 20} 项`)
+        if (diff.added.length > 20) lines.push(`  ? ??? ${diff.added.length - 20} ?`)
       } else {
-        lines.push('resolved PATH 与 process PATH 一致（无需补全）。')
+        lines.push('resolved PATH ? process PATH ?????????')
       }
       const stillMissing = [
         !env.git.available ? 'git' : null,
@@ -1224,8 +1224,8 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         !env.gradle.available ? 'gradle' : null,
       ].filter(Boolean)
       if (stillMissing.length > 0) {
-        lines.push('', `仍未找到: ${stillMissing.join(', ')}`)
-        lines.push('若已安装，请把其可执行目录加入配置 env.extraPath（数组），或设置对应的 *_HOME 变量后重启天枢。')
+        lines.push('', `????: ${stillMissing.join(', ')}`)
+        lines.push('????????????????? env.extraPath??????????? *_HOME ????????')
       }
 
       const guidance = formatEnvGuidance(env)
@@ -1239,16 +1239,16 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     immediate: true,
     async handler(ctx) {
       const { parts, pushStatic, setIsStreaming, agent, currentSessionId } = ctx
-      // 直接复用 `rivet logs` 的实现，不在这里重写一遍路径推导与 open 逻辑——
-      // 两处措辞一旦分叉，用户在 TUI 和终端里会看到互相矛盾的落点说明。
-      // 会话 id 显式透传：CLI 缺省是「最近写入的会话」，而 TUI 要的是当前这个。
+      // ???? `rivet logs` ????????????????? open ????
+      // ???????????? TUI ?????????????????
+      // ?? id ?????CLI ?????????????? TUI ????????
       const { runLogsCLI } = await import('../diagnostics/logs-cli.js')
       const { output } = runLogsCLI(
         ['--session', currentSessionId, ...parts.slice(1)],
         { cwd: agent.cwd },
       )
       const isOpen = parts[1]?.toLowerCase() === 'open'
-      const hint = isOpen ? '' : '\n\n用 /logs open 打开会话目录，/logs open desktop 打开 sidecar 日志目录。'
+      const hint = isOpen ? '' : '\n\n? /logs open ???????/logs open desktop ?? sidecar ?????'
       pushStatic(createLogEntry({ type: 'system', content: output + hint }))
       setIsStreaming(false)
       return true
@@ -1260,7 +1260,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      pushStatic(createLogEntry({ type: 'system', content: '模式已由消息内容自动检测，无需手动切换。任务脚手架在有明确意图时自动开启。' }))
+      pushStatic(createLogEntry({ type: 'system', content: '?????????????????????????????????????' }))
       setIsStreaming(false)
       return true
     },
@@ -1271,7 +1271,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      pushStatic(createLogEntry({ type: 'system', content: '模式已由消息内容自动检测，无需手动切换。任务脚手架在有明确意图时自动开启。子代理任务面板（查看/管理 worker）请用 /tasks。' }))
+      pushStatic(createLogEntry({ type: 'system', content: '???????????????????????????????????????????????/?? worker??? /tasks?' }))
       setIsStreaming(false)
       return true
     },
@@ -1282,7 +1282,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      pushStatic(createLogEntry({ type: 'system', content: '模式已由消息内容自动检测，无需手动切换。' }))
+      pushStatic(createLogEntry({ type: 'system', content: '????????????????????' }))
       setIsStreaming(false)
       return true
     },
@@ -1316,7 +1316,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const budgetHint = parsed.wallClockMs !== undefined
         ? `Wall-clock budget: ${Math.round(parsed.wallClockMs / 60000)}m. `
         : ''
-      pushStatic(createLogEntry({ type: 'system', content: `🎯 Goal activated: ${parsed.goalText}\nMax iterations: ${maxIterations}. ${budgetHint}Output "GOAL ACHIEVED" to complete, "GOAL BLOCKED" for blockers, or /goal-cancel to abort.\nUse /goal-pause to pause, /goal-resume to resume.` }))
+      pushStatic(createLogEntry({ type: 'system', content: `?? Goal activated: ${parsed.goalText}\nMax iterations: ${maxIterations}. ${budgetHint}Output "GOAL ACHIEVED" to complete, "GOAL BLOCKED" for blockers, or /goal-cancel to abort.\nUse /goal-pause to pause, /goal-resume to resume.` }))
       if (ctx.agent.config.goalJudge?.enabled !== false && !parsed.criteria) {
         void (async () => {
           try {
@@ -1337,9 +1337,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
             const criteria = await extractGoalCriteria(parsed.goalText, completion)
             tracker.setSuccessCriteria(criteria)
             await persistGoalState(ctx, tracker)
-            pushStatic(createLogEntry({ type: 'system', content: `🔍 Judge 验收项（完成时独立核验）：\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` }))
+            pushStatic(createLogEntry({ type: 'system', content: `?? Judge ?????????????\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` }))
           } catch {
-            pushStatic(createLogEntry({ type: 'system', content: '🔍 验收项提取已降级为宽判模式（extraction failed）。' }))
+            pushStatic(createLogEntry({ type: 'system', content: '?? ??????????????extraction failed??' }))
           }
         })()
       }
@@ -1364,7 +1364,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           deleteGoalState(getSessionDir(ctx.agent.cwd), ctx.currentSessionId)
         } catch { /* best-effort */ }
       }
-      pushStatic(createLogEntry({ type: 'system', content: '🚫 Goal cancelled.' }))
+      pushStatic(createLogEntry({ type: 'system', content: '?? Goal cancelled.' }))
       setIsStreaming(false)
       return true
     },
@@ -1389,8 +1389,8 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
       tracker.resume('user')
       const wallElapsed = Math.round(tracker.getWallClockElapsedMs() / 1000)
-      pushStatic(createLogEntry({ type: 'system', content: `▶️ Goal resumed: ${tracker.getGoal()}\nIteration: ${tracker.getIteration()}/${tracker.getMaxIterations()} | ⏱ ${wallElapsed}s elapsed.` }))
-      ctx.submitToAgent?.(`[GOAL RESUME] 继续执行目标: ${tracker.getGoal()}`)
+      pushStatic(createLogEntry({ type: 'system', content: `?? Goal resumed: ${tracker.getGoal()}\nIteration: ${tracker.getIteration()}/${tracker.getMaxIterations()} | ? ${wallElapsed}s elapsed.` }))
+      ctx.submitToAgent?.(`[GOAL RESUME] ??????: ${tracker.getGoal()}`)
       return true
     },
   },
@@ -1421,17 +1421,17 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
             throw new Error('Expected a JSON array of strings')
           }
           tracker.setSuccessCriteria(criteria as string[])
-          pushStatic(createLogEntry({ type: 'system', content: `✅ 验收项已更新（${(criteria as string[]).length} 项）:\n${(criteria as string[]).map((c, i) => `${i + 1}. ${c}`).join('\n')}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? ???????${(criteria as string[]).length} ??:\n${(criteria as string[]).map((c, i) => `${i + 1}. ${c}`).join('\n')}` }))
         } catch (e) {
-          pushStatic(createLogEntry({ type: 'system', content: `❌ 解析失败: ${(e as Error).message}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? ????: ${(e as Error).message}` }))
         }
       } else {
         // Show current criteria
         const criteria = tracker.getSuccessCriteria()
         if (criteria.length === 0) {
-          pushStatic(createLogEntry({ type: 'system', content: '当前无验收项（提取未完成或失败）。\n用 /goal-criteria set \'["..."]\' 手动设置。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '?????????????????\n? /goal-criteria set \'["..."]\' ?????' }))
         } else {
-          pushStatic(createLogEntry({ type: 'system', content: `📋 Judge 验收项（${criteria.length} 项）:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\n用 /goal-criteria set \'["..."]\' 覆盖。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `?? Judge ????${criteria.length} ??:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\n? /goal-criteria set \'["..."]\' ???` }))
         }
       }
       setIsStreaming(false)
@@ -1472,7 +1472,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
       tracker.pause('Paused by user', 'user')
       await persistGoalState(ctx, tracker)
-      pushStatic(createLogEntry({ type: 'system', content: `⏸ Goal paused: ${tracker.getGoal()}\nIteration: ${tracker.getIteration()}/${tracker.getMaxIterations()} | Use /goal-resume to continue.` }))
+      pushStatic(createLogEntry({ type: 'system', content: `? Goal paused: ${tracker.getGoal()}\nIteration: ${tracker.getIteration()}/${tracker.getMaxIterations()} | Use /goal-resume to continue.` }))
       setIsStreaming(false)
       return true
     },
@@ -1488,25 +1488,25 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         // Show current domain
         const current = ctx.agent.getSessionDomain()
         if (current === undefined) {
-          pushStatic(createLogEntry({ type: 'system', content: '星域\n\n尚未激活。发送第一条消息后将根据内容自动匹配。\n使用 /domain list 查看所有星域，/domain <名称> 手动指定。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??\n\n???????????????????????\n?? /domain list ???????/domain <??> ?????' }))
         } else if (current === null) {
-          pushStatic(createLogEntry({ type: 'system', content: '星域\n\n当前无星域（自动匹配未命中）。\n使用 /domain <名称> 手动指定，或 /domain auto 重置为自动检测。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??\n\n???????????????\n?? /domain <??> ?????? /domain auto ????????' }))
         } else {
-          pushStatic(createLogEntry({ type: 'system', content: `星域\n\n当前: ${current.name} (${current.id})\n座右铭: ${current.motto}\n\n${current.volatileBlock}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `??\n\n??: ${current.name} (${current.id})\n???: ${current.motto}\n\n${current.volatileBlock}` }))
         }
       } else if (sub === 'list' || sub === 'ls') {
         const current = ctx.agent.getSessionDomain()
         const currentId = current?.id
         const lines = (starDomainRegistry.list() as Array<{ id: StarDomainId; name: string; keywords: string[]; decisionStyle: string; motto: string }>).map(d => {
-          const marker = d.id === currentId ? ' ← current' : ''
+          const marker = d.id === currentId ? ' ? current' : ''
           return `  ${d.name} (${d.id}) [${d.decisionStyle}]${marker}\n    ${d.motto}\n    keywords: ${d.keywords.join(', ')}`
         })
-        pushStatic(createLogEntry({ type: 'system', content: `星域一览\n\n${lines.join('\n\n')}\n\n使用 /domain <id|名称> 切换，/domain auto 恢复自动检测。` }))
+        pushStatic(createLogEntry({ type: 'system', content: `????\n\n${lines.join('\n\n')}\n\n?? /domain <id|??> ???/domain auto ???????` }))
       } else if (sub === 'auto') {
         const midSession = ctx.agent.getSessionTurnCount() > 0
         ctx.agent.resetSessionDomain()
         ctx.onDomainChange?.(undefined)
-        pushStatic(createLogEntry({ type: 'system', content: '星域已重置为自动检测模式。下一次对话将根据输入内容自动匹配星域。' }))
+        pushStatic(createLogEntry({ type: 'system', content: '????????????????????????????????' }))
         if (midSession) pushStatic(createLogEntry({ type: 'system', content: DOMAIN_SWITCH_CACHE_WARNING }))
       } else {
         // Try to match by id or Chinese name
@@ -1517,11 +1517,11 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           const domain = { id: matched.id, name: matched.name, volatileBlock: matched.volatileBlock, motto: matched.motto, courageThreshold: matched.courageThreshold }
           ctx.agent.setSessionDomain(domain)
           ctx.onDomainChange?.(domain.name)
-          pushStatic(createLogEntry({ type: 'system', content: `星域切换: ${domain.name} (${domain.id})\n${domain.motto}\n\n${domain.volatileBlock}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `????: ${domain.name} (${domain.id})\n${domain.motto}\n\n${domain.volatileBlock}` }))
           if (midSession) pushStatic(createLogEntry({ type: 'system', content: DOMAIN_SWITCH_CACHE_WARNING }))
         } else {
           const validNames = allDomains.map(d => `${d.name}|${d.id}`).join(', ')
-          pushStatic(createLogEntry({ type: 'system', content: `未知星域: "${parts[1]}"\n\n可用星域: ${validNames}\n\n使用 /domain list 查看所有星域。`, isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: `????: "${parts[1]}"\n\n????: ${validNames}\n\n?? /domain list ???????`, isError: true }))
         }
       }
       setIsStreaming(false)
@@ -1554,7 +1554,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const recent = state.verifications.slice(-10)
         const lines = ['Evidence Summary (last 10 verifications):', '']
         for (const v of recent) {
-          const glyph = v.status === 'passed' ? '✓' : v.status === 'failed' ? '✗' : '◐'
+          const glyph = v.status === 'passed' ? '?' : v.status === 'failed' ? '?' : '?'
           const time = v.timestamp ? new Date(v.timestamp).toLocaleTimeString() : ''
           lines.push(`  ${glyph} ${v.command}  (${v.status})  ${time}`)
         }
@@ -1579,10 +1579,10 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         return (VALID_MODES as readonly string[]).includes(m)
       }
       const MODE_LABELS: Record<RuntimeMode, string> = {
-        'auto-accept': 'auto-accept — 自动接受低风险工具调用',
-        'auto-safe': 'auto-safe — 低/无风险自动过，高风险仍弹确认',
-        'manual': 'manual — 所有需 approval 的工具都弹确认',
-        'dangerously-skip-permissions': 'yolo (dangerously-skip-permissions) — 跳过所有权限确认',
+        'auto-accept': 'auto-accept ? ???????????',
+        'auto-safe': 'auto-safe ? ?/??????????????',
+        'manual': 'manual ? ??? approval ???????',
+        'dangerously-skip-permissions': 'yolo (dangerously-skip-permissions) ? ????????',
       }
 
       function parseKvPairs(tokens: string[]): Record<string, string> {
@@ -1616,40 +1616,40 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const lines: string[] = []
         const currentMode = agent.config.approvalMode ?? 'manual'
         const currentLabel = { manual: 'Manual', 'auto-safe': 'Auto', 'auto-accept': 'Auto', 'dangerously-skip-permissions': 'YOLO' }[currentMode] ?? currentMode
-        lines.push(`当前权限: ${currentLabel} (${currentMode})`)
+        lines.push(`????: ${currentLabel} (${currentMode})`)
         lines.push('')
-        lines.push('快速切换: /permission manual | /permission auto [轮次] | /permission yolo [confirm]')
+        lines.push('????: /permission manual | /permission auto [??] | /permission yolo [confirm]')
         lines.push('')
 
         if (allow.length > 0) {
-          lines.push('\nAllow 规则：')
+          lines.push('\nAllow ???')
           allow.forEach((r, i) => {
             const params = r.params ? Object.entries(r.params).map(([k, v]) => `${k}="${v}"`).join(' ') : ''
             lines.push(`  ${i}. ${ruleSource(cfg?.allow ?? [], overlay?.allow ?? [], i)} ${r.tool}${params ? ' ' + params : ''}`)
           })
         }
         if (deny.length > 0) {
-          lines.push('\nDeny 规则：')
+          lines.push('\nDeny ???')
           deny.forEach((r, i) => {
             const params = r.params ? Object.entries(r.params).map(([k, v]) => `${k}="${v}"`).join(' ') : ''
             lines.push(`  ${i}. ${ruleSource(cfg?.deny ?? [], overlay?.deny ?? [], i)} ${r.tool}${params ? ' ' + params : ''}`)
           })
         }
         if (bashAllow.length > 0) {
-          lines.push(`\nBash 前缀白名单：${bashAllow.join(', ')}`)
+          lines.push(`\nBash ??????${bashAllow.join(', ')}`)
         }
         if (bashDeny.length > 0) {
-          lines.push(`\nBash 前缀黑名单：${bashDeny.join(', ')}`)
+          lines.push(`\nBash ??????${bashDeny.join(', ')}`)
         }
         if (allow.length === 0 && deny.length === 0 && bashAllow.length === 0 && bashDeny.length === 0) {
-          lines.push('\n当前没有任何 allow/deny 规则。')
+          lines.push('\n?????? allow/deny ???')
         }
-        lines.push('\n说明：deny 规则优先于 allow 和 approval mode；session 规则仅本次会话有效。')
+        lines.push('\n???deny ????? allow ? approval mode?session ??????????')
         return lines.join('\n')
       }
 
       if (!sub) {
-        // 无参数 → 弹出交互式权限选择面板（上下选 + 回车确认，同 /effort 风格，kimi-code 对标）
+        // ??? ? ??????????????? + ?????? /effort ???kimi-code ???
         ctx.setChoicePanelKind?.('permission')
         ctx.surfacePush?.('choice-panel')
         setIsStreaming(false)
@@ -1657,19 +1657,19 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
 
       if (sub === 'status') {
-        // /permission status → 显示当前模式 + 所有规则（文字视图）
+        // /permission status ? ?????? + ??????????
         pushStatic(createLogEntry({ type: 'system', content: formatRules() }))
         setIsStreaming(false)
         return true
       }
 
-      // ── 三档快速切换 ──
+      // ?? ?????? ??
 
       if (sub === 'manual') {
         agent.setApprovalMode('manual')
         ctx.setAutoSafe(false)
         ctx.persistApprovalMode?.('manual')
-        pushStatic(createLogEntry({ type: 'system', content: '✓ 已切换至 Manual — 所有高风险操作都需人工确认（已设为默认，重启后仍生效）' }))
+        pushStatic(createLogEntry({ type: 'system', content: '? ???? Manual ? ???????????????????????????' }))
         setIsStreaming(false)
         return true
       }
@@ -1679,7 +1679,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         if (intervalRaw !== undefined) {
           const v = Number(intervalRaw)
           if (!Number.isInteger(v) || v < 0) {
-            pushStatic(createLogEntry({ type: 'system', content: '轮数必须是非负整数。用法: /permission auto [轮次]', isError: true }))
+            pushStatic(createLogEntry({ type: 'system', content: '????????????: /permission auto [??]', isError: true }))
             setIsStreaming(false)
             return true
           }
@@ -1689,8 +1689,8 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         ctx.setAutoSafe(true)
         ctx.persistApprovalMode?.('auto-safe')
         const interval = intervalRaw !== undefined ? Number(intervalRaw) : undefined
-        const cpNote = interval !== undefined ? (interval > 0 ? `，检查点每 ${interval} 轮暂停` : '，检查点已关闭') : ''
-        pushStatic(createLogEntry({ type: 'system', content: `✓ 已切换至 Auto — 低/无风险工具自动执行，高风险仍需确认${cpNote}（已设为默认，重启后仍生效）\n\n  调整检查点: /permission auto <轮数>（0 = 关）` }))
+        const cpNote = interval !== undefined ? (interval > 0 ? `????? ${interval} ???` : '???????') : ''
+        pushStatic(createLogEntry({ type: 'system', content: `? ???? Auto ? ?/?????????????????${cpNote}??????????????\n\n  ?????: /permission auto <??>?0 = ??` }))
         setIsStreaming(false)
         return true
       }
@@ -1699,16 +1699,16 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const confirmed = parts[2]?.toLowerCase() === 'confirm'
         if (!confirmed) {
           pushStatic(createLogEntry({ type: 'system', content: [
-            '⚠ YOLO 模式风险说明',
+            '? YOLO ??????',
             '',
-            '  · 无轮次刹车 — run 一直执行到完成或 maxTurns 上限',
-            '  · 无进度播报 — 完全静默运行',
-            '  · 所有工具调用直接执行，不再弹确认',
-            '  · 沙箱仍拦截项目外写入',
-            '  · 回滚兜底：/rollback + git 检查点',
-            '  · Windows 注意：沙箱能力降级',
+            '  ? ????? ? run ???????? maxTurns ??',
+            '  ? ????? ? ??????',
+            '  ? ????????????????',
+            '  ? ??????????',
+            '  ? ?????/rollback + git ???',
+            '  ? Windows ?????????',
             '',
-            '确认进入: /permission yolo confirm  或  /yes',
+            '????: /permission yolo confirm  ?  /yes',
           ].join('\n') }))
           setIsStreaming(false)
           return true
@@ -1717,23 +1717,23 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         agent.config.maxTurns = 0
         ctx.setAutoSafe(false)
         ctx.persistApprovalMode?.('dangerously-skip-permissions')
-        pushStatic(createLogEntry({ type: 'system', content: '✓ 已切换至 YOLO — 全自动执行，无刹车无打扰（已设为默认，重启后仍生效）。/rollback 可随时回滚。关闭: /yes off' }))
+        pushStatic(createLogEntry({ type: 'system', content: '? ???? YOLO ? ???????????????????????????/rollback ????????: /yes off' }))
         setIsStreaming(false)
         return true
       }
 
-      // ── 高级 mode 命令（保留兼容） ──
+      // ?? ?? mode ???????? ??
 
       if (sub === 'mode') {
         const mode = parts[2]
         if (!mode || !isRuntimeMode(mode)) {
-          pushStatic(createLogEntry({ type: 'system', content: `用法: /permission mode <${VALID_MODES.join('|')}>`, isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: `??: /permission mode <${VALID_MODES.join('|')}>`, isError: true }))
           setIsStreaming(false)
           return true
         }
         agent.setApprovalMode(mode)
         ctx.setAutoSafe(mode === 'auto-safe')
-        pushStatic(createLogEntry({ type: 'system', content: `Approval mode → ${mode}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `Approval mode ? ${mode}` }))
         setIsStreaming(false)
         return true
       }
@@ -1741,7 +1741,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (sub === 'allow' || sub === 'deny') {
         const tool = parts[2]
         if (!tool) {
-          pushStatic(createLogEntry({ type: 'system', content: `用法: /permission ${sub} <tool> [param=value]...`, isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: `??: /permission ${sub} <tool> [param=value]...`, isError: true }))
           setIsStreaming(false)
           return true
         }
@@ -1750,7 +1750,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         if (sub === 'allow') agent.addAllowRule(rule)
         else agent.addDenyRule(rule)
         const paramsStr = rule.params ? Object.entries(rule.params).map(([k, v]) => `${k}="${v}"`).join(' ') : ''
-        pushStatic(createLogEntry({ type: 'system', content: `已添加 ${sub} 规则: ${tool}${paramsStr ? ' ' + paramsStr : ''}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `??? ${sub} ??: ${tool}${paramsStr ? ' ' + paramsStr : ''}` }))
         setIsStreaming(false)
         return true
       }
@@ -1758,19 +1758,19 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (sub === 'bash') {
         const action = parts[2]?.toLowerCase()
         if (action !== 'allow' && action !== 'deny') {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /permission bash allow|deny <prefix>', isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /permission bash allow|deny <prefix>', isError: true }))
           setIsStreaming(false)
           return true
         }
         const prefix = parts.slice(3).join(' ')
         if (!prefix) {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /permission bash allow|deny <prefix>', isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /permission bash allow|deny <prefix>', isError: true }))
           setIsStreaming(false)
           return true
         }
         if (action === 'allow') agent.addBashAllowPrefix(prefix)
         else agent.addBashDenyPrefix(prefix)
-        pushStatic(createLogEntry({ type: 'system', content: `已添加 bash ${action === 'allow' ? '白名单' : '黑名单'}前缀: ${prefix}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `??? bash ${action === 'allow' ? '???' : '???'}??: ${prefix}` }))
         setIsStreaming(false)
         return true
       }
@@ -1779,7 +1779,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const kindRaw = parts[2]?.toLowerCase()
         const target = parts[3]
         if (!kindRaw || !target || !['allow', 'deny', 'bashallow', 'bashdeny'].includes(kindRaw)) {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /permission remove allow|deny|bashAllow|bashDeny <index|pattern>', isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /permission remove allow|deny|bashAllow|bashDeny <index|pattern>', isError: true }))
           setIsStreaming(false)
           return true
         }
@@ -1787,14 +1787,14 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const idx = parseInt(target, 10)
         const key = Number.isNaN(idx) ? target : idx
         const ok = agent.removePermissionRule(kind, key)
-        pushStatic(createLogEntry({ type: 'system', content: ok ? `已移除 ${kind} 规则: ${target}` : `未找到 ${kind} 规则: ${target}`, isError: !ok }))
+        pushStatic(createLogEntry({ type: 'system', content: ok ? `??? ${kind} ??: ${target}` : `??? ${kind} ??: ${target}`, isError: !ok }))
         setIsStreaming(false)
         return true
       }
 
       if (sub === 'reset') {
         agent.resetPermissionOverlay()
-        pushStatic(createLogEntry({ type: 'system', content: '已清空本次会话所有运行时权限覆盖。' }))
+        pushStatic(createLogEntry({ type: 'system', content: '?????????????????' }))
         setIsStreaming(false)
         return true
       }
@@ -1803,7 +1803,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const tool = parts[2]
         const json = parts.slice(3).join(' ')
         if (!tool || !json) {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /permission test <tool> <json input>', isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /permission test <tool> <json input>', isError: true }))
           setIsStreaming(false)
           return true
         }
@@ -1811,7 +1811,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         try {
           input = JSON.parse(json) as Record<string, unknown>
         } catch {
-          pushStatic(createLogEntry({ type: 'system', content: 'JSON 解析失败', isError: true }))
+          pushStatic(createLogEntry({ type: 'system', content: 'JSON ????', isError: true }))
           setIsStreaming(false)
           return true
         }
@@ -1824,7 +1824,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           ? isBashCommandDenied(input.command, bashDeny)
           : isToolDenied(tool, input, allDeny)
         if (denied) {
-          pushStatic(createLogEntry({ type: 'system', content: `结果: deny（命中 deny 规则）` }))
+          pushStatic(createLogEntry({ type: 'system', content: `??: deny??? deny ???` }))
           setIsStreaming(false)
           return true
         }
@@ -1832,17 +1832,17 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           ? isBashCommandAllowlisted(input.command, bashAllow)
           : isToolAllowed(tool, input, allAllow)
         if (allowlisted) {
-          pushStatic(createLogEntry({ type: 'system', content: '结果: allow（命中 allow 规则）' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: allow??? allow ???' }))
           setIsStreaming(false)
           return true
         }
         const needsApproval = agent.config.toolRegistry.needsApproval(tool, { input, toolUseId: 'test', cwd: ctx.agent.cwd })
-        pushStatic(createLogEntry({ type: 'system', content: `结果: ask（需要 approval：${needsApproval ? '是' : '否'}）` }))
+        pushStatic(createLogEntry({ type: 'system', content: `??: ask??? approval?${needsApproval ? '?' : '?'}?` }))
         setIsStreaming(false)
         return true
       }
 
-      pushStatic(createLogEntry({ type: 'system', content: '未知子命令。用法: /permission [status|mode|allow|deny|bash|remove|reset|test]', isError: true }))
+      pushStatic(createLogEntry({ type: 'system', content: '????????: /permission [status|mode|allow|deny|bash|remove|reset|test]', isError: true }))
       setIsStreaming(false)
       return true
     },
@@ -1856,18 +1856,18 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const target = parts[1]
 
       if (!target) {
-        // 无参 → 列出本工作区已记住的目录授权。只列 listPersistedGrants：
-        // 内存 store 还含依赖缓存/raw 输出目录等系统级会话授权，用户从未主动
-        // 授权过，混进列表只会让人误以为可以/需要撤销。
+        // ?? ? ????????????????? listPersistedGrants?
+        // ?? store ??????/raw ???????????????????
+        // ?????????????????/?????
         const persisted = listPersistedGrants(cwd)
-        const lines: string[] = ['本工作区已记住的目录授权', '══════════════════════']
+        const lines: string[] = ['????????????', '??????????????????????']
         if (persisted.length === 0) {
-          lines.push('（无。用 /grant <路径> [read|write] 授权并记住，或在工作区外路径审批时选「批准并记住此目录」。）')
+          lines.push('???? /grant <??> [read|write] ??????????????????????????????')
         } else {
           for (const g of persisted) {
-            lines.push(`  ${g.mode === 'write' ? '✎' : '👁'} ${g.root}${g.mode === 'write' ? ' (读写)' : ' (只读)'}`)
+            lines.push(`  ${g.mode === 'write' ? '?' : '??'} ${g.root}${g.mode === 'write' ? ' (??)' : ' (??)'}`)
           }
-          lines.push('', '撤销：rivet config revoke-dir <路径>，或桌面端 设置 → 目录授权。')
+          lines.push('', '???rivet config revoke-dir <??>????? ?? ? ?????')
         }
         pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
         setIsStreaming(false)
@@ -1878,7 +1878,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       grantPath(target, mode, { persist: true, cwd })
       pushStatic(createLogEntry({
         type: 'system',
-        content: `✓ 已授权并记住 ${mode === 'write' ? '读写' : '只读'}访问 "${target}"（本工作区，重启后仍生效）`,
+        content: `? ?????? ${mode === 'write' ? '??' : '??'}?? "${target}"?????????????`,
       }))
       setIsStreaming(false)
       return true
@@ -1894,13 +1894,13 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         if (planModeExitArmedAt !== 0 && now - planModeExitArmedAt <= PLAN_MODE_EXIT_CONFIRM_MS) {
           planModeExitArmedAt = 0
           ctx.agent.exitPlanMode()
-          pushStatic(createLogEntry({ type: 'system', content: 'Plan Mode 已关闭 — 写入操作已解锁。' }))
+          pushStatic(createLogEntry({ type: 'system', content: 'Plan Mode ??? ? ????????' }))
         } else {
           planModeExitArmedAt = now
           const activePath = ctx.agent.getActivePlanFilePath()
           pushStatic(createLogEntry({
             type: 'system',
-            content: `🔍 Plan Mode 仍在运行。${activePath ? `\n活动计划文件: \`${activePath}\`` : ''}\n\n⚠ 计划尚未批准。再执行一次 /plan-mode 放弃当前计划并退出，或用 /plan-approve <slug> 批准后执行。`,
+            content: `?? Plan Mode ?????${activePath ? `\n??????: \`${activePath}\`` : ''}\n\n? ???????????? /plan-mode ???????????? /plan-approve <slug> ??????`,
           }))
         }
         setIsStreaming(false)
@@ -1908,7 +1908,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
       planModeExitArmedAt = 0
       ctx.agent.enterPlanMode()
-      pushStatic(createLogEntry({ type: 'system', content: '🔍 Plan Mode activated. Write operations are blocked except the active plan file.\n\nWorkflow: identify key questions → delegate_task (code_scout) / web_search → write plan incrementally → ask_user_question or plan submit.\n\nWhen ready:\n  plan action=submit — submit for approval\n  /plan-list — list submitted plans\n  /plan-approve <slug> [option] — approve and start execution\n  /plan-reject <slug> <feedback> — reject with feedback (plan mode stays active)\n\n/plan-mode — exit plan mode (double-confirm if unapproved)' }))
+      pushStatic(createLogEntry({ type: 'system', content: '?? Plan Mode activated. Write operations are blocked except the active plan file.\n\nWorkflow: identify key questions ? delegate_task (code_scout) / web_search ? write plan incrementally ? ask_user_question or plan submit.\n\nWhen ready:\n  plan action=submit ? submit for approval\n  /plan-list ? list submitted plans\n  /plan-approve <slug> [option] ? approve and start execution\n  /plan-reject <slug> <feedback> ? reject with feedback (plan mode stays active)\n\n/plan-mode ? exit plan mode (double-confirm if unapproved)' }))
       setIsStreaming(false)
       return true
     },
@@ -1920,7 +1920,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const { pushStatic, setIsStreaming } = ctx
       if (ctx.agent.getAskModeState?.() === 'asking' || ctx.agent.askModeState === 'asking') {
         ctx.agent.exitAskMode()
-        pushStatic(createLogEntry({ type: 'system', content: 'Ask Mode 已关闭 — 写入与执行操作已解锁。' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Ask Mode ??? ? ???????????' }))
         setIsStreaming(false)
         return true
       }
@@ -1929,7 +1929,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         type: 'system',
         content:
           '? Ask Mode activated. Only read / search / ask_user_question are allowed.\n\n' +
-          'Ask Mode 适合：代码问答、对照阅读、澄清需求。需要写改或跑命令时执行 /ask 退出。',
+          'Ask Mode ????????????????????????????? /ask ???',
       }))
       setIsStreaming(false)
       return true
@@ -1947,9 +1947,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         pushStatic(createLogEntry({ type: 'system', content: 'No plans found. Use /plan-mode to enter plan mode and create a plan.' }))
       } else {
         const lines = plans.map(p => {
-          const statusIcon = p.status === 'approved' ? '✅' : p.status === 'rejected' ? '❌' : p.status === 'executed' ? '🏁' : '📋'
-          const tierTag = p.modelTier === 'cheap' ? ' ⚠低阶模型产出' : ''
-          return `  ${statusIcon} \`${p.slug}\` — ${p.title} (${p.status}, ${p.createdAt.toLocaleString()})${tierTag}`
+          const statusIcon = p.status === 'approved' ? '?' : p.status === 'rejected' ? '?' : p.status === 'executed' ? '??' : '??'
+          const tierTag = p.modelTier === 'cheap' ? ' ???????' : ''
+          return `  ${statusIcon} \`${p.slug}\` ? ${p.title} (${p.status}, ${p.createdAt.toLocaleString()})${tierTag}`
         })
         pushStatic(createLogEntry({ type: 'system', content: `Plans (.rivet/plans/):\n\n${lines.join('\n')}\n\nUse /plan-approve <slug> to approve, /plan-reject <slug> to reject.` }))
       }
@@ -1969,7 +1969,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const rawArg = parts.slice(1).join(' ').trim()
       const plans = await listPlans(cwd)
 
-      // ── No arg: approve the single pending plan, else open the picker ──
+      // ?? No arg: approve the single pending plan, else open the picker ??
       if (!rawArg) {
         const submitted = plans.filter(p => p.status === 'submitted')
         if (submitted.length === 0) {
@@ -1980,12 +1980,12 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           return true
         }
         if (submitted.length === 1) {
-          // Sole pending plan → approve + kickoff directly (no slug typing needed).
+          // Sole pending plan ? approve + kickoff directly (no slug typing needed).
           await approvePlanAndKickoff(kickoffDeps, submitted[0]!.slug)
           setIsStreaming(false)
           return true
         }
-        // Multiple pending → interactive picker (arrow-select + Enter approves).
+        // Multiple pending ? interactive picker (arrow-select + Enter approves).
         if (ctx.surfacePush) {
           ctx.surfacePush('plan-picker')
         } else {
@@ -1996,12 +1996,12 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         return true
       }
 
-      // ── Explicit arg: resolve tolerantly (handles copied "slug — title") ──
-      // A copied hint contains " — "; a real approach is space-separated. Split so
+      // ?? Explicit arg: resolve tolerantly (handles copied "slug ? title") ??
+      // A copied hint contains " ? "; a real approach is space-separated. Split so
       // the em-dash title junk never gets mistaken for an approach.
       let slugCandidate: string
       let approachRaw = ''
-      if (rawArg.includes(' — ')) {
+      if (rawArg.includes(' ? ')) {
         slugCandidate = stripCopiedTitleSuffix(rawArg)
       } else {
         slugCandidate = parts[1]!
@@ -2028,7 +2028,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const plan = resolution.plan
       const slug = plan.slug
 
-      // Validate the selected approach BEFORE mutating the plan file — approving
+      // Validate the selected approach BEFORE mutating the plan file ? approving
       // first would leave the file marked APPROVED even when the option is bogus.
       let resolvedApproach: string | undefined
       if (approachRaw) {
@@ -2075,7 +2075,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       ctx.agent.enterPlanMode({ planFilePath: `.rivet/plans/${slug}.md` })
       pushStatic(createLogEntry({
         type: 'system',
-        content: `❌ Plan rejected: **${rejected.title}** (\`${slug}\`)\n\nPlan mode remains active. Revise \`.rivet/plans/${slug}.md\` in place, then resubmit with \`plan action=submit\`.${feedback ? '' : '\n\nTip: /plan-reject <slug> <feedback> injects revision guidance.'}`,
+        content: `? Plan rejected: **${rejected.title}** (\`${slug}\`)\n\nPlan mode remains active. Revise \`.rivet/plans/${slug}.md\` in place, then resubmit with \`plan action=submit\`.${feedback ? '' : '\n\nTip: /plan-reject <slug> <feedback> injects revision guidance.'}`,
       }))
       if (feedback && ctx.submitToAgent) {
         ctx.submitToAgent(`User rejected the plan. Feedback:\n\n${feedback}`)
@@ -2098,7 +2098,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       ]
       if (!raw || raw === 'list') {
         const current = getActiveThemeName()
-        const list = validThemes.map(t => `  ${t}${t === current ? ' ← current' : ''}`).join('\n')
+        const list = validThemes.map(t => `  ${t}${t === current ? ' ? current' : ''}`).join('\n')
         pushStatic(createLogEntry({ type: 'system', content: `Available themes:\n${list}\n\nUsage: /theme <name>` }))
       } else if (validThemes.includes(raw)) {
         setTheme(raw)
@@ -2120,9 +2120,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const lines = [
         formatBudgetReport(report),
         '',
-        `档位 ${profile}（工具描述 ${toolDescriptions}）。切档在下个会话生效——改前缀等于全量重建缓存。`,
-        '配置：prompt.profile = standard | lean | full，或 RIVET_PROMPT_PROFILE 环境变量。',
-        'token 为 chars/4 粗估，中文内容实际偏高；用于跨块对比，勿与 API usage 直接比对。',
+        `?? ${profile}????? ${toolDescriptions}?????????????????????????`,
+        '???prompt.profile = standard | lean | full?? RIVET_PROMPT_PROFILE ?????',
+        'token ? chars/4 ????????????????????? API usage ?????',
       ]
       pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
       setIsStreaming(false)
@@ -2147,7 +2147,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         const usage = ctx.session.getTotalUsage()
         const hitRate = ctx.cacheHitRate
         const totalCached = usage.cache_read_input_tokens + usage.cache_creation_input_tokens
-        pushStatic(createLogEntry({ type: 'system', content: `Cache:\n  hit rate: ${(hitRate * 100).toFixed(1)}%\n  read tokens: ${usage.cache_read_input_tokens.toLocaleString()}\n  write tokens: ${usage.cache_creation_input_tokens.toLocaleString()}\n  total cached: ${totalCached.toLocaleString()}\n  input tokens: ${usage.input_tokens.toLocaleString()}\n  output tokens: ${usage.output_tokens.toLocaleString()}\n  estimated: ${ctx.session.getEstimatedTokens().toLocaleString()}\n  cost: ¥${ctx.cost.toFixed(4)}\n  saved: ¥${((usage.cache_read_input_tokens * 0.9) / 1_000_000).toFixed(4)} (cache discount)` }))
+        pushStatic(createLogEntry({ type: 'system', content: `Cache:\n  hit rate: ${(hitRate * 100).toFixed(1)}%\n  read tokens: ${usage.cache_read_input_tokens.toLocaleString()}\n  write tokens: ${usage.cache_creation_input_tokens.toLocaleString()}\n  total cached: ${totalCached.toLocaleString()}\n  input tokens: ${usage.input_tokens.toLocaleString()}\n  output tokens: ${usage.output_tokens.toLocaleString()}\n  estimated: ${ctx.session.getEstimatedTokens().toLocaleString()}\n  cost: ?${ctx.cost.toFixed(4)}\n  saved: ?${((usage.cache_read_input_tokens * 0.9) / 1_000_000).toFixed(4)} (cache discount)` }))
       } else if (subcmd === 'context-payload') {
         pushStatic(createLogEntry({ type: 'system', content: formatVolatilePayloadReport(info.volatilePayloadReport) }))
       } else if (subcmd === 'mcp') {
@@ -2160,7 +2160,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           const lines = [`MCP Status (${states.length} server(s), ${tools.length} tool(s)):`]
           for (const s of states) {
             const detail = s.status === 'connected'
-              ? `connected — ${s.toolCount} tools`
+              ? `connected ? ${s.toolCount} tools`
               : s.status === 'error'
                 ? `error: ${s.error}`
                 : s.status
@@ -2193,7 +2193,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      // Clear visual state — reset streaming text and thinking buffers
+      // Clear visual state ? reset streaming text and thinking buffers
       setIsStreaming(false)
       pushStatic(createLogEntry({ type: 'system', content: 'Screen cleared.' }))
       return true
@@ -2207,9 +2207,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      // /fork [name]       — fork current session, auto-switch to the copy
-      // /fork at <N>       — fork from message line N (truncate after)
-      // /fork at <N> <name>— fork from line N with a branch name
+      // /fork [name]       ? fork current session, auto-switch to the copy
+      // /fork at <N>       ? fork from message line N (truncate after)
+      // /fork at <N> <name>? fork from line N with a branch name
       const sessionDir = getSessionDir(ctx.agent.cwd)
       const sourceJsonl = join(sessionDir, `${ctx.currentSessionId}.jsonl`)
       const arg1 = parts[1]?.toLowerCase()
@@ -2220,7 +2220,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (arg1 === 'at') {
         const n = parseInt(parts[2] ?? '', 10)
         if (!Number.isFinite(n) || n < 1) {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /fork at <行号> [分支名]。行号必须 ≥ 1。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /fork at <??> [???]????? ? 1?' }))
           setIsStreaming(false)
           return true
         }
@@ -2231,7 +2231,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
 
       if (!existsSync(sourceJsonl)) {
-        pushStatic(createLogEntry({ type: 'system', content: `找不到当前会话日志: ${sourceJsonl}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `?????????: ${sourceJsonl}` }))
         setIsStreaming(false)
         return true
       }
@@ -2240,7 +2240,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (upToLine !== undefined) {
         const total = countMessageLines(sourceJsonl)
         if (upToLine > total) {
-          pushStatic(createLogEntry({ type: 'system', content: `行号 ${upToLine} 超出当前消息总数 (${total})。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `?? ${upToLine} ???????? (${total})?` }))
           setIsStreaming(false)
           return true
         }
@@ -2254,26 +2254,26 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         branchName,
       })
 
-      const lineInfo = upToLine ? ` (截取前 ${upToLine} 行)` : ' (完整历史)'
-      const nameInfo = branchName ? ` 分支名: ${branchName}` : ''
+      const lineInfo = upToLine ? ` (??? ${upToLine} ?)` : ' (????)'
+      const nameInfo = branchName ? ` ???: ${branchName}` : ''
       pushStatic(createLogEntry({
         type: 'system',
-        content: `🌿 Fork 已创建\n  新会话 ID: ${result.newSessionId}${lineInfo}${nameInfo}\n  (短码: ${result.newSessionId.slice(0, 8)})\n正在切换到新会话...`,
+        content: `?? Fork ???\n  ??? ID: ${result.newSessionId}${lineInfo}${nameInfo}\n  (??: ${result.newSessionId.slice(0, 8)})\n????????...`,
       }))
 
       // Auto-switch to the new session
       if (ctx.onSessionSwitch) {
         const res = ctx.onSessionSwitch(result.newSessionId)
         if (!res.ok) {
-          pushStatic(createLogEntry({ type: 'system', content: `⚠ Fork 文件已创建但切换失败: ${res.error ?? '未知错误'}\n用 /resume ${result.newSessionId.slice(0, 8)} 手动切换。\n完整 ID: ${result.newSessionId}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? Fork ??????????: ${res.error ?? '????'}\n? /resume ${result.newSessionId.slice(0, 8)} ?????\n?? ID: ${result.newSessionId}` }))
         } else {
           pushStatic(createLogEntry({
             type: 'system',
-            content: `✅ 已切换到 fork 会话 (${result.newSessionId.slice(0, 8)})。\n完整 ID: ${result.newSessionId}\n原会话保持不变，用 /branch back 回去。`,
+            content: `? ???? fork ?? (${result.newSessionId.slice(0, 8)})?\n?? ID: ${result.newSessionId}\n????????? /branch back ???`,
           }))
         }
       } else {
-        pushStatic(createLogEntry({ type: 'system', content: `✅ Fork 已创建。\n用 /resume ${result.newSessionId.slice(0, 8)} 切换过去。\n完整 ID: ${result.newSessionId}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `? Fork ????\n? /resume ${result.newSessionId.slice(0, 8)} ?????\n?? ID: ${result.newSessionId}` }))
       }
       setIsStreaming(false)
       return true
@@ -2286,9 +2286,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      // /branch            — show branch tree for current session
-      // /branch list       — same
-      // /branch back       — switch back to parent session
+      // /branch            ? show branch tree for current session
+      // /branch list       ? same
+      // /branch back       ? switch back to parent session
       const sub = parts[1]?.toLowerCase()
       const sessionDir = getSessionDir(ctx.agent.cwd)
 
@@ -2296,36 +2296,36 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         // Read current session's parentSessionId from meta.json
         const metaPath = join(sessionDir, `${ctx.currentSessionId}.meta.json`)
         if (!existsSync(metaPath)) {
-          pushStatic(createLogEntry({ type: 'system', content: '当前会话没有父会话（这是一个根会话）。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '???????????????????' }))
           setIsStreaming(false)
           return true
         }
         try {
           const meta = JSON.parse(readFileSync(metaPath, 'utf-8'))
           if (!meta.parentSessionId) {
-            pushStatic(createLogEntry({ type: 'system', content: '当前会话没有父会话。' }))
+            pushStatic(createLogEntry({ type: 'system', content: '??????????' }))
             setIsStreaming(false)
             return true
           }
           if (ctx.onSessionSwitch) {
             const res = ctx.onSessionSwitch(meta.parentSessionId)
             if (!res.ok) {
-              pushStatic(createLogEntry({ type: 'system', content: `切换回父会话失败: ${res.error ?? '未知错误'}` }))
+              pushStatic(createLogEntry({ type: 'system', content: `????????: ${res.error ?? '????'}` }))
             } else {
-              pushStatic(createLogEntry({ type: 'system', content: `↩️ 已切换回父会话 (${meta.parentSessionId.slice(0, 8)})。\n完整 ID: ${meta.parentSessionId}` }))
+              pushStatic(createLogEntry({ type: 'system', content: `?? ??????? (${meta.parentSessionId.slice(0, 8)})?\n?? ID: ${meta.parentSessionId}` }))
             }
           } else {
-            pushStatic(createLogEntry({ type: 'system', content: `父会话: ${meta.parentSessionId}\n用 /resume ${meta.parentSessionId.slice(0, 8)} 切换。` }))
+            pushStatic(createLogEntry({ type: 'system', content: `???: ${meta.parentSessionId}\n? /resume ${meta.parentSessionId.slice(0, 8)} ???` }))
           }
         } catch {
-          pushStatic(createLogEntry({ type: 'system', content: '无法读取当前会话的元数据。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '?????????????' }))
         }
         setIsStreaming(false)
         return true
       }
 
-      // Default: /branch or /branch list — show branch tree
-      const lines: string[] = ['分支树', '════════']
+      // Default: /branch or /branch list ? show branch tree
+      const lines: string[] = ['???', '????????']
 
       // Check if current session has a parent
       const currentMetaPath = join(sessionDir, `${ctx.currentSessionId}.meta.json`)
@@ -2340,22 +2340,22 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
               if (parentMeta.title) parentLabel += ` "${parentMeta.title}"`
               if (parentMeta.branchName) parentLabel += ` (${parentMeta.branchName})`
             }
-            lines.push(`⬆️ 父会话: ${parentLabel}`)
+            lines.push(`?? ???: ${parentLabel}`)
           } else {
-            lines.push('⬆️ 父会话: 无 (根会话)')
+            lines.push('?? ???: ? (???)')
           }
           if (meta.branchName) {
-            lines.push(`🏷️ 当前分支名: ${meta.branchName}`)
+            lines.push(`??? ?????: ${meta.branchName}`)
           }
         } catch { /* meta corrupted */ }
       } else {
-        lines.push('⬆️ 父会话: 无 (根会话)')
+        lines.push('?? ???: ? (???)')
       }
 
       // List child branches
       const children = listBranches(sessionDir, ctx.currentSessionId)
       if (children.length > 0) {
-        lines.push('', `⬇️ 子分支 (${children.length}):`)
+        lines.push('', `?? ??? (${children.length}):`)
         for (const child of children) {
           const name = child.branchName ?? '(unnamed)'
           const time = existsSync(join(sessionDir, `${child.sessionId}.meta.json`))
@@ -2366,13 +2366,13 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
                 } catch { return '' }
               })()
             : ''
-          lines.push(`  ├️ ${child.sessionId} "${name}" ${time}`)
+          lines.push(`  ?? ${child.sessionId} "${name}" ${time}`)
         }
       } else {
-        lines.push('', '⬇️ 子分支: 无')
+        lines.push('', '?? ???: ?')
       }
 
-      lines.push('', '提示: /fork [名称] 创建新分支, /branch back 回到父会话')
+      lines.push('', '??: /fork [??] ?????, /branch back ?????')
       pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') }))
       setIsStreaming(false)
       return true
@@ -2398,16 +2398,16 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
             const shortId = s.id.slice(0, 8)
             const shortParent = String(meta.parentSessionId).slice(0, 8)
             const name = meta.branchName ? ` "${meta.branchName}"` : ''
-            forkAnnotations.push(`  ${shortId} ← fork from ${shortParent}${name}`)
+            forkAnnotations.push(`  ${shortId} ? fork from ${shortParent}${name}`)
           }
         } catch { /* skip */ }
       }
       const forkSection = forkAnnotations.length > 0
-        ? `\n\n Fork 关系:\n${forkAnnotations.join('\n')}`
+        ? `\n\n Fork ??:\n${forkAnnotations.join('\n')}`
         : ''
       pushStatic(createLogEntry({
         type: 'system',
-        content: `会话列表(按最近更新排序):\n${list}${forkSection}`,
+        content: `????(???????):\n${list}${forkSection}`,
       }))
       setIsStreaming(false)
       return true
@@ -2421,23 +2421,23 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const cmd = parts[0]!.toLowerCase()
       const arg = parts[1]
       if (!arg) {
-        // 无参 = 打开会话选择器（对齐 Claude Code /resume）；无选择器注入时退化为用法提示。
+        // ?? = ?????????? Claude Code /resume?????????????????
         if (ctx.openSessionPicker) {
           ctx.openSessionPicker()
         } else {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /resume <id前缀 或 序号>。用 /sessions 查看会话列表。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /resume <id?? ? ??>?? /sessions ???????' }))
         }
         setIsStreaming(false)
         return true
       }
 
-      // 序号(兼容旧习惯)或 id 前缀 → 解析为完整 id。
+      // ??(?????)? id ?? ? ????? id?
       const ordered = SessionPersist.listMainSessions(ctx.agent.cwd)
       let targetId: string | null = null
       if (/^\d+$/.test(arg)) {
         const idx = parseInt(arg, 10) - 1
         if (idx < 0 || idx >= ordered.length) {
-          pushStatic(createLogEntry({ type: 'system', content: `序号超出范围(共 ${ordered.length} 个会话)。用 /sessions 查看。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `??????(? ${ordered.length} ???)?? /sessions ???` }))
           setIsStreaming(false)
           return true
         }
@@ -2445,13 +2445,13 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       } else {
         const resolved = SessionPersist.resolveSessionId(ctx.agent.cwd, arg)
         if (!resolved) {
-          pushStatic(createLogEntry({ type: 'system', content: `未找到匹配会话: "${arg}"。用 /sessions 查看会话列表。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `???????: "${arg}"?? /sessions ???????` }))
           setIsStreaming(false)
           return true
         }
         if ('ambiguous' in resolved) {
           const cands = resolved.ambiguous.map(id => `  ${id.slice(0, 12)}`).join('\n')
-          pushStatic(createLogEntry({ type: 'system', content: `前缀 "${arg}" 匹配多个会话,请用更长前缀:\n${cands}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `?? "${arg}" ??????,??????:\n${cands}` }))
           setIsStreaming(false)
           return true
         }
@@ -2459,33 +2459,33 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
 
       if (targetId === ctx.currentSessionId) {
-        pushStatic(createLogEntry({ type: 'system', content: `已经在会话 ${targetId.slice(0, 8)} 中。` }))
+        pushStatic(createLogEntry({ type: 'system', content: `????? ${targetId.slice(0, 8)} ??` }))
         setIsStreaming(false)
         return true
       }
 
-      // 真正的身份切换(Phase 4):会话id = 日志id = pointer id 一致。
+      // ???????(Phase 4):??id = ??id = pointer id ???
       if (ctx.onSessionSwitch) {
         const res = ctx.onSessionSwitch(targetId)
         if (!res.ok) {
-          pushStatic(createLogEntry({ type: 'system', content: `切换失败: ${res.error ?? '未知错误'}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `????: ${res.error ?? '????'}` }))
         } else {
           pushStatic(createLogEntry({
             type: 'system',
-            content: `🔄 已切换到会话 ${targetId.slice(0, 8)}: 载入 ${res.messageCount ?? 0} 条消息(将重建前缀缓存)${res.repaired ? ' · 已修复孤儿工具调用' : ''}。`,
+            content: `?? ?????? ${targetId.slice(0, 8)}: ?? ${res.messageCount ?? 0} ???(???????)${res.repaired ? ' ? ?????????' : ''}?`,
           }))
         }
         setIsStreaming(false)
         return true
       }
 
-      // Fallback:无切换回调时退化为仅内存恢复(身份不切,旧行为)。
+      // Fallback:??????????????(????,???)?
       const p = new SessionPersist(targetId, ctx.agent.cwd)
       const preflight = runResumePreflightOai(p.loadOai())
       ctx.session.replaceMessages(preflight.messages)
       ctx.agent.config.promptEngine.resetAppendixBaseline()
       if (preflight.repaired) p.compactOai(preflight.messages)
-      pushStatic(createLogEntry({ type: 'system', content: `已恢复会话 ${targetId.slice(0, 8)} (${preflight.messages.length} 条消息, apiSafe=${preflight.safe})` }))
+      pushStatic(createLogEntry({ type: 'system', content: `????? ${targetId.slice(0, 8)} (${preflight.messages.length} ???, apiSafe=${preflight.safe})` }))
       setIsStreaming(false)
       return true
     },
@@ -2617,7 +2617,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         }
         const filePath = args.slice('import '.length).trim()
         const count = importClaims(store, filePath)
-        pushStatic(createLogEntry({ type: 'system', content: count > 0 ? `Imported ${count} claims (confidence ×0.8)` : `No claims imported. Check file path: ${filePath}` }))
+        pushStatic(createLogEntry({ type: 'system', content: count > 0 ? `Imported ${count} claims (confidence ?0.8)` : `No claims imported. Check file path: ${filePath}` }))
         setIsStreaming(false)
         return true
       }
@@ -2632,20 +2632,20 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const sections = ledger.tokenBudget
       const diagnostics = ledger.apiInvariantStatus.brokenRounds === 0
         ? 'API rounds: safe'
-        : `⚠ ${ledger.apiInvariantStatus.brokenRounds} broken rounds`
+        : `? ${ledger.apiInvariantStatus.brokenRounds} broken rounds`
       const compacts = ctx.session.getCompactEvents()
       const compactStr = compacts.length === 0
         ? 'No compact events.'
-        : compacts.slice(-5).map(e => `- turn ${e.turn}: tier ${e.tier}, ${e.beforeTokens}→${e.afterTokens}`).join('\n')
+        : compacts.slice(-5).map(e => `- turn ${e.turn}: tier ${e.tier}, ${e.beforeTokens}?${e.afterTokens}`).join('\n')
 
       const anchorLines = ledger.anchors.length > 0
         ? `\n\nPinned Anchors:\n${ledger.anchors.map(a => `  [${a.kind}] ${a.text.slice(0, 60)}`).join('\n')}`
         : ''
 
-      // 占用明细头：cache 命中率 + 本轮 cost（与 GlanceBar 同源），对齐 Claude Code /context。
+      // ??????cache ??? + ?? cost?? GlanceBar ?????? Claude Code /context?
       const usagePct = sections.maxTokens > 0 ? Math.round(sections.estimatedTokens / sections.maxTokens * 100) : 0
       const cacheStr = ctx.cacheHitRate !== undefined ? `${Math.round(ctx.cacheHitRate * 100)}%` : 'n/a'
-      const costStr = `¥${(ctx.cost ?? 0).toFixed(2)}`
+      const costStr = `?${(ctx.cost ?? 0).toFixed(2)}`
       const realTokens = ctx.session.getLastRealPromptTokens()
       const realStr = realTokens > 0 ? `\nAPI (last): ${realTokens.toLocaleString()} tokens` : ''
 
@@ -2753,7 +2753,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           try {
             const scopes = [...provider.defaultScopes, ...(auth.scopes ?? [])]
             await startMcpOAuth(serverId, provider, clientId, scopes)
-            pushStatic(createLogEntry({ type: 'system', content: `✓ OAuth connected for ${serverId} (${provider.name})` }))
+            pushStatic(createLogEntry({ type: 'system', content: `? OAuth connected for ${serverId} (${provider.name})` }))
           } catch (err) {
             pushStatic(createLogEntry({ type: 'system', content: `OAuth failed: ${(err as Error).message}`, isError: true }))
           }
@@ -2788,7 +2788,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
 
       // Default: show status
-      pushStatic(createLogEntry({ type: 'system', content: 'Usage:\n  /mcp — show status\n  /mcp auth <serverId> — start OAuth flow\n  /mcp logs <serverId> [tail] — view stderr log buffer' }))
+      pushStatic(createLogEntry({ type: 'system', content: 'Usage:\n  /mcp ? show status\n  /mcp auth <serverId> ? start OAuth flow\n  /mcp logs <serverId> [tail] ? view stderr log buffer' }))
       setIsStreaming(false)
       return true
     },
@@ -2817,7 +2817,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         } else {
           const id = `user-${Date.now().toString(36)}`
           setTodos([...todos, { id, content: arg, status: 'pending' as const }])
-          pushStatic(createLogEntry({ type: 'system', content: `Added: ○ [${id}] ${arg}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `Added: ? [${id}] ${arg}` }))
         }
       } else if (subcmd === 'done') {
         const item = todos.find(t => t.id === arg || t.id.startsWith(arg))
@@ -2825,7 +2825,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           pushStatic(createLogEntry({ type: 'system', content: `No todo matching "${arg}". Use /todo list to see ids.`, isError: true }))
         } else {
           setTodos(todos.map(t => t.id === item.id ? { ...t, status: 'completed' as const } : t))
-          pushStatic(createLogEntry({ type: 'system', content: `✓ Done: ${item.content}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? Done: ${item.content}` }))
         }
       } else if (subcmd === 'skip') {
         const item = todos.find(t => t.id === arg || t.id.startsWith(arg))
@@ -2834,7 +2834,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         } else {
           // Remove the item entirely (skip = don't do it)
           setTodos(todos.filter(t => t.id !== item.id))
-          pushStatic(createLogEntry({ type: 'system', content: `⊘ Skipped: ${item.content}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? Skipped: ${item.content}` }))
         }
       } else if (subcmd === 'move') {
         const id = parts[2]
@@ -2903,7 +2903,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
             pushStatic(createLogEntry({ type: 'system', content: 'No active plan to save. Run /plan first.', isError: true }))
           } else {
             savePlanTemplate(cwd, name, `\`\`\`json\n${currentPlan}\n\`\`\`\n`, description)
-            pushStatic(createLogEntry({ type: 'system', content: `✓ Saved template "${name}" to .rivet/plan-templates/${name}.md` }))
+            pushStatic(createLogEntry({ type: 'system', content: `? Saved template "${name}" to .rivet/plan-templates/${name}.md` }))
           }
         }
       } else {
@@ -2914,7 +2914,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         } else {
           pushStatic(createLogEntry({
             type: 'system',
-            content: `Loaded template: ${tpl.name}\n${tpl.description ? tpl.description + '\n' : ''}${tpl.estimatedWaves ? `Estimated waves: ${tpl.estimatedWaves}\n` : ''}\n${tpl.content}\n\n→ Use /plan to refine, or /team to execute.`,
+            content: `Loaded template: ${tpl.name}\n${tpl.description ? tpl.description + '\n' : ''}${tpl.estimatedWaves ? `Estimated waves: ${tpl.estimatedWaves}\n` : ''}\n${tpl.content}\n\n? Use /plan to refine, or /team to execute.`,
           }))
         }
       }
@@ -2944,7 +2944,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           const traces = listTraces(cwd, 10)
           const text = traces.length === 0
             ? 'No traces available.'
-            : `Recent traces:\n\n${traces.map(t => `  ${t.traceId} — ${t.workflowName} (${t.finalStatus})`).join('\n')}\n\nUse: /workflow replay <id> to view.`
+            : `Recent traces:\n\n${traces.map(t => `  ${t.traceId} ? ${t.workflowName} (${t.finalStatus})`).join('\n')}\n\nUse: /workflow replay <id> to view.`
           pushStatic(createLogEntry({ type: 'system', content: text }))
         } else {
           const trace = loadTrace(cwd, traceId)
@@ -2962,7 +2962,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         } else {
           pushStatic(createLogEntry({
             type: 'system',
-            content: `▶ Workflow "${wf.name}" loaded (${wf.steps.length} steps).\n${wf.description ?? ''}\n\n→ Type your objective to execute, or /cancel to abort.`,
+            content: `? Workflow "${wf.name}" loaded (${wf.steps.length} steps).\n${wf.description ?? ''}\n\n? Type your objective to execute, or /cancel to abort.`,
           }))
         }
       }
@@ -3006,7 +3006,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (sub === 'update') {
         const summary = parts.slice(2).join(' ').trim()
         if (!summary) {
-          pushStatic(createLogEntry({ type: 'system', content: 'Usage: /constellation update <summary> — records a milestone for current changes.' }))
+          pushStatic(createLogEntry({ type: 'system', content: 'Usage: /constellation update <summary> ? records a milestone for current changes.' }))
           setIsStreaming(false)
           return true
         }
@@ -3070,7 +3070,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
       const summary = summaryParts.join(' ').trim()
       if (!summary) {
-        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /leave [symbol] <summary> — leave your mark in the starmap as you depart.' }))
+        pushStatic(createLogEntry({ type: 'system', content: 'Usage: /leave [symbol] <summary> ? leave your mark in the starmap as you depart.' }))
         setIsStreaming(false)
         return true
       }
@@ -3087,7 +3087,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       appendMilestone(cwd, milestone, now)
       pushStatic(createLogEntry({
         type: 'system',
-        content: `✶ Mark ${milestone.agentMark.symbol} sealed into the starmap.\n${milestone.summary}`,
+        content: `? Mark ${milestone.agentMark.symbol} sealed into the starmap.\n${milestone.summary}`,
       }))
       setIsStreaming(false)
       return true
@@ -3171,13 +3171,13 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         setIsStreaming(false)
         return true
       }
-      // A2: real resume — rebuild the remaining tasks into a stored plan and
+      // A2: real resume ? rebuild the remaining tasks into a stored plan and
       // kick the master so it re-dispatches via team_orchestrate.
       const resume = buildResumeFromCheckpoint(cp)
       if (!resume) {
         pushStatic(createLogEntry({
           type: 'system',
-          content: `Checkpoint ${cp.groupId} has no remaining tasks (wave ${cp.lastCompletedWave + 1}/${cp.totalWaves} was the last).\n最后一波若有失败，请直接让主控重跑该波或修复遗留，checkpoint 仅保留剩余任务。`,
+          content: `Checkpoint ${cp.groupId} has no remaining tasks (wave ${cp.lastCompletedWave + 1}/${cp.totalWaves} was the last).\n?????????????????????????checkpoint ????????`,
         }))
         setIsStreaming(false)
         return true
@@ -3191,7 +3191,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       storePlan(resume.planJson)
       pushStatic(createLogEntry({
         type: 'system',
-        content: `▶️ Resuming ${cp.groupId}: ${cp.remainingOrders.length} tasks re-planned (objective: ${cp.objective.slice(0, 80)}). Dispatching to master…`,
+        content: `?? Resuming ${cp.groupId}: ${cp.remainingOrders.length} tasks re-planned (objective: ${cp.objective.slice(0, 80)}). Dispatching to master?`,
       }))
       setIsStreaming(false)
       ctx.submitToAgent(resume.prompt)
@@ -3247,7 +3247,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const level = parts[1]?.toLowerCase() as 'off' | 'low' | 'medium' | 'high' | 'max' | 'auto' | undefined
       const valid: Array<'off' | 'low' | 'medium' | 'high' | 'max' | 'auto'> = ['off', 'low', 'medium', 'high', 'max', 'auto']
       if (!level) {
-        // 无参数 → 打开交互式选择面板（上下选、回车确认）。
+        // ??? ? ????????????????????
         surfacePush?.('choice-panel')
         setIsStreaming(false)
         return true
@@ -3268,8 +3268,8 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     name: '/yes',
     immediate: true,
     handler(ctx) {
-      // 一键 YOLO 快捷键（/permission 的捷径）。显式输入命令即视为确认，无需二次确认。
-      // /yes / /yes on → YOLO；/yes off → 回到 Auto。均持久化为默认，重启后仍生效。
+      // ?? YOLO ????/permission ????????????????????????
+      // /yes / /yes on ? YOLO?/yes off ? ?? Auto????????????????
       const { parts, agent, pushStatic, setIsStreaming } = ctx
       const arg = parts[1]?.toLowerCase()
       if (arg === 'off') {
@@ -3277,7 +3277,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         agent.config.maxTurns = 200
         ctx.setAutoSafe(true)
         ctx.persistApprovalMode?.('auto-safe')
-        pushStatic(createLogEntry({ type: 'system', content: '✓ 已退出 YOLO，切回 Auto — 低/无风险自动，高风险仍确认（已设为默认，重启后仍生效）。' }))
+        pushStatic(createLogEntry({ type: 'system', content: '? ??? YOLO??? Auto ? ?/???????????????????????????' }))
         setIsStreaming(false)
         return true
       }
@@ -3285,7 +3285,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       agent.config.maxTurns = 0
       ctx.setAutoSafe(false)
       ctx.persistApprovalMode?.('dangerously-skip-permissions')
-      pushStatic(createLogEntry({ type: 'system', content: '✓ YOLO 已开启 — 全自动执行，无限轮次，无刹车无打扰（已设为默认，重启后仍生效）。关闭: /yes off · 回滚: /rollback' }))
+      pushStatic(createLogEntry({ type: 'system', content: '? YOLO ??? ? ??????????????????????????????????: /yes off ? ??: /rollback' }))
       setIsStreaming(false)
       return true
     },
@@ -3341,21 +3341,21 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const sub = parts[1]?.toLowerCase()
 
       // Single source of truth: the shared skillRegistry (loaded at bootstrap
-      // from .rivet/skills only — external .claude dirs are never scanned in
+      // from .rivet/skills only ? external .claude dirs are never scanned in
       // place; designated skills are copied in via importFromClaude). No
-      // re-scan, no truncation — same Tier-1/Tier-2 model the model uses.
+      // re-scan, no truncation ? same Tier-1/Tier-2 model the model uses.
       const sourceTag = (source?: string): string =>
-        source === 'global-claude' ? '🌐' : '📁'
+        source === 'global-claude' ? '??' : '??'
       const allSkills = skillRegistry.list()
 
-      // ── Auto-distilled draft review (human-in-loop) ──
+      // ?? Auto-distilled draft review (human-in-loop) ??
       if (sub === 'review' || sub === 'drafts') {
         const drafts = listSkillDrafts(ctx.agent.cwd)
         if (drafts.length === 0) {
-          pushStatic(createLogEntry({ type: 'system', content: '没有待审核的 skill 草稿。\n会话结束时,验证通过的可复用流程会自动蒸馏到 .rivet/skills/_drafts/。' }))
+          pushStatic(createLogEntry({ type: 'system', content: '?????? skill ???\n?????,???????????????? .rivet/skills/_drafts/?' }))
         } else {
-          const lines = drafts.map(d => `  📝 ${d.name} — ${(d.description || '(no description)').slice(0, 120)}`)
-          pushStatic(createLogEntry({ type: 'system', content: `待审核 skill 草稿 (${drafts.length}):\n${lines.join('\n')}\n\n/skill approve <name> 入库  ·  /skill reject <name> 丢弃` }))
+          const lines = drafts.map(d => `  ?? ${d.name} ? ${(d.description || '(no description)').slice(0, 120)}`)
+          pushStatic(createLogEntry({ type: 'system', content: `??? skill ?? (${drafts.length}):\n${lines.join('\n')}\n\n/skill approve <name> ??  ?  /skill reject <name> ??` }))
         }
         setIsStreaming(false)
         return true
@@ -3364,7 +3364,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (sub === 'approve') {
         const name = parts[2]
         if (!name) {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /skill approve <name>(用 /skill review 查看草稿)' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /skill approve <name>(? /skill review ????)' }))
           setIsStreaming(false)
           return true
         }
@@ -3373,9 +3373,9 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
           // Do NOT hot-load into the live registry: changing the available-skill
           // set mid-session shatters the prefix cache (cost can be tens of times
           // higher). The draft is persisted to disk; it takes effect on next session.
-          pushStatic(createLogEntry({ type: 'system', content: `✅ 已入库 skill: ${res.skill.name} → .rivet/skills/\n⚠ 需重开会话才生效:会话内热加载新技能会打碎前缀缓存,成本可达几十倍。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? ??? skill: ${res.skill.name} ? .rivet/skills/\n? ????????:????????????????,????????` }))
         } else {
-          pushStatic(createLogEntry({ type: 'system', content: `❌ 入库失败: ${res.error ?? 'unknown error'}` }))
+          pushStatic(createLogEntry({ type: 'system', content: `? ????: ${res.error ?? 'unknown error'}` }))
         }
         setIsStreaming(false)
         return true
@@ -3384,36 +3384,36 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       if (sub === 'reject') {
         const name = parts[2]
         if (!name) {
-          pushStatic(createLogEntry({ type: 'system', content: '用法: /skill reject <name>(用 /skill review 查看草稿)' }))
+          pushStatic(createLogEntry({ type: 'system', content: '??: /skill reject <name>(? /skill review ????)' }))
           setIsStreaming(false)
           return true
         }
         const ok = rejectSkillDraft(ctx.agent.cwd, name)
-        pushStatic(createLogEntry({ type: 'system', content: ok ? `🗑 已丢弃草稿: ${name}` : `草稿 "${name}" 不存在` }))
+        pushStatic(createLogEntry({ type: 'system', content: ok ? `?? ?????: ${name}` : `?? "${name}" ???` }))
         setIsStreaming(false)
         return true
       }
 
-      // /skill off <name> — manually release an invoked skill so its instructions
+      // /skill off <name> ? manually release an invoked skill so its instructions
       // are no longer re-injected into the dynamic appendix.
       if (sub === 'off' || sub === 'complete') {
         const name = parts[2]
         if (!name) {
-          pushStatic(createLogEntry({ type: 'system', content: `用法: /skill ${sub} <name>\n停止持续注入该技能的完整指令。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `??: /skill ${sub} <name>\n???????????????` }))
           setIsStreaming(false)
           return true
         }
         ctx.agent.markSkillCompleted?.(name)
-        pushStatic(createLogEntry({ type: 'system', content: `🛑 已停止技能: ${name}` }))
+        pushStatic(createLogEntry({ type: 'system', content: `?? ?????: ${name}` }))
         setIsStreaming(false)
         return true
       }
 
-      // /skill install <name> [...] — copy from .claude/skills/ into .rivet/skills/
+      // /skill install <name> [...] ? copy from .claude/skills/ into .rivet/skills/
       if (sub === 'install' || sub === 'import') {
         const names = parts.slice(2).filter(Boolean)
         if (names.length === 0) {
-          pushStatic(createLogEntry({ type: 'system', content: `用法: /skill ${sub} <name> [name2 ...]\n从 .claude/skills/<name> 复制到 .rivet/skills/<name>。` }))
+          pushStatic(createLogEntry({ type: 'system', content: `??: /skill ${sub} <name> [name2 ...]\n? .claude/skills/<name> ??? .rivet/skills/<name>?` }))
           setIsStreaming(false)
           return true
         }
@@ -3422,17 +3422,17 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         // mid-session shatters the prefix cache (cost can be tens of times higher).
         // Files are copied to disk; they take effect on next session.
         const lines: string[] = []
-        if (copied.length > 0) lines.push(`✅ 已安装: ${copied.join(', ')}`)
-        if (skipped.length > 0) lines.push(`⏭ 已存在/跳过: ${skipped.join(', ')}`)
-        if (errors.length > 0) lines.push(`❌ 失败:\n${errors.map(e => `  • ${e}`).join('\n')}`)
+        if (copied.length > 0) lines.push(`? ???: ${copied.join(', ')}`)
+        if (skipped.length > 0) lines.push(`? ???/??: ${skipped.join(', ')}`)
+        if (errors.length > 0) lines.push(`? ??:\n${errors.map(e => `  ? ${e}`).join('\n')}`)
         if (copied.length > 0) {
-          lines.push('⚠ 需重开会话才生效:会话内热加载新技能会打碎前缀缓存,成本可达几十倍。')
+          lines.push('? ????????:????????????????,????????')
           const installed = countInstalledSkills(ctx.agent.cwd)
           if (installed >= RECOMMENDED_MAX_SKILLS) {
-            lines.push(`⚠ 已安装 ${installed} 个,超过建议上限 ${RECOMMENDED_MAX_SKILLS}。${SKILL_RESTRAINT_NOTICE}`)
+            lines.push(`? ??? ${installed} ?,?????? ${RECOMMENDED_MAX_SKILLS}?${SKILL_RESTRAINT_NOTICE}`)
           }
         }
-        pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') || '无变更。' }))
+        pushStatic(createLogEntry({ type: 'system', content: lines.join('\n') || '????' }))
         setIsStreaming(false)
         return true
       }
@@ -3446,17 +3446,17 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
             .map(s => {
               const size = s.body.length > 1024 ? `${(s.body.length / 1024).toFixed(1)}KB` : `${s.body.length}B`
               const desc = (s.description || '(no description)').replace(/\s+/g, ' ').slice(0, 120)
-              return `  ${sourceTag(s.source)} ${s.name} (${size}) — ${desc}`
+              return `  ${sourceTag(s.source)} ${s.name} (${size}) ? ${desc}`
             })
           const draftCount = listSkillDrafts(ctx.agent.cwd).length
-          const draftHint = draftCount > 0 ? `\n📝 ${draftCount} 个自动蒸馏草稿待审核 — /skill review` : ''
+          const draftHint = draftCount > 0 ? `\n?? ${draftCount} ?????????? ? /skill review` : ''
           pushStatic(createLogEntry({ type: 'system', content: `Skills (${allSkills.length}):\n${lines.join('\n')}\n\nUse /skill <name> to load a skill's full instructions into the conversation.${draftHint}` }))
         }
         setIsStreaming(false)
         return true
       }
 
-      // /skill <name> — load the FULL body into the conversation and immediately
+      // /skill <name> ? load the FULL body into the conversation and immediately
       // invoke it as the current prompt. The slash handler just acknowledges the
       // load; the actual body is expanded by resolveAppPromptInput so the agent
       // sees the skill instructions as the user message and responds in this turn.
@@ -3469,7 +3469,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
 
       const sizeKb = (skill.body.length / 1024).toFixed(1)
       const taskHint = parts.slice(2).join(' ').trim()
-      pushStatic(createLogEntry({ type: 'system', content: `✅ Loaded skill: ${skill.name} (${sizeKb}KB from ${skill.source ?? 'rivet'})\nThe full skill instructions are now in the conversation.${taskHint ? `\nUser task: ${taskHint}` : ''}` }))
+      pushStatic(createLogEntry({ type: 'system', content: `? Loaded skill: ${skill.name} (${sizeKb}KB from ${skill.source ?? 'rivet'})\nThe full skill instructions are now in the conversation.${taskHint ? `\nUser task: ${taskHint}` : ''}` }))
 
       // Remember that this skill was invoked so the prompt engine can re-inject
       // its instructions into the dynamic appendix after context compaction.
@@ -3494,17 +3494,17 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       }
       const s = snapshot
       const sensoriumLines = [
-        '🧠 Sensorium — 天枢 3D 自感知',
+        '?? Sensorium ? ?? 3D ???',
         '',
-        `  任务状态: ${s.contractStatus ?? 'idle'}`,
-        `  目标: ${s.objective ?? '(none)'}`,
-        `  涉及文件: ${s.scopeFileCount}`,
-        `  可执行任务: ${s.isActionableTask ? 'yes' : 'no'}`,
-        `  验证缺口: ${s.hasVerificationGap ? 'WARNING: yes' : 'OK: no'}`,
-        `  交付状态: ${s.deliveryStatus}`,
+        `  ????: ${s.contractStatus ?? 'idle'}`,
+        `  ??: ${s.objective ?? '(none)'}`,
+        `  ????: ${s.scopeFileCount}`,
+        `  ?????: ${s.isActionableTask ? 'yes' : 'no'}`,
+        `  ????: ${s.hasVerificationGap ? 'WARNING: yes' : 'OK: no'}`,
+        `  ????: ${s.deliveryStatus}`,
         '',
-        '这些信号驱动 Immune 系统、Sycophancy Trap、Doom Loop 防护等自适应行为。',
-        '详细诊断: /debug [prompt|fingerprint|cache|context-payload]',
+        '?????? Immune ???Sycophancy Trap?Doom Loop ?????????',
+        '????: /debug [prompt|fingerprint|cache|context-payload]',
       ]
       pushStatic(createLogEntry({ type: 'system', content: sensoriumLines.join('\n') }))
       setIsStreaming(false)
@@ -3520,7 +3520,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       // Rebuild codebase index from MeridianDB
       const indexer = ctx.agent.getIndexer?.()
       if (!indexer) {
-        pushStatic(createLogEntry({ type: 'system', content: '⚠ MeridianIndexer not available. Index requires better-sqlite3.' }))
+        pushStatic(createLogEntry({ type: 'system', content: '? MeridianIndexer not available. Index requires better-sqlite3.' }))
         setIsStreaming(false)
         return true
       }
@@ -3542,7 +3542,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const result = fullRebuild(db, mainTsSource, headlessSource, mainTsPath, headlessPath, cwd)
       const indexBlock = generateCodebaseIndexBlock(db, getHeadSha())
 
-      pushStatic(createLogEntry({ type: 'system', content: `📚 Codebase Index Rebuilt\n\n${result}\n\nIndex will be injected into agent context on next turn.` }))
+      pushStatic(createLogEntry({ type: 'system', content: `?? Codebase Index Rebuilt\n\n${result}\n\nIndex will be injected into agent context on next turn.` }))
       setIsStreaming(false)
       return true
     },
@@ -3553,7 +3553,7 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
     handler(ctx) {
       const { parts, pushStatic, setIsStreaming } = ctx
       const cmd = parts[0]!.toLowerCase()
-      // Show dream status — memory distillation runs automatically at session end
+      // Show dream status ? memory distillation runs automatically at session end
       const dir = knowledgeDir()
       const memPath = join(dir, 'project-memory.md')
       const hasMemory = existsSync(memPath)
@@ -3563,18 +3563,18 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
         : 0
 
       pushStatic(createLogEntry({ type: 'system', content:
-        `🌙 Dream — 记忆蒸馏\n\n` +
-        `  状态: ${hasMemory ? 'active' : 'empty'}\n` +
-        `  条目: ${entries} curated memories\n` +
-        `  大小: ${(size / 1024).toFixed(1)} KB\n` +
-        `  路径: .rivet/knowledge/project-memory.md\n\n` +
-        `Dream 在会话结束时自动运行，从决策中提取：\n` +
-        `  • convergence_insight — 收敛洞察\n` +
-        `  • architectural_invariant — 架构不变量\n` +
-        `  • selection_rule — 选择规则\n` +
-        `  • conceptual_reframe — 概念重构\n` +
-        `  • reusable_design_pattern — 可复用设计模式\n\n` +
-        `记忆不注入提示词，通过 recall 工具按需检索。`
+        `?? Dream ? ????\n\n` +
+        `  ??: ${hasMemory ? 'active' : 'empty'}\n` +
+        `  ??: ${entries} curated memories\n` +
+        `  ??: ${(size / 1024).toFixed(1)} KB\n` +
+        `  ??: .rivet/knowledge/project-memory.md\n\n` +
+        `Dream ??????????????????\n` +
+        `  ? convergence_insight ? ????\n` +
+        `  ? architectural_invariant ? ?????\n` +
+        `  ? selection_rule ? ????\n` +
+        `  ? conceptual_reframe ? ????\n` +
+        `  ? reusable_design_pattern ? ???????\n\n` +
+        `??????????? recall ???????`
       }))
       setIsStreaming(false)
       return true
@@ -3589,14 +3589,14 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       const arg = (parts[1] ?? '').toLowerCase()
       if (!arg || arg === 'list') {
         pushStatic(createLogEntry({ type: 'system', content:
-          `${formatDiagramList()}\n\n用法：/diagram <type> — 生成骨架并写入 docs/diagrams/<type>.md\n形状语义已内建（{{六边形}}=LLM·[[子程序]]=Agent·[(圆柱)]=存储·{菱形}=决策·(圆角)=输入）。`
+          `${formatDiagramList()}\n\n???/diagram <type> ? ??????? docs/diagrams/<type>.md\n????????{{???}}=LLM?[[???]]=Agent?[(??)]=???{??}=???(??)=????`
         }))
         setIsStreaming(false)
         return true
       }
       if (!isDiagramType(arg)) {
         pushStatic(createLogEntry({ type: 'system', content:
-          `未知图型 "${arg}"。\n${formatDiagramList()}`
+          `???? "${arg}"?\n${formatDiagramList()}`
         }))
         setIsStreaming(false)
         return true
@@ -3608,12 +3608,12 @@ const TUI_SLASH_COMMANDS: readonly TuiSlashCommandDef[] = [
       try {
         mkdirSync(outDir, { recursive: true })
         writeFileSync(outPath, buildDiagramDoc(arg), 'utf-8')
-        writeNote = `已写入 docs/diagrams/${arg}.md — 在 VSCode/GitHub/Obsidian 打开查看渲染。`
+        writeNote = `??? docs/diagrams/${arg}.md ? ? VSCode/GitHub/Obsidian ???????`
       } catch (e) {
-        writeNote = `（写入失败：${e instanceof Error ? e.message : String(e)}；骨架见下方，可手动保存）`
+        writeNote = `??????${e instanceof Error ? e.message : String(e)}?????????????`
       }
       pushStatic(createLogEntry({ type: 'system', content:
-        `📐 ${arg} 骨架已生成\n\n${writeNote}\n\n${renderDiagramBlock(arg)}\n\n替换节点文字即可。终端里显示为源码，渲染在外部查看器。`
+        `?? ${arg} ?????\n\n${writeNote}\n\n${renderDiagramBlock(arg)}\n\n???????????????????????????`
       }))
       setIsStreaming(false)
       return true
@@ -3670,7 +3670,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
         const res = switchAgentSession(ctx, targetId)
         if (res.ok) {
           app.setStreamingState(false)
-          // 切换后恢复目标、todo 列表与 side panel 状态，保持会话连续性。
+          // ????????todo ??? side panel ???????????
           try {
             const restoredGoal = restoreGoalTracker(getSessionDir(ctx.cwd), targetId, {
               maxJudgeRuns: ctx.config.agent.goal?.judge?.maxRuns,
@@ -3691,10 +3691,10 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
             const meta = ctx.persist.loadMetadata()
             if (meta?.sidePanelOpen) app.setSidePanelOpen(true)
             else app.setSidePanelOpen(false)
-            // 计划模式恢复：目标会话退出时在 planning 且 draft 仍在 → 重进。
+            // ??????????????? planning ? draft ?? ? ???
             const restoredPlan = restorePlanModeFromMeta(ctx.agent, ctx.cwd, meta)
             if (restoredPlan) {
-              app.commitStatic(`🔍 已恢复计划模式（draft: ${restoredPlan}）— /plan-mode 退出或批准计划后执行。`)
+              app.commitStatic(`?? ????????draft: ${restoredPlan}?? /plan-mode ???????????`)
             }
           } catch { /* panel/plan restore best-effort */ }
         }
@@ -3705,7 +3705,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
       onCwdSwitch: async (target: string) => {
         const res = await switchAgentCwd(ctx, target)
         if (res.ok) {
-          // 刷新顶框 cwd + git 分支——新 cwd 可能是不同 git 仓库，必须重读分支
+          // ???? cwd + git ????? cwd ????? git ?????????
           const newCwd = ctx.agent.cwd
           app.setCwd(newCwd)
           try {
@@ -3792,7 +3792,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
     },
   })
 
-  // GlanceBar 信息密度切换（Wave 2 减密分档）。
+  // GlanceBar ???????Wave 2 ??????
   register("/glance", {
     description: "Toggle GlanceBar density (compact/full)",
     immediate: true,
@@ -3803,14 +3803,14 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
         : (app.glanceDensity === 'compact' ? 'full' : 'compact')
       app.glanceDensity = next
       app.forceRedraw()
-      app.commitStatic(`GlanceBar density → ${next}${next === 'compact' ? '（模式/模型/上下文%/耗时）' : '（全量指标）'}`)
+      app.commitStatic(`GlanceBar density ? ${next}${next === 'compact' ? '???/??/???%/???' : '??????'}`)
       return true
     },
   })
 
-  // 经 SIGINT 走 main.ts 的统一 shutdown（app.dispose → ctx.shutdown →
-  // 退出摘要 + resume 指引 → process.exit）。直接调 ctx.shutdown() 不会退出
-  // 进程，也绕过退出摘要。
+  // ? SIGINT ? main.ts ??? shutdown?app.dispose ? ctx.shutdown ?
+  // ???? + resume ?? ? process.exit????? ctx.shutdown() ????
+  // ???????????
   register("/exit", {
     description: "Exit Rivet",
     immediate: true,
@@ -3834,20 +3834,20 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
     immediate: true,
     handler: async () => {
       if (app.busy) {
-        app.commitStatic('⚠️  Cannot update while the agent is running.')
+        app.commitStatic('??  Cannot update while the agent is running.')
         return true
       }
 
       const root = detectInstallRoot()
       if (!root) {
-        app.commitStatic('⚠️  Cannot detect Rivet install root.')
+        app.commitStatic('??  Cannot detect Rivet install root.')
         return true
       }
 
       app.commitStatic('Checking for updates...')
       const check = await checkForUpdate(root, { bypassCache: true })
       if (!check) {
-        app.commitStatic('⚠️  Could not check for updates right now.')
+        app.commitStatic('??  Could not check for updates right now.')
         return true
       }
 
@@ -3859,48 +3859,52 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
       app.commitStatic(formatUpdateBanner(check.current, check.latest))
       app.commitStatic(`Install source: ${check.installType}`)
 
-      // Windows 全局安装：进程存活时 npm 无法覆盖被占用的原生模块
-      // （better_sqlite3.node）→ "另一个程序正在使用此文件"。改为分离式更新器：
-      // 等本进程退出释放文件锁后再装、再拉起。
+      // Windows ?????????? npm ????????????
+      // ?better_sqlite3.node?? "????????????"??????????
+      // ???????????????????
       if (process.platform === 'win32' && check.installType === 'global') {
         const schedule = spawnWindowsSelfUpdate(root, 'latest', true, ctx.sessionId)
         if (!schedule.ok) {
-          app.commitStatic(`❌ 无法启动后台更新器：${schedule.error ?? 'unknown'}`)
-          app.commitStatic('   请手动执行：npm install -g tianshu-tui@latest')
+          app.commitStatic(`? ??????????${schedule.error ?? 'unknown'}`)
+          app.commitStatic('   ??????npm install -g tianshu-tui@latest')
           return true
         }
-        app.commitStatic('✅ 更新已安排：天枢将退出以释放文件占用，安装完成后会自动重新打开。')
-        app.commitStatic('   （若未自动打开，请重新运行 rivet；安装约需数十秒）')
-        app.commitStatic('   ⚠️ 若有其他天枢/rivet 会话在运行，请一并退出——否则 npm 覆盖全局包时仍会命中文件占用而失败。')
-        app.commitStatic(`   日志：${schedule.logPath}`)
+        app.commitStatic('? ????????????????????????????????')
+        app.commitStatic('   ????????????? rivet?????????')
+        app.commitStatic('   ?? ??????/rivet ??????????????? npm ??????????????????')
+        app.commitStatic(`   ???${schedule.logPath}`)
         setTimeout(() => {
-          ctx.shutdown()
-          app.dispose()
-          process.exit(0)
+          void (async () => {
+            await ctx.shutdown()
+            app.dispose()
+            process.exit(0)
+          })()
         }, 400)
         return true
       }
 
       const result = await runUpdate(root, 'latest', (line) => app.commitStatic(line))
       if (result.skipped) {
-        app.commitStatic(`ℹ️  ${result.message}`)
+        app.commitStatic(`??  ${result.message}`)
         return true
       }
       if (!result.ok) {
-        app.commitStatic(`❌ ${result.message}`)
-        // Windows 源码安装：npm install 重建原生模块（better_sqlite3.node）时
-        // 当前进程已加载该文件 → "另一个程序正在使用此文件"。给出定向指引。
+        app.commitStatic(`? ${result.message}`)
+        // Windows ?????npm install ???????better_sqlite3.node??
+        // ?????????? ? "????????????"????????
         if (process.platform === 'win32') {
-          app.commitStatic('   Windows 提示：若因文件被占用（EBUSY/EPERM）失败，请退出所有天枢会话后在安装目录手动执行上述更新命令。')
+          app.commitStatic('   Windows ???????????EBUSY/EPERM??????????????????????????????')
         }
         return true
       }
 
-      app.commitStatic('✅ Update complete. Restarting...')
+      app.commitStatic('? Update complete. Restarting...')
       setTimeout(() => {
-        ctx.shutdown()
-        app.dispose()
-        restartProcess(ctx.sessionId)
+        void (async () => {
+          await ctx.shutdown()
+          app.dispose()
+          restartProcess(ctx.sessionId)
+        })()
       }, 250)
       return true
     },
@@ -3949,14 +3953,14 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   })
 
   register("/jobs", {
-    description: "后台任务列表",
+    description: "??????",
     immediate: true,
     overlay: "jobs",
     handler: () => true,
   })
 
   register("/cache", {
-    description: "缓存面板（token 消耗 / 命中率 / 缓存省钱 · DeepSeek 官方账单）",
+    description: "?????token ?? / ??? / ???? ? DeepSeek ?????",
     immediate: true,
     overlay: "cache",
     handler: () => true,
@@ -3969,7 +3973,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
       const result = resolveEnterWorkerInput(app, trimmed)
       if (!result) return false
       if ('error' in result) {
-        app.commitStatic(`⚠️  ${result.error}`)
+        app.commitStatic(`??  ${result.error}`)
         return true
       }
       app.submitText(result.prompt)
@@ -4013,7 +4017,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   })
 
   register("/connect", {
-    description: "连接模型服务商（选内置或自定义，填写 API 密钥）",
+    description: "?????????????????? API ???",
     immediate: true,
     handler: ({ app }) => {
       app.startConnect()
@@ -4021,13 +4025,13 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
     },
   })
 
-  // /config —— 设置面板。配置读写就在这一层做（同 /mirror 的先例），app.ts 只拿
-  // 一个纯状态机和一个落盘闭包，不引 config manager。
+  // /config ?? ????????????????? /mirror ?????app.ts ??
+  // ???????????????? config manager?
   const openSettingsPanel = (): boolean => {
     const flow = new SettingsFlow(loadSettingsDraft(), loadSettingsEnv())
     app.startSettings(flow, request => saveSettings(request, {
-      // 审批模式是唯一要同步到「正在跑的会话」的字段：落盘之外还得改 agent
-      // 与 badge，否则用户看着面板改了、当前会话仍按旧模式放行。
+      // ?????????????????????????????? agent
+      // ? badge????????????????????????
       onApprovalChange: (mode: string) => {
         try {
           ctx.agent.setApprovalMode(mode as Parameters<typeof ctx.agent.setApprovalMode>[0])
@@ -4043,17 +4047,17 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   }
 
   register("/config", {
-    description: "设置面板（子代理路由 / 审查子代理 / 识图模型 / 基础项）",
+    description: "?????????? / ????? / ???? / ????",
     immediate: true,
     handler: openSettingsPanel,
   })
   register("/settings", {
-    description: "设置面板（同 /config）",
+    description: "?????? /config?",
     immediate: true,
     handler: openSettingsPanel,
   })
   register("/setup", {
-    description: "设置面板（同 /config）",
+    description: "?????? /config?",
     immediate: true,
     handler: openSettingsPanel,
   })
@@ -4110,7 +4114,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
     handler: () => {
       const next = app.toggleVim()
       app.commitStatic(next
-        ? 'Vim keybindings: on (Esc → normal mode, i/a → insert)'
+        ? 'Vim keybindings: on (Esc ? normal mode, i/a ? insert)'
         : 'Vim keybindings: off')
       app.setStreamingState(false)
       return true
@@ -4118,20 +4122,20 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   })
 
   register("/permission", {
-    description: "权限模式：Manual / Auto / YOLO 三档统一入口",
+    description: "?????Manual / Auto / YOLO ??????",
     immediate: true,
     handler: () => {
-      // Delegate to the main permission handler — it reads approvalMode live.
+      // Delegate to the main permission handler ? it reads approvalMode live.
       app.setApprovalMode(ctx.agent.config.approvalMode ?? 'manual')
-      app.commitStatic(`当前权限: ${ctx.agent.config.approvalMode ?? 'manual'} — /permission manual|auto|yolo 快速切换 · /yes 一键 YOLO`)
+      app.commitStatic(`????: ${ctx.agent.config.approvalMode ?? 'manual'} ? /permission manual|auto|yolo ???? ? /yes ?? YOLO`)
       app.setStreamingState(false)
       return true
     },
   })
 
-  // /yes：一键 YOLO。显式输入即确认；同步 TUI badge，planning 叠层时更新 stash。
+  // /yes??? YOLO??????????? TUI badge?planning ????? stash?
   register("/yes", {
-    description: "一键 YOLO（/yes off 退出）— 持久化为默认",
+    description: "?? YOLO?/yes off ???? ??????",
     immediate: true,
     handler: ({ trimmed }) => {
       const arg = trimmed.split(/\s+/)[1]?.toLowerCase()
@@ -4139,25 +4143,25 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
         ctx.agent.setApprovalMode(mode)
         ctx.agent.config.maxTurns = mode === 'dangerously-skip-permissions' ? 0 : 200
         app.setApprovalMode(mode)
-        // Plan 叠层期间改审批 → 同步 stash，Shift+Tab 退出时恢复用户最新意图
+        // Plan ??????? ? ?? stash?Shift+Tab ???????????
         if (ctx.agent.planModeState === 'planning') {
           app.approvalModeBeforePlan = mode
         }
         try { persistApprovalDefault(mode) } catch { /* best-effort */ }
       }
-      // YOLO 确认面板打开时，/yes 视为确认并关掉面板
+      // YOLO ????????/yes ?????????
       if (app.choicePanelKind === 'permission-yolo-confirm' && app.activeOverlayId() === 'choice-panel') {
         app.choicePanelKind = 'effort'
         app.deactivateOverlay()
       }
       if (arg === 'off') {
         applyLive('auto-safe')
-        app.commitStatic('✓ 已退出 YOLO，切回 Auto — 低/无风险自动，高风险仍确认（已设为默认，重启后仍生效）。')
+        app.commitStatic('? ??? YOLO??? Auto ? ?/???????????????????????????')
         app.setStreamingState(false)
         return true
       }
       applyLive('dangerously-skip-permissions')
-      app.commitStatic('✓ YOLO 已开启 — 全自动执行，无限轮次，无刹车无打扰（已设为默认，重启后仍生效）。关闭: /yes off · 回滚: /rollback')
+      app.commitStatic('? YOLO ??? ? ??????????????????????????????????: /yes off ? ??: /rollback')
       app.setStreamingState(false)
       return true
     },
@@ -4188,10 +4192,10 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
   registerWorkflow("/write-plan")
   registerWorkflow("/plan-close")
 
-  // ── Plugin management ────────────────────────────────────────────
+  // ?? Plugin management ????????????????????????????????????????????
 
   register("/plugin", {
-    description: "Manage plugins — list, install, remove, enable, disable, info",
+    description: "Manage plugins ? list, install, remove, enable, disable, info",
     immediate: true,
     handler: ({ app, trimmed }) => {
       const parts = trimmed.split(/\s+/)
@@ -4208,7 +4212,7 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
         const lines = ['Installed plugins:']
         for (const p of plugins) {
           const enabled = cfg.plugins.enabled[p.name] !== false ? 'enabled' : 'disabled'
-          lines.push(`  ${p.name} (${p.version}) — ${enabled} — ${p.description}`)
+          lines.push(`  ${p.name} (${p.version}) ? ${enabled} ? ${p.description}`)
         }
         lines.push('')
         lines.push('Use /plugin info <name> for details.')
@@ -4245,16 +4249,16 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
             const perms = result.manifest.permissions
             const permStr = Object.entries(perms).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none'
             app.commitStatic(
-              `✓ Installed "${result.manifest.name}" v${result.manifest.version}\n` +
+              `? Installed "${result.manifest.name}" v${result.manifest.version}\n` +
               `  Tools: ${result.manifest.tools.map(t => t.name).join(', ')}\n` +
               `  Permissions: ${permStr}\n` +
               `  This plugin will be available on next session start.`
             )
           } else {
-            app.commitStatic(`✗ Install failed: ${result.error}`, { isError: true })
+            app.commitStatic(`? Install failed: ${result.error}`, { isError: true })
           }
         }).catch((err) => {
-          app.commitStatic(`✗ Install error: ${(err as Error).message}`, { isError: true })
+          app.commitStatic(`? Install error: ${(err as Error).message}`, { isError: true })
         })
         return true
       }
@@ -4263,9 +4267,9 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
         if (!arg) { app.commitStatic('Usage: /plugin remove <name>'); return true }
         const result = removePlugin(arg)
         if (result.ok) {
-          app.commitStatic(`✓ Removed plugin "${arg}".`)
+          app.commitStatic(`? Removed plugin "${arg}".`)
         } else {
-          app.commitStatic(`✗ ${result.error}`, { isError: true })
+          app.commitStatic(`? ${result.error}`, { isError: true })
         }
         return true
       }
@@ -4273,14 +4277,14 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
       if (sub === 'enable' || sub === 'disable') {
         if (!arg) { app.commitStatic(`Usage: /plugin ${sub} <name>`); return true }
         if (!isPluginInstalled(arg)) {
-          app.commitStatic(`✗ Plugin "${arg}" is not installed.`, { isError: true })
+          app.commitStatic(`? Plugin "${arg}" is not installed.`, { isError: true })
           return true
         }
         const cfg = loadConfig()
         cfg.plugins.enabled[arg] = sub === 'enable'
         saveConfig(cfg)
         app.commitStatic(
-          `✓ Plugin "${arg}" ${sub === 'enable' ? 'enabled' : 'disabled'}. ` +
+          `? Plugin "${arg}" ${sub === 'enable' ? 'enabled' : 'disabled'}. ` +
           `Changes take effect on next session start.`
         )
         return true

@@ -1,5 +1,6 @@
 import type { StreamClient, WireDivergence } from './stream-client.js'
 import type { StreamCallbacks } from './stream-client.js'
+import { normalizeOaiMessage } from './oai-types.js'
 import type { OaiChatRequest, OaiMessage } from './oai-types.js'
 import { estimateOaiTokens } from '../compact/micro.js'
 import type { ProviderProfile } from './provider-profile.js'
@@ -22,7 +23,7 @@ import { dirname, join } from 'node:path'
  *  - the parsed object on success.
  *  - a salvaged object when the buffer is two concatenated JSON objects
  *    (`{...}{...}`), which happens when a provider reuses a single
- *    `tool_calls[].index` for distinct calls — we recover the first object.
+ *    `tool_calls[].index` for distinct calls ? we recover the first object.
  *  - `null` when the buffer is non-empty but not yet (or not) valid JSON,
  *    signalling the caller to defer until more chunks arrive.
  *
@@ -31,7 +32,7 @@ import { dirname, join } from 'node:path'
  * deltas AFTER finish_reason; flushing eagerly fed `{}` to the tool, which then
  * failed with a misleading "X is required").
  */
-/** Full-content djb2 for the wire-level prefix probe — hashes every character
+/** Full-content djb2 for the wire-level prefix probe ? hashes every character
  *  so any single-byte change in the final payload is detectable. */
 function wireHash(s: string): string {
   let h = 5381
@@ -119,24 +120,24 @@ export interface OpenAIClientConfig {
   prefixCompletion?: boolean
   /** Use max_completion_tokens instead of max_tokens (MiMo requires this per API docs) */
   useMaxCompletionTokens?: boolean
-  /** Custom User-Agent header — required by providers that verify caller identity (e.g. Kimi) */
+  /** Custom User-Agent header ? required by providers that verify caller identity (e.g. Kimi) */
   userAgent?: string
   /**
    * Thinking-stall timeout (ms): once reasoning tokens have arrived but no text/tool
    * output yet, abort the stream if no further chunk within this window.
-   * 默认 undefined = 禁用（等于 read 超时，不提前触发）—— 故意为之：Opus/GPT-5.5 等
-   * 深思模型会合法地在推理段之间停顿 90s+，过短的 stall 会造成误杀。
-   * 显式设置一个 < read 的值可对易卡死的 provider 开启更早的 stall 检测。
+   * ?? undefined = ????? read ??????????? ?????Opus/GPT-5.5 ?
+   * ???????????????? 90s+???? stall ??????
+   * ?????? < read ???????? provider ????? stall ???
    */
   thinkingStallTimeoutMs?: number
   /**
    * First-byte (pre-first-chunk) timeout base override (ms). Optional.
-   * 默认 undefined = 按 provider/thinking 推导（45/90/180s）。这一 base 之上还会按
-   * 请求预估输入规模自动上浮（见 computeFirstByteTimeoutMs），故只有当某个自定义/慢
-   * OpenAI 兼容模型即便小上下文也迟迟不出首 token 时才需要显式抬高 base。
+   * ?? undefined = ? provider/thinking ???45/90/180s???? base ?????
+   * ?????????????? computeFirstByteTimeoutMs???????????/?
+   * OpenAI ???????????????? token ???????? base?
    */
   firstByteTimeoutMs?: number
-  /** Provider-specific capability flags (网#1). */
+  /** Provider-specific capability flags (?#1). */
   capabilities?: {
     /** DeepSeek sometimes emits tool JSON as plain text content. */
     hasToolJsonInContentBug?: boolean
@@ -146,7 +147,7 @@ export interface OpenAIClientConfig {
    *  available for clients that always want JSON. */
   jsonMode?: boolean
   /**
-   * Provider usage calibration factor for `prompt_tokens` (0–1).
+   * Provider usage calibration factor for `prompt_tokens` (0?1).
    * 1.0 (default) = trust the API's prompt_tokens as-is.
    * 0 = discard prompt_tokens; use local estimate instead.
    */
@@ -172,11 +173,11 @@ const SLOW_READ_TIMEOUT_MS = 300_000
 // needs longer before the first token arrives. On top of the derived/configured
 // base first-byte timeout, add PER_100K per 100k estimated input tokens, capped
 // by MAX (kept below the 10min base hard cap and retry budget). Pre-first-chunk
-// only — read timeout and thinking-stall detection are unchanged.
+// only ? read timeout and thinking-stall detection are unchanged.
 export const FIRST_BYTE_PER_100K_MS = 60_000
 const FIRST_BYTE_MAX_MS = 420_000
-// GLM-5.2 reasoning_effort=max: 服务端完整推理阶段可能 5min+ 不发 token，
-// 300s read timeout 会误杀。单独给到 720s（12min 硬顶兜底 runaway）。
+// GLM-5.2 reasoning_effort=max: ??????????? 5min+ ?? token?
+// 300s read timeout ???????? 720s?12min ???? runaway??
 const GLM_READ_TIMEOUT_MS = 720_000
 /** Providers whose thinking mode can exceed 90s before first token. */
 export const SLOW_THINKING_PROVIDERS = new Set(['glm', 'mimo', 'deepseek', 'codex', 'minimax'])
@@ -184,13 +185,13 @@ export const SLOW_THINKING_PROVIDERS = new Set(['glm', 'mimo', 'deepseek', 'code
  * Per-process cap on the always-on tool-stream event log (logToolStreamEvent).
  * These events fire only on rare streaming pathologies (ambiguous continuation
  * chunks dropped, final-flush empty tool_use), so a long healthy session writes
- * zero lines. Hitting the cap means the provider is misbehaving — stop logging
+ * zero lines. Hitting the cap means the provider is misbehaving ? stop logging
  * rather than fill disk.
  */
 const TOOL_STREAM_LOG_MAX_LINES = 2000
-// Thinking-stall timeout 现由 config.thinkingStallTimeoutMs 控制（默认禁用，见
-// resetIdleTimer 与 OpenAIClientConfig 注释）。旧的模块级常量已移除——它恒等于
-// SLOW_READ_TIMEOUT_MS（实为禁用），且配套错误文案硬编码"90s"与实际值不符。
+// Thinking-stall timeout ?? config.thinkingStallTimeoutMs ?????????
+// resetIdleTimer ? OpenAIClientConfig ????????????????????
+// SLOW_READ_TIMEOUT_MS?????????????????"90s"???????
 
 /** Recent-progress window for hard-cap extension: a data event within this
  *  window counts as "still producing" and earns another extension slice. */
@@ -229,13 +230,13 @@ export type StreamHardCapAction =
   | { kind: 'rearm'; rearmMs: number; extended: boolean }
 
 /**
- * Track 4 自适应流硬顶：固定 10min 硬顶会误杀 1M+max-reasoning 的健康长输出
- * （死流早被 idle/stall 计时器拦截）。到达基础硬顶后，只要最近 progressWindowMs
- * 内仍有 data 事件就按 60s 一档续期，绝对上限 3×基础时长兜底 runaway。纯函数，
- * 由 openai-client 的硬顶计时器驱动。
+ * Track 4 ????????? 10min ????? 1M+max-reasoning ??????
+ * ????? idle/stall ??????????????????? progressWindowMs
+ * ??? data ???? 60s ????????? 3??????? runaway?????
+ * ? openai-client ?????????
  *
- * @param progressWindowMs 进度窗口（ms），默认 30s。GLM reasoning 模式传 120s
- *   以防止深度推理中 30-60s 的无 delta 停顿被误判为卡死。
+ * @param progressWindowMs ?????ms???? 30s?GLM reasoning ??? 120s
+ *   ???????? 30-60s ?? delta ?????????
  */
 export function decideStreamHardCap(input: {
   now: number
@@ -259,9 +260,9 @@ export class OpenAIClient implements StreamClient {
   /** Resolved raw-SSE dump path (undefined = unresolved, null = disabled/failed). */
   private rawSsePath: string | null | undefined = undefined
   private pendingStopReason: string | null = null
-  /** Messages from the current stream request — used for usage calibration. */
+  /** Messages from the current stream request ? used for usage calibration. */
   private lastRequestMessages: OaiChatRequest['messages'] = []
-  /** Accumulated text for DeepSeek tool-JSON-in-content fallback (网#1). */
+  /** Accumulated text for DeepSeek tool-JSON-in-content fallback (?#1). */
   private _textAccum = ''
   /** Stable suffix appended to system message for Chinese thinking (computed once, cache-safe). */
   private readonly systemSuffix: string
@@ -284,22 +285,22 @@ export class OpenAIClient implements StreamClient {
 
   constructor(private config: OpenAIClientConfig) {
     this.systemSuffix = (config.providerName === 'mimo' || config.providerName === 'deepseek') && config.thinking === 'enabled'
-      ? '\n\n请在内部思考链中使用中文进行推理。不要在回复中输出你的推理过程，只输出最终答案或工具调用。'
+      ? '\n\n?????????????????????????????????????????????'
       : ''
     this._sanitizedCount = 0
   }
 
-  // ── Incremental sanitize ─────────────────────────────────────
+  // ?? Incremental sanitize ?????????????????????????????????????
   // Historical messages are already sanitized at entry points
   // (addUserMessage/addAssistantBlocks/addToolResults). Re-sanitizing
   // the full message array every turn is O(history) overhead that grows
-  // linearly with conversation length — particularly wasteful at 1M
+  // linearly with conversation length ? particularly wasteful at 1M
   // context windows. We track the sanitized count and only apply the
   // safety-net sanitize to newly appended messages.
   private _sanitizedCount: number
 
   setReasoningEffort(effort: string): void {
-    // OpenAI uses reasoning_effort in request body — store for next request
+    // OpenAI uses reasoning_effort in request body ? store for next request
     this.config = { ...this.config, reasoningEffort: effort }
   }
 
@@ -315,7 +316,7 @@ export class OpenAIClient implements StreamClient {
     this.lastRequestMessages = request.messages
     // reasoning_content stripping rules:
     // - DeepSeek (preserved thinking): keep for tool-call turns, strip for pure-text
-    // - GLM (independent reasoning): always strip — no preserved thinking context
+    // - GLM (independent reasoning): always strip ? no preserved thinking context
     // - Thinking disabled: always strip
     const isGlm = this.config.providerName === 'glm'
     const isPreservedThinking = this.config.thinking === 'enabled' && !isGlm
@@ -339,11 +340,11 @@ export class OpenAIClient implements StreamClient {
         (rest as Record<string, unknown>).content = ''
       }
       return rest
-    })
+    }).map(normalizeOaiMessage)
 
     const body: Record<string, unknown> = {
-      // 空 model 回退到 client 绑定值——侧路调用（essence-gate / vision bridge）
-      // 传 model: '' 期望"client already binds the model"；不回退会被 provider 400。
+      // ? model ??? client ??????????essence-gate / vision bridge?
+      // ? model: '' ??"client already binds the model"?????? provider 400?
       model: request.model || this.config.model,
       messages,
       stream: true,
@@ -370,7 +371,7 @@ export class OpenAIClient implements StreamClient {
     // JSON output mode: force the model to emit valid JSON. Per-request
     // response_format (worker final turn) takes precedence; config.jsonMode is a
     // fallback for always-JSON clients. DeepSeek/GLM require the prompt to
-    // mention "json" when this is set — worker prompts already satisfy this.
+    // mention "json" when this is set ? worker prompts already satisfy this.
     if (request.response_format) {
       body.response_format = request.response_format
     } else if (this.config.jsonMode) {
@@ -401,7 +402,7 @@ export class OpenAIClient implements StreamClient {
           body.thinking = { type: 'adaptive' }
         }
         // GLM: independent reasoning mode (no preserved thinking).
-        // Prior reasoning is NOT echoed — each turn is a fresh reasoning start.
+        // Prior reasoning is NOT echoed ? each turn is a fresh reasoning start.
         // This avoids the cross-API-call context discontinuity that causes GLM
         // to restart reasoning mid-turn after a stream abort/timeout.
         if (this.config.providerName === 'claude' && this.config.reasoningEffort) {
@@ -415,11 +416,11 @@ export class OpenAIClient implements StreamClient {
           const budget = budgetMap[this.config.reasoningEffort ?? 'high'] ?? Math.floor(this.config.maxTokens * 0.6)
           ;(body.thinking as Record<string, unknown>)['budget_tokens'] = budget
         }
-        // DeepSeek-style: thinking 块与 reasoning_effort **并存**（官方 curl 样例
-        // 同时带 {thinking:{type:enabled}} 和 {reasoning_effort:high/max}）。
-        // 旧实现只发 thinking 块，配置的 reasoningEffort(v4-pro=max) 被静默丢弃，
-        // DeepSeek 退回服务端默认 effort(high)。Claude/GLM/minimax 各有块内 effort
-        // 编码(budget_tokens/clear_thinking/adaptive)，故仅对 reasoning_effort 格式补发。
+        // DeepSeek-style: thinking ?? reasoning_effort **??**??? curl ??
+        // ??? {thinking:{type:enabled}} ? {reasoning_effort:high/max}??
+        // ????? thinking ????? reasoningEffort(v4-pro=max) ??????
+        // DeepSeek ??????? effort(high)?Claude/GLM/minimax ???? effort
+        // ??(budget_tokens/clear_thinking/adaptive)???? reasoning_effort ?????
         if (this.config.effortFormat === 'reasoning_effort'
           && this.config.reasoningEffort
           && this.config.reasoningEffort !== 'off') {
@@ -443,13 +444,13 @@ export class OpenAIClient implements StreamClient {
       body.reasoning_effort = 'high'
     }
 
-    // Apply stable system suffix (Chinese thinking instruction) — computed once
+    // Apply stable system suffix (Chinese thinking instruction) ? computed once
     // at construction. Copy-on-write, NEVER `content +=`: the system message
     // object is shared by reference with the caller's request.messages, and the
     // same request object can re-enter stream() (llm-speculation reuses the main
     // request's messages; FallbackStreamClient replays the request on failover).
-    // In-place mutation double-appended the suffix on re-entry → system bytes
-    // changed mid-session → full prefix-cache miss for that request (2026-07-06
+    // In-place mutation double-appended the suffix on re-entry ? system bytes
+    // changed mid-session ? full prefix-cache miss for that request (2026-07-06
     // wireDiverged idx 0 incident).
     if (this.systemSuffix) {
       const wireMessages = body.messages as Record<string, unknown>[]
@@ -479,13 +480,13 @@ export class OpenAIClient implements StreamClient {
     }
 
     // Wire-level prefix probe (2026-07-06 cache investigation): fingerprint the
-    // FINAL messages — everything above (reasoning-strip, system-suffix,
+    // FINAL messages ? everything above (reasoning-strip, system-suffix,
     // sanitize) has already been applied, so this hashes exactly what goes on
     // the socket. The engine-level probe proved the pre-transform arrays are
     // append-only; cacheRead regressions kept happening anyway, so the
     // remaining client-side suspects are these transforms. Joined with
     // cacheRead regressions in the cache-log this separates send-layer byte
-    // churn from provider-side rendering/落盘 behavior.
+    // churn from provider-side rendering/?? behavior.
     if (request.prefixProbe) this.recordWireDivergence(msgArray)
 
     await this.sendStream(body, callbacks, signal)
@@ -569,10 +570,10 @@ export class OpenAIClient implements StreamClient {
       // DeepSeek requires assistant messages to have `content` or `tool_calls`.
       //
       // GLM exception: GLM's preserved thinking (clear_thinking: false) has its
-      // own incremental protocol — it expects complete prior-turn reasoning, not
+      // own incremental protocol ? it expects complete prior-turn reasoning, not
       // partial mid-stream fragments. Injecting partial reasoning_content breaks
       // the increment and causes GLM to re-reason from scratch (the exact
-      // "推理到一半中断然后从头推一遍" symptom). GLM retains reasoning server-side,
+      // "??????????????" symptom). GLM retains reasoning server-side,
       // so skipping client-side reinjection is safe.
       let effectiveBody = body
       const isGlm = this.config.providerName === 'glm'
@@ -594,10 +595,10 @@ export class OpenAIClient implements StreamClient {
       // server accepts the connection but never sends response headers. Uses the
       // size-scaled first-byte budget computed above.
       const fetchTimeout = firstByteMs
-      // 共享 lifecycle controller：传给 fetch 的信号。它由外部 user signal 联动，
-      // 也由 parseStreamFromReader 在任何退出路径（idle/硬顶超时、错误、正常结束）
-      // 于 finally 中 abort —— 确保 keep-alive 下仅 reader.cancel() 可能拆不掉的 TCP
-      // 连接被 fetch 侧 abort 真正拆除（mid-body abort 同时拆 fetch）。
+      // ?? lifecycle controller??? fetch ???????? user signal ???
+      // ?? parseStreamFromReader ????????idle/?????????????
+      // ? finally ? abort ?? ?? keep-alive ?? reader.cancel() ?????? TCP
+      // ??? fetch ? abort ?????mid-body abort ??? fetch??
       const lifecycle = new AbortController()
       if (signal) {
         if (signal.aborted) lifecycle.abort()
@@ -640,10 +641,10 @@ export class OpenAIClient implements StreamClient {
     }, signal, {
       maxTotalDurationMs: this.config.providerName === 'glm' ? 20 * 60_000 : 10 * 60_000,
       // Thinking retries are normally throttled to 1 because re-reasoning is costly.
-      // 例外：slow-thinking providers 在被中止的那次尝试里已把整个 prompt 灌进服务端
-      // 前缀缓存，重试命中近 100% 缓存（实测 deepseek 99.4% hit、~12s 完成），代价极低。
-      // 给它们 2 次重试，让「单次服务端 thinking 卡死」甚至「连续两次卡死」都能自愈而
-      // 不冒泡成错误。maxTotalDurationMs 仍是总时长兜底，防 runaway。
+      // ???slow-thinking providers ?????????????? prompt ?????
+      // ?????????? 100% ????? deepseek 99.4% hit?~12s ?????????
+      // ??? 2 ??????????? thinking ??????????????????
+      // ???????maxTotalDurationMs ????????? runaway?
       maxTotalRetries: isThinking
         ? (SLOW_THINKING_PROVIDERS.has(this.config.providerName ?? '') ? 2 : 1)
         : undefined,
@@ -655,18 +656,18 @@ export class OpenAIClient implements StreamClient {
     })
   }
 
-  /** Parse SSE stream from a reader — exposed for testing */
+  /** Parse SSE stream from a reader ? exposed for testing */
 
-  /** Parse SSE stream from a reader — exposed for testing */
+  /** Parse SSE stream from a reader ? exposed for testing */
   async parseStreamFromReader(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     callbacks: Partial<Pick<StreamCallbacks, 'onTextDelta' | 'onContentBlock' | 'onStopReason' | 'onStreamAttemptAborted'>>,
     signal?: AbortSignal,
     reasoningRef?: { content: string },
     /**
-     * 传给 fetch 的共享 lifecycle controller。任何退出路径（正常结束 / idle 或硬顶
-     * 超时 / 错误 / 用户 abort）都会在 finally 中 abort 它，确保 keep-alive 下
-     * reader.cancel() 拆不掉的连接被 fetch 侧 abort 真正拆除。
+     * ?? fetch ??? lifecycle controller???????????? / idle ???
+     * ?? / ?? / ?? abort???? finally ? abort ???? keep-alive ?
+     * reader.cancel() ??????? fetch ? abort ?????
      */
     lifecycle?: AbortController,
     /**
@@ -681,11 +682,11 @@ export class OpenAIClient implements StreamClient {
     let streamTimedOut = false
     let idleTimer: ReturnType<typeof setTimeout> | null = null
     let receivedFirstChunk = false
-    /** 本次 idle timer 实际生效的超时（ms），供触发时输出准确文案。 */
+    /** ?? idle timer ????????ms????????????? */
     let lastIdleTimeoutMs = 0
-    /** 本次 idle timer 是否以"thinking-stall"（短于 read）名义触发。 */
+    /** ?? idle timer ???"thinking-stall"??? read?????? */
     let lastFiredAsThinkingStall = false
-    /** Whether any reasoning_content has been received — used to detect thinking stalls. */
+    /** Whether any reasoning_content has been received ? used to detect thinking stalls. */
     let receivedThinking = false
     // GLM-5.1 mandatory thinking mode outputs everything as reasoning_content
     // with no content field. Accumulate reasoning to promote if no content arrives.
@@ -697,10 +698,10 @@ export class OpenAIClient implements StreamClient {
     // This ensures reader.read() is unblocked even if reader.cancel() alone
     // cannot break the TCP connection (e.g. GLM server keeps connection alive).
     //
-    // Track 4 自适应硬顶：固定 10min 会误杀 1M+max-reasoning 的健康长输出
-    // （死流早被 idle/stall 计时器拦截，硬顶杀掉的只能是仍在产出的流）。
-    // 改为按输出进度续期：到达基础硬顶时若最近 30s 内仍有 data 事件，
-    // 续 60s 一档，绝对上限 3×基础（30min）兜底 runaway。
+    // Track 4 ???????? 10min ??? 1M+max-reasoning ??????
+    // ????? idle/stall ??????????????????????
+    // ???????????????????? 30s ??? data ???
+    // ? 60s ??????? 3????30min??? runaway?
     const timeoutController = new AbortController()
     const isGlm = this.config.providerName === 'glm'
     const baseStreamMs = isGlm ? 20 * 60_000 : 10 * 60_000
@@ -747,8 +748,8 @@ export class OpenAIClient implements StreamClient {
       // streams. If the provider has already sent a complete content block (for
       // example a tool_use) but no text delta, do not treat the stream as
       // thinking-only: some APIs finalize tool calls without any text content.
-      // 默认 thinkingStallTimeoutMs 未配置 → 取 readMs（等于禁用，不提前触发），
-      // 保留对深思模型不误杀的既有行为；显式配置可对易卡死 provider 开启更早 stall。
+      // ?? thinkingStallTimeoutMs ??? ? ? readMs?????????????
+      // ????????????????????????? provider ???? stall?
       const hasActionableBlock = this.toolCallBuffer.size > 0 || this._textAccum.length > 0
       const inThinkingOnly = receivedThinking && !textReceived && !hasActionableBlock
       const thinkingStallMs = inThinkingOnly
@@ -757,7 +758,7 @@ export class OpenAIClient implements StreamClient {
       const timeout = receivedFirstChunk
         ? (thinkingStallMs ?? readMs)
         : firstByteMs
-      // 记录本次实际生效的超时，供 idle 触发时输出准确文案（不再硬编码"90s"）。
+      // ????????????? idle ???????????????"90s"??
       lastIdleTimeoutMs = timeout
       lastFiredAsThinkingStall = thinkingStallMs !== null && thinkingStallMs < readMs
       idleTimer = setTimeout(() => {
@@ -777,17 +778,17 @@ export class OpenAIClient implements StreamClient {
         if (timeoutController.signal.aborted) {
           const mins = Math.round((Date.now() - streamStartedAt) / 60_000)
           throw new Error(hardCapExtended
-            ? `OpenAI SSE stream hard timeout (~${mins}min, progress-extended) — stream exceeded maximum duration`
-            : 'OpenAI SSE stream hard timeout (10min) — stream stopped progressing')
+            ? `OpenAI SSE stream hard timeout (~${mins}min, progress-extended) ? stream exceeded maximum duration`
+            : 'OpenAI SSE stream hard timeout (10min) ? stream stopped progressing')
         }
 
         const { done, value } = await reader.read()
-        // Check timeout AFTER read — reader.cancel() from idle timer causes
+        // Check timeout AFTER read ? reader.cancel() from idle timer causes
         // read() to return done=true, but we must throw, not silently break.
         if (streamTimedOut) {
           const secs = Math.round(lastIdleTimeoutMs / 1000)
           const msg = lastFiredAsThinkingStall
-            ? `OpenAI SSE stream thinking stall timeout (${secs}s) — model stopped producing thinking tokens`
+            ? `OpenAI SSE stream thinking stall timeout (${secs}s) ? model stopped producing thinking tokens`
             : `OpenAI SSE stream idle timeout (${secs}s)`
           throw new Error(msg)
         }
@@ -799,9 +800,9 @@ export class OpenAIClient implements StreamClient {
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
 
-        // keepalive 感知：只有解析出真正的 `data:` 事件才算"进展"并重置 idle timer。
-        // 服务端心跳是 `:` 注释行 / 空行（被下面 startsWith('data:') 过滤掉），
-        // 若按任意字节重置（旧行为），纯心跳流会让 stall 检测失效、最坏拖到 10min 硬顶。
+        // keepalive ??????????? `data:` ????"??"??? idle timer?
+        // ?????? `:` ??? / ?????? startsWith('data:') ?????
+        // ???????????????????? stall ????????? 10min ???
         let sawDataEvent = false
         for (const line of lines) {
           const trimmed = line.trim()
@@ -827,7 +828,7 @@ export class OpenAIClient implements StreamClient {
             // Skip malformed SSE lines
           }
         }
-        // 仅在收到真实内容事件时重置 idle timer（心跳不重置）
+        // ????????????? idle timer???????
         if (sawDataEvent) {
           lastDataEventAt = Date.now()
           resetIdleTimer()
@@ -855,7 +856,7 @@ export class OpenAIClient implements StreamClient {
       }
 
       this.flushToolCalls(callbacks, { final: true })
-      // 网#1: DeepSeek tool-JSON-in-content fallback
+      // ?#1: DeepSeek tool-JSON-in-content fallback
       let textConsumedAsToolJson = false
       if (this.toolCallBuffer.size === 0 && this._textAccum && this.config.capabilities?.hasToolJsonInContentBug) {
         textConsumedAsToolJson = this.tryParseToolJsonFromContent(this._textAccum, callbacks) > 0
@@ -870,7 +871,7 @@ export class OpenAIClient implements StreamClient {
 
       // GLM-5.1 mandatory thinking: if only reasoning_content arrived (no content),
       // promote reasoning to visible text so the TUI shows a reply.
-      // ONLY promote for GLM — MiMo/DeepSeek properly separate reasoning from
+      // ONLY promote for GLM ? MiMo/DeepSeek properly separate reasoning from
       // content. When MiMo sends a tool-call turn (reasoning_content + tool_calls
       // but no content), promoting would leak thinking into visible text.
       if (!textReceived && reasoningAccum && this.config.providerName === 'glm') {
@@ -878,7 +879,7 @@ export class OpenAIClient implements StreamClient {
         promotionFired = true
       }
 
-      // Emit the final text content block (normal completion only — never on
+      // Emit the final text content block (normal completion only ? never on
       // error/retry paths, where a second attempt would re-emit and duplicate).
       // The agent loop persists assistant turns from content blocks; without
       // this block, text-only replies never reached session history and the
@@ -905,21 +906,21 @@ export class OpenAIClient implements StreamClient {
         errorName: (err as Error)?.name ?? 'Error',
         errorMessage: (err as Error)?.message ?? String(err),
       })
-      // Body-phase TimeoutError (raw undici DOMException) → descriptive,
+      // Body-phase TimeoutError (raw undici DOMException) ? descriptive,
       // classifiable Error. User AbortError and other errors pass through.
       throw wrapBodyTimeoutError(err, 'OpenAI', streamStartedAt)
     } finally {
       if (idleTimer) clearTimeout(idleTimer)
       if (maxStreamTimer) clearTimeout(maxStreamTimer)
       if (signalCleanup) signalCleanup()
-      // 拆 fetch 连接：keep-alive 下 reader.cancel() 可能把连接还给连接池而非关闭，
-      // abort 传给 fetch 的 lifecycle signal 强制 undici 销毁底层 socket。已结束的
-      // 响应上 abort 为无操作，故正常结束路径安全。
+      // ? fetch ???keep-alive ? reader.cancel() ???????????????
+      // abort ?? fetch ? lifecycle signal ?? undici ???? socket?????
+      // ??? abort ???????????????
       lifecycle?.abort()
 
-      // Promote reasoning to text even on stream error — prevents GLM "stuck" when
+      // Promote reasoning to text even on stream error ? prevents GLM "stuck" when
       // stream breaks after receiving reasoning_content but before normal completion.
-      // Only for GLM — see main promotion block above for rationale.
+      // Only for GLM ? see main promotion block above for rationale.
       if (!textReceived && reasoningAccum && !promotionFired && this.config.providerName === 'glm') {
         callbacks.onTextDelta?.(reasoningAccum)
       }
@@ -931,7 +932,7 @@ export class OpenAIClient implements StreamClient {
    *
    * Returns the slot index, or null to DROP the chunk. Dropping is the
    * fail-safe choice when a continuation chunk carries no `index`/`id` and more
-   * than one buffer is open — misgrafting it onto another tool's arguments
+   * than one buffer is open ? misgrafting it onto another tool's arguments
    * corrupts both (the parallel tool_call pollution bug). A dropped trailing
    * fragment at worst leaves one call's JSON incomplete, which the existing
    * final-flush + salvageFirstJsonObject path already handles.
@@ -954,7 +955,7 @@ export class OpenAIClient implements StreamClient {
     }
     // No identity on the chunk: if exactly one buffer is open, it must be the
     // target (the common single-call trailing-args case). With multiple open we
-    // cannot know — drop rather than guess and pollute.
+    // cannot know ? drop rather than guess and pollute.
     if (this.toolCallBuffer.size === 1) {
       const idx = this.toolCallBuffer.keys().next().value!
       this.logToolStreamEvent({
@@ -977,7 +978,7 @@ export class OpenAIClient implements StreamClient {
     return null
   }
 
-  /** Process a single SSE delta chunk — exposed for testing */
+  /** Process a single SSE delta chunk ? exposed for testing */
   processDelta(
     chunk: {
       choices?: Array<{
@@ -1010,7 +1011,7 @@ export class OpenAIClient implements StreamClient {
 
     const delta = choice.delta
 
-    // DeepSeek reasoning_content → thinking delta
+    // DeepSeek reasoning_content ? thinking delta
     if (delta.reasoning_content) {
       callbacks.onThinkingDelta?.(delta.reasoning_content)
     }
@@ -1018,7 +1019,7 @@ export class OpenAIClient implements StreamClient {
     if (delta.content) {
       callbacks.onTextDelta?.(delta.content)
       // Always accumulate: the final text content block (emitted at stream end)
-      // is built from this — it is what the agent loop persists into session
+      // is built from this ? it is what the agent loop persists into session
       // history. Without it, text-only replies were displayed but never stored,
       // and the model re-answered the previous turn on the next user message.
       this._textAccum += delta.content
@@ -1031,7 +1032,7 @@ export class OpenAIClient implements StreamClient {
         // root cause of cross-tool argument pollution (oh-my-pi/384919c7): when a
         // provider (DeepSeek/GLM) streams trailing argument deltas AFTER
         // finish_reason, those continuation chunks frequently omit `index`. `?? 0`
-        // routed them onto index 0's buffer — a DIFFERENT tool (e.g. read_section),
+        // routed them onto index 0's buffer ? a DIFFERENT tool (e.g. read_section),
         // grafting `{"path":...,"pattern":...}` onto its `{"file_path":...}`. grep
         // then received `{file_path}` or `{}` and failed "pattern is required" in a
         // tight loop, draining the reviewer worker's budget before it could emit
@@ -1057,14 +1058,14 @@ export class OpenAIClient implements StreamClient {
             const partial = JSON.parse(buf.function.arguments)
             this.toolCallHintFired.add(idx)
             callbacks.onToolCallHint(buf.function.name, partial)
-          } catch { /* args not yet complete JSON — wait for more chunks */ }
+          } catch { /* args not yet complete JSON ? wait for more chunks */ }
         }
       }
     }
 
     if (choice.finish_reason) {
       this.flushToolCalls(callbacks)
-      // Buffer the stop reason — will be emitted when usage chunk arrives
+      // Buffer the stop reason ? will be emitted when usage chunk arrives
       this.pendingStopReason = choice.finish_reason
     }
 
@@ -1096,7 +1097,7 @@ export class OpenAIClient implements StreamClient {
    * once at end-of-stream (`final: true`). On the non-final flush, entries whose
    * arguments are not yet valid JSON are LEFT in the buffer so trailing argument
    * deltas (GLM-5.2 sends them after finish_reason) can complete them before the
-   * final flush. Only emitted entries are removed — the buffer is never cleared
+   * final flush. Only emitted entries are removed ? the buffer is never cleared
    * wholesale, so a deferred entry survives to the final flush.
    */
   private flushToolCalls(
@@ -1118,12 +1119,12 @@ export class OpenAIClient implements StreamClient {
           this.maybeTraceToolStream('defer', idx, buf)
           continue
         }
-        // Final flush and still unparseable — surface it loudly instead of
+        // Final flush and still unparseable ? surface it loudly instead of
         // silently feeding {} into the tool (the misleading "X is required").
         // argsTruncated marks the block so the tool pipeline refuses to
         // EXECUTE it (running a half-received command is worse than failing:
         // session 4df36bcd executed a truncated bash call as {}). The block
-        // is still emitted — the assistant message needs the tool_use so the
+        // is still emitted ? the assistant message needs the tool_use so the
         // paired error tool_result keeps the history well-formed.
         this.warnToolArgParseFailure(buf)
         this.logToolStreamEvent({
@@ -1143,7 +1144,7 @@ export class OpenAIClient implements StreamClient {
 
   /**
    * Append one raw SSE `data:` payload to disk for offline analysis.
-   * Gated by RIVET_DEBUG_RAW_SSE: `1` → `<cwd>/.rivet/raw-sse[-<sessionId>].jsonl`,
+   * Gated by RIVET_DEBUG_RAW_SSE: `1` ? `<cwd>/.rivet/raw-sse[-<sessionId>].jsonl`,
    * any other value is treated as an explicit target file path.
    */
   private dumpRawSse(payload: string): void {
@@ -1186,7 +1187,7 @@ export class OpenAIClient implements StreamClient {
    * having to enable RIVET_DEBUG up front. Best-effort: any IO failure disables
    * further logging for this client (sets path to null), never throws.
    *
-   * Capped at TOOL_STREAM_LOG_MAX_LINES per process — once hit, logging stops to
+   * Capped at TOOL_STREAM_LOG_MAX_LINES per process ? once hit, logging stops to
    * bound disk on long sessions. The cap is generous: these events are rare
    * (only fire on ambiguous continuation chunks / final-flush empties), so
    * hitting the cap itself signals a provider streaming pathology worth flagging.
@@ -1280,7 +1281,7 @@ export class OpenAIClient implements StreamClient {
     }
   }
 
-  /** 网#1: Parse tool JSON from accumulated text content (DeepSeek bug workaround).
+  /** ?#1: Parse tool JSON from accumulated text content (DeepSeek bug workaround).
    *  Returns the number of tool_use blocks emitted so the caller knows whether
    *  the text was consumed as tool calls (and must not also persist as text). */
   private tryParseToolJsonFromContent(
@@ -1354,28 +1355,28 @@ export interface ApiErrorProviderContext {
 }
 
 /**
- * 可识别错误的行动指引。原始报错（如 "Insufficient Balance"）只陈述现象，
- * 用户得自己猜是哪家的账户、去哪充值——在报错后追加一行中文提示，直接给
- * 结论：哪家、余额不足、充值入口、临时退路（/model 换 provider）。
+ * ????????????????? "Insufficient Balance"???????
+ * ???????????????????????????????????
+ * ?????????????????????/model ? provider??
  */
 function apiErrorHint(code: string, message: string, provider?: ApiErrorProviderContext): string {
   const probe = `${code} ${typeof message === 'string' ? message : ''}`
-  if (!/insufficient[ _-]?(balance|quota)|余额不足|额度不足/i.test(probe)) return ''
+  if (!/insufficient[ _-]?(balance|quota)|????|????/i.test(probe)) return ''
 
   const where = `${provider?.providerName ?? ''} ${provider?.baseUrl ?? ''}`.toLowerCase()
   const BILLING: Array<[RegExp, string, string]> = [
     [/deepseek/, 'DeepSeek', 'https://platform.deepseek.com/top_up'],
-    [/siliconflow|硅基/, 'SiliconFlow', 'https://cloud.siliconflow.cn'],
-    [/bigmodel|zhipu|智谱|glm/, '智谱 GLM', 'https://www.bigmodel.cn'],
+    [/siliconflow|??/, 'SiliconFlow', 'https://cloud.siliconflow.cn'],
+    [/bigmodel|zhipu|??|glm/, '?? GLM', 'https://www.bigmodel.cn'],
     [/minimax/, 'MiniMax', 'https://platform.minimaxi.com'],
     [/moonshot|kimi/, 'Kimi', 'https://platform.moonshot.cn'],
   ]
   for (const [re, name, url] of BILLING) {
     if (re.test(where)) {
-      return `\n提示：${name} 账户余额不足，充值后重试：${url} —— 或用 /model 临时切换到其他 provider。`
+      return `\n???${name} ?????????????${url} ?? ?? /model ??????? provider?`
     }
   }
-  return '\n提示：当前 provider 账户余额不足，请充值后重试，或用 /model 切换到其他 provider。'
+  return '\n????? provider ???????????????? /model ????? provider?'
 }
 
 export function parseOpenAIError(status: number, body: string, provider?: ApiErrorProviderContext): string {

@@ -6,21 +6,21 @@ import { join } from 'node:path'
 
 /** Flush enough event-loop iterations to cover setImmediate + setTimeout(0)
  *  (watchdog auto-continue's two-stage timer chain). Old settle(5) was too
- *  short when maybeWatchdogAutoContinue gained a setImmediate→setTimeout(0) hop. */
+ *  short when maybeWatchdogAutoContinue gained a setImmediate?setTimeout(0) hop. */
 const settle = async () => {
   await new Promise((r) => setTimeout(r, 5))
   await new Promise((r) => setImmediate(r))
   await new Promise((r) => setTimeout(r, 10))
 }
 
-/** 轮询到条件成立。比固定 sleep 抗负载：机器繁忙时定时器晚触发不该判失败。 */
+/** ??????????? sleep ????????????????????? */
 const waitUntil = async (cond: () => boolean, timeoutMs = 3000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (cond()) return
     await new Promise((r) => setTimeout(r, 5))
   }
-  throw new Error(`条件在 ${timeoutMs}ms 内未成立`)
+  throw new Error(`??? ${timeoutMs}ms ????`)
 }
 import { RuntimeSessionManager, extractObjective, type ManagedAgent, type ModelOption, type DelegateActivityUpdate } from '../session-manager.js'
 import type { AgentCallbacks } from '../../agent/loop-types.js'
@@ -34,10 +34,10 @@ class FakeAgent implements ManagedAgent {
   artifacts: Artifact[] = []
   /** Rewind: in-memory message store for testing. */
   messages: OaiMessage[] = []
-  /** S — captures the mode this agent was built with + any live switches. */
+  /** S ? captures the mode this agent was built with + any live switches. */
   builtApprovalMode?: string
   liveApprovalMode?: string
-  /** 每次 run 收到的 prompt，按序记录（含自动续跑注入的 'continue'）。 */
+  /** ?? run ??? prompt?????????????? 'continue'?? */
   prompts: string[] = []
   private resolveRun?: () => void
 
@@ -52,8 +52,8 @@ class FakeAgent implements ManagedAgent {
     this.callbacks?.onAbort()
     this.resolveRun?.()
   }
-  /** 模拟 agent 内部 watchdog 自中止：带 reason 的 onAbort + run settle。
-   *  与 abort()（用户中止，无 reason）区分——manager.abort 不走这条路。 */
+  /** ?? agent ?? watchdog ????? reason ? onAbort + run settle?
+   *  ? abort()??????? reason?????manager.abort ?????? */
   watchdogAbort(reason = 'watchdog:goal'): void {
     this.callbacks?.onAbort(reason)
     this.resolveRun?.()
@@ -66,7 +66,7 @@ class FakeAgent implements ManagedAgent {
   getMessages(): OaiMessage[] { return this.messages }
   replaceMessages(msgs: OaiMessage[]): void { this.messages = msgs }
   rewindToMessages(msgs: OaiMessage[]): void { this.messages = msgs }
-  /** P0-2: optional — plan_task onToolResult reads this to emit todo_state */
+  /** P0-2: optional ? plan_task onToolResult reads this to emit todo_state */
   getTodos?: () => Array<{ id: string; content: string; status: string }>
 }
 
@@ -96,8 +96,8 @@ function makeManager(opts: { watchdogContinueDelayMs?: number } = {}) {
       return a
     },
     defaultCwd: '/tmp/work',
-    // C2 倒计时默认 5s——测试里压到 0（setImmediate+setTimeout(0) 仍被 settle 覆盖），
-    // 倒计时行为本身由专门用例以小延迟验证。
+    // C2 ????? 5s??????? 0?setImmediate+setTimeout(0) ?? settle ????
+    // ???????????????????
     watchdogContinueDelayMs: opts.watchdogContinueDelayMs ?? 0,
   })
   return { manager, agents }
@@ -113,7 +113,7 @@ test('createSession with prompt starts running; without prompt stays idle', asyn
   assert.notEqual(idle.id, live.id)
 })
 
-test('sameCwdRunningCount counts running sessions per cwd (VSW §6)', async () => {
+test('sameCwdRunningCount counts running sessions per cwd (VSW ?6)', async () => {
   const { manager } = makeManager()
   const a = manager.createSession({ prompt: 'a', cwd: '/repo/x' })
   manager.createSession({ prompt: 'b', cwd: '/repo/x' })
@@ -125,7 +125,7 @@ test('sameCwdRunningCount counts running sessions per cwd (VSW §6)', async () =
   assert.equal(manager.sameCwdRunningCount('/repo/y'), 1)
   assert.equal(manager.sameCwdRunningCount('/repo/z'), 0)
 
-  // excluding self yields "other concurrent sessions" → 1
+  // excluding self yields "other concurrent sessions" ? 1
   assert.equal(manager.sameCwdRunningCount('/repo/x', a.id), 1)
 
   // path forms of the same cwd resolve equal
@@ -188,7 +188,7 @@ test('getEvents(since) replays only newer events with monotonic seq', async () =
 })
 
 // Redaction now lives ONLY here (the legacy /prompt route forwards manager
-// events verbatim since its session rebase) — this is the single trust boundary
+// events verbatim since its session rebase) ? this is the single trust boundary
 // keeping secrets out of event logs and every SSE stream.
 test('manager redacts sensitive tool input and error text before they reach the event log', async () => {
   const { manager, agents } = makeManager()
@@ -207,11 +207,11 @@ test('manager redacts sensitive tool input and error text before they reach the 
 
 test('createSession with prompt records a user event with the prompt text (Q1)', async () => {
   const { manager } = makeManager()
-  const s = manager.createSession({ prompt: '帮我重构这个模块' })
+  const s = manager.createSession({ prompt: '????????' })
   const events = manager.getEvents(s.id, 0)!.events
   const userEvent = events.find((e) => e.type === 'user')
   assert.ok(userEvent, 'a user event must be recorded')
-  assert.equal(userEvent!.data.text, '帮我重构这个模块')
+  assert.equal(userEvent!.data.text, '????????')
   // user must precede status:running so the conversation renders in order
   const userIdx = events.findIndex((e) => e.type === 'user')
   const statusIdx = events.findIndex((e) => e.type === 'status')
@@ -268,13 +268,13 @@ test('computer_use approve + remember records a per-app grant (always allow)', a
   const s = manager.createSession({ prompt: 'go' })
   const cb = agents[0]!.callbacks!
 
-  // approve WITHOUT remember → no grant
+  // approve WITHOUT remember ? no grant
   const p1 = cb.onApprovalRequired('cu-1', 'computer_use', { action: 'snapshot', app: 'Safari' })
   manager.answerIntervention(s.id, 'cu-1', 'approve')
   assert.deepEqual(await p1, { approved: true })
   assert.equal(isAppGranted('Safari'), false, 'plain approve must not grant')
 
-  // approve WITH remember → grant recorded + event annotated
+  // approve WITH remember ? grant recorded + event annotated
   const p2 = cb.onApprovalRequired('cu-2', 'computer_use', { action: 'click', app: 'Safari', ref: 1 })
   manager.answerIntervention(s.id, 'cu-2', 'approve', undefined, true)
   assert.deepEqual(await p2, { approved: true, remember: true })
@@ -284,12 +284,12 @@ test('computer_use approve + remember records a per-app grant (always allow)', a
     .find((e) => e.data.requestId === 'cu-2')
   assert.equal(resolved!.data.rememberedApp, 'Safari')
 
-  // remember on a NON-computer_use tool → no grant side effect
+  // remember on a NON-computer_use tool ? no grant side effect
   const p3 = cb.onApprovalRequired('b-1', 'bash', { command: 'ls' })
   manager.answerIntervention(s.id, 'b-1', 'approve', undefined, true)
   assert.deepEqual(await p3, { approved: true, remember: true })
 
-  // reject + remember → no grant
+  // reject + remember ? no grant
   const p4 = cb.onApprovalRequired('cu-3', 'computer_use', { action: 'snapshot', app: 'Notes' })
   manager.answerIntervention(s.id, 'cu-3', 'reject', undefined, true)
   assert.deepEqual(await p4, { approved: false })
@@ -314,26 +314,26 @@ test('abort resolves all pending approvals (no hung promises)', async () => {
   const resolved = manager.getEvents(s.id, 0)!.events
     .filter((e) => e.type === 'approval_resolved')
     .find((e) => e.data.requestId === 't')
-  assert.equal(resolved!.data.decision, 'aborted', '用户中止的审批关闭保持 aborted 语义')
+  assert.equal(resolved!.data.decision, 'aborted', '??????????? aborted ??')
 })
 
-test('run 正常完成时挂起 approval 关闭为 stale，不误标 aborted', async () => {
+test('run ??????? approval ??? stale???? aborted', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const a = agents[0]!
   const pending = a.callbacks!.onApprovalRequired('t1', 'bash', { command: 'ls' })
-  // run 正常 settle，approval 仍挂起（真实 agent 不应发生，但 manager 必须诚实收尾）
+  // run ?? settle?approval ?????? agent ?????? manager ???????
   a.finish()
   await settle()
-  assert.deepEqual(await pending, { approved: false }, 'promise 必须被关闭，不能悬挂')
+  assert.deepEqual(await pending, { approved: false }, 'promise ??????????')
   const rec = manager.getSession(s.id)!
   assert.equal(rec.status, 'completed')
   assert.equal(rec.pendingApprovals, 0)
   const resolved = manager.getEvents(s.id, 0)!.events
     .filter((e) => e.type === 'approval_resolved')
     .find((e) => e.data.requestId === 't1')
-  assert.ok(resolved, '必须有 approval_resolved 收尾事件')
-  assert.equal(resolved!.data.decision, 'stale', '正常完成的收尾不得伪装成 aborted')
+  assert.ok(resolved, '??? approval_resolved ????')
+  assert.equal(resolved!.data.decision, 'stale', '???????????? aborted')
 })
 
 test('artifacts are surfaced per session and never cross-read', async () => {
@@ -371,7 +371,7 @@ test('idle/rehydrated session reads artifact bodies straight off disk', async ()
     createAgent: () => new FakeAgent(),
     defaultCwd: cwd,
   })
-  // No prompt → agent stays null, exercising the rehydrated path.
+  // No prompt ? agent stays null, exercising the rehydrated path.
   const s = manager.createSession({ cwd })
 
   // Mirror the live AgentLoop layout: <cwd>/.rivet/artifacts/<sessionId>
@@ -406,7 +406,7 @@ test('completed run emits a terminal done event', async () => {
   assert.equal(manager.getSession(s.id)!.status, 'completed')
 })
 
-// ── R1: registry lifecycle (register / heartbeat / release) ──────────
+// ?? R1: registry lifecycle (register / heartbeat / release) ??????????
 
 interface FakeRegistryCalls {
   registered: Array<{ id: string; cwd: string; role: string }>
@@ -450,6 +450,47 @@ test('R1: a finished run releases the session claims', async () => {
   assert.deepEqual(calls.released, [s.id], 'terminal state must release claims')
 })
 
+test('R1: idle-agent eviction waits for async shutdown before releasing claims', async () => {
+  const { manager, calls } = makeManagerWithRegistry()
+  const s = manager.createSession({ cwd: '/tmp/proj' })
+  const internal = manager['sessions'].get(s.id)!
+  let finishShutdown!: () => void
+  const shutdownDone = new Promise<void>(resolve => { finishShutdown = resolve })
+  internal.agent = { shutdown: () => shutdownDone } as ManagedAgent
+
+  manager['releaseAgent'](internal)
+  assert.deepEqual(calls.released, [], 'claims stay held while the old coordinator shuts down')
+  finishShutdown()
+  await shutdownDone
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.deepEqual(calls.released, [s.id])
+})
+
+test('R1: idle-agent eviction keeps claims when shutdown reports a timeout', () => {
+  const { manager, calls } = makeManagerWithRegistry()
+  const s = manager.createSession({ cwd: '/tmp/proj' })
+  const internal = manager['sessions'].get(s.id)!
+  internal.agent = { shutdown: () => false } as ManagedAgent
+
+  manager['releaseAgent'](internal)
+  assert.deepEqual(calls.released, [], 'a timed-out coordinator may still be writing')
+})
+
+test('R1: shutdownAll releases claims for idle sessions after agent shutdown', async () => {
+  const { manager, calls } = makeManagerWithRegistry()
+  const s = manager.createSession({ cwd: '/tmp/proj' })
+  const internal = manager['sessions'].get(s.id)!
+  let finishShutdown!: () => void
+  const shutdownDone = new Promise<void>(resolve => { finishShutdown = resolve })
+  internal.agent = { shutdown: () => shutdownDone } as ManagedAgent
+
+  const allShutdown = manager.shutdownAll()
+  assert.deepEqual(calls.released, [], 'shutdown must await the idle agent before releasing claims')
+  finishShutdown()
+  await allShutdown
+  assert.deepEqual(calls.released, [s.id])
+})
+
 test('R1: two concurrent sessions register & release independently', async () => {
   const { manager, agents, calls } = makeManagerWithRegistry()
   const a = manager.createSession({ prompt: 'a' })
@@ -461,28 +502,28 @@ test('R1: two concurrent sessions register & release independently', async () =>
   assert.equal(manager.getSession(b.id)!.status, 'running')
 })
 
-// ── R5: decision_shift event ─────────────────────────────────────────
+// ?? R5: decision_shift event ?????????????????????????????????????????
 
 test('R5: onDecisionShift appends a decision_shift event with structured payload', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   agents[0]!.callbacks!.onDecisionShift!({
     source: 'kick',
-    domain: '天璇',
-    reason: '检测到停滞',
-    methods: ['换用 grep', '重新框定问题'],
+    domain: '??',
+    reason: '?????',
+    methods: ['?? grep', '??????'],
     severity: 'warn',
   })
   const ev = manager.getEvents(s.id, 0)!.events.find((e) => e.type === 'decision_shift')
   assert.ok(ev, 'a decision_shift event must be recorded')
   assert.equal(ev!.data.source, 'kick')
-  assert.equal(ev!.data.domain, '天璇')
-  assert.equal(ev!.data.reason, '检测到停滞')
-  assert.deepEqual(ev!.data.methods, ['换用 grep', '重新框定问题'])
+  assert.equal(ev!.data.domain, '??')
+  assert.equal(ev!.data.reason, '?????')
+  assert.deepEqual(ev!.data.methods, ['?? grep', '??????'])
   assert.equal(ev!.data.severity, 'warn')
 })
 
-// ── S: per-session autonomy (approvalMode) ───────────────────────────
+// ?? S: per-session autonomy (approvalMode) ???????????????????????????
 
 function makeManagerCapturingMode() {
   const built: Array<{ cwd?: string; sessionId?: string; approvalMode?: string }> = []
@@ -539,7 +580,7 @@ test('S: setApprovalMode returns false for a missing session', async () => {
   assert.equal(manager.setApprovalMode('nope', 'manual'), false)
 })
 
-// ── T2: todo_state emission ─────────────────────────────────────────
+// ?? T2: todo_state emission ?????????????????????????????????????????
 
 test('T2: todo write tool emits a structured todo_state event', async () => {
   const { manager, agents } = makeManager()
@@ -591,7 +632,7 @@ test('P0-2: plan_task success emits todo_state via onToolResult', async () => {
   const s = manager.createSession({ prompt: 'go' })
   const cb = agents[0]!.callbacks!
 
-  // plan_task success → todo_state emitted
+  // plan_task success ? todo_state emitted
   cb.onToolResult('plan1', 'plan_task', 'ok', false)
   const evs = manager.getEvents(s.id, 0)!.events.filter((e) => e.type === 'todo_state')
   assert.equal(evs.length, 1)
@@ -617,13 +658,13 @@ test('P0-2: plan_task error does NOT emit todo_state', async () => {
   const s = manager.createSession({ prompt: 'go' })
   const cb = agents[0]!.callbacks!
 
-  // plan_task error → no todo_state
+  // plan_task error ? no todo_state
   cb.onToolResult('plan1', 'plan_task', 'error', true)
   const evs = manager.getEvents(s.id, 0)!.events.filter((e) => e.type === 'todo_state')
   assert.equal(evs.length, 0)
 })
 
-// ── T3: mid-run steering ────────────────────────────────────────────
+// ?? T3: mid-run steering ????????????????????????????????????????????
 
 test('T3: steer on a running session queues, echoes, and drains once', async () => {
   const { manager, agents } = makeManager()
@@ -651,14 +692,14 @@ test('T3: a fresh run drops guidance left over from a previous run', async () =>
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   manager.steer(s.id, 'stale')
-  agents[0]!.finish() // run resolves → session idle
+  agents[0]!.finish() // run resolves ? session idle
   await new Promise((r) => setTimeout(r, 0)) // let the run's finally flip running=false
   assert.equal(manager.run(s.id, 'go again'), true) // reuses the same agent, fresh callbacks
   // The new run cleared the buffer, so the first drain sees nothing stale.
   assert.equal(agents[0]!.callbacks!.onSteerDrain!(), null)
 })
 
-// ── T4: structured per-worker delegation ────────────────────────────
+// ?? T4: structured per-worker delegation ????????????????????????????
 
 test('T4: onDelegationActivity emits per-worker delegation with progress + elapsed', async () => {
   const { manager, agents } = makeManager()
@@ -669,7 +710,7 @@ test('T4: onDelegationActivity emits per-worker delegation with progress + elaps
     parentToolId: 'tool-1',
     profile: 'code_scout',
     status: 'running',
-    progressLine: '⚙ grep',
+    progressLine: '? grep',
   })
   cb.onDelegationActivity!({
     workOrderId: 'wo:T1',
@@ -682,7 +723,7 @@ test('T4: onDelegationActivity emits per-worker delegation with progress + elaps
   assert.equal(evs[0]!.data.workerId, 'wo:T1')
   assert.equal(evs[0]!.data.parentId, 'tool-1')
   assert.equal(evs[0]!.data.status, 'running')
-  assert.equal(evs[0]!.data.progressLine, '⚙ grep')
+  assert.equal(evs[0]!.data.progressLine, '? grep')
   assert.equal(typeof evs[0]!.data.elapsedMs, 'number')
   assert.equal(evs[1]!.data.status, 'passed')
 })
@@ -696,7 +737,7 @@ test('T4: delegation events pass through counters, event mirror + failureReason'
     parentToolId: 'tool-1',
     profile: 'patcher',
     status: 'running',
-    progressLine: '⚙ edit_file',
+    progressLine: '? edit_file',
     toolUseCount: 3,
     tokenCount: 1200,
     eventKind: 'tool_use',
@@ -718,7 +759,7 @@ test('T4: delegation events pass through counters, event mirror + failureReason'
   assert.equal(evs[1]!.data.failureReason, 'timeout')
 })
 
-// ── PlusMenu: model / star-domain / skills ──────────────────────────
+// ?? PlusMenu: model / star-domain / skills ??????????????????????????
 
 /** Richer fake exposing the optional PlusMenu surface for wiring assertions. */
 class PlusFakeAgent implements ManagedAgent {
@@ -763,8 +804,8 @@ function makePlusManager() {
 
 test('PlusMenu: listDomains flags Auto by default; setDomain pins a domain', async () => {
   const { manager } = makePlusManager()
-  // 显式 domain —— 空 input 时起始星域由 ~/.rivet 全局配置 defaultDomain 决定
-  // （同 a976167f 对 model 的处理），在本机真实配置下不可预测，需锚定起点。
+  // ?? domain ?? ? input ?????? ~/.rivet ???? defaultDomain ??
+  // ?? a976167f ? model ????????????????????????
   const s = manager.createSession({ domain: 'auto' })
   const entries = manager.listDomains(s.id)!
   assert.ok(entries.length >= 3)
@@ -791,15 +832,15 @@ test('PlusMenu: domain selection applies to a lazily-built agent', async () => {
   const { manager, agents } = makePlusManager()
   const s = manager.createSession({})
   manager.setDomain(s.id, 'tianshu') // before any agent exists
-  manager.run(s.id, 'go')            // builds the agent → applySelections runs
+  manager.run(s.id, 'go')            // builds the agent ? applySelections runs
   assert.equal(agents[0]!.domain?.id, 'tianshu')
 })
 
 test('PlusMenu: listModels flags current; switchModel updates record + emits', async () => {
   const { manager } = makePlusManager()
-  // 显式 input.model（新建会话对话框同路径，优先级最高）。a976167f 起空输入
-  // 会被项目配置默认 provider 的首模型覆盖注入的 defaultModelId——本机会解析
-  // 到真实 ~/.rivet 配置，起始模型不确定，断言必须钉在显式输入上。
+  // ?? input.model???????????????????a976167f ????
+  // ???????? provider ????????? defaultModelId???????
+  // ??? ~/.rivet ???????????????????????
   const s = manager.createSession({ model: 'model-a' })
   const before = manager.listModels(s.id)!
   assert.equal(before.find((m) => m.id === 'model-a')!.current, true)
@@ -812,10 +853,10 @@ test('PlusMenu: listModels flags current; switchModel updates record + emits', a
   assert.equal(ev.data.modelId, 'model-b')
 })
 
-// a976167f 新建会话模型优先级：显式 input.model > 项目配置默认 provider 首模型
-// > 注入的 defaultModelId。该特性此前无测试覆盖——上方 listModels 测试正因
-// 优先级改动在本机真实配置下静默失效。
-test('PlusMenu: createSession model precedence — project config beats injected default, explicit input beats project', async () => {
+// a976167f ???????????? input.model > ?????? provider ???
+// > ??? defaultModelId??????????????? listModels ????
+// ??????????????????
+test('PlusMenu: createSession model precedence ? project config beats injected default, explicit input beats project', async () => {
   const projectDir = mkdtempSync(join(tmpdir(), 'rivet-plus-proj-'))
   try {
     writeFileSync(join(projectDir, '.rivet-config.json'), JSON.stringify({
@@ -845,13 +886,13 @@ test('PlusMenu: createSession model precedence — project config beats injected
       defaultModelId: 'model-a',
     })
 
-    // 项目配置默认 provider 的首模型 > 注入的 defaultModelId
+    // ?????? provider ???? > ??? defaultModelId
     const s1 = manager.createSession({})
     assert.equal(manager.getSession(s1.id)!.model, 'proj-model')
     const flagged = manager.listModels(s1.id)!
     assert.equal(flagged.find((m) => m.id === 'proj-model')!.current, true)
 
-    // 显式 input.model（新建会话对话框同路径）> 项目配置
+    // ?? input.model????????????> ????
     const s2 = manager.createSession({ model: 'model-a' })
     assert.equal(manager.getSession(s2.id)!.model, 'model-a')
   } finally {
@@ -893,7 +934,7 @@ test('PlusMenu: missing session yields undefined/false from menu methods', async
   assert.equal(manager.setSkillEnabled('nope', 'x', false), false)
 })
 
-// ── User-dispatched background subagent ─────────────────────────────
+// ?? User-dispatched background subagent ?????????????????????????????
 
 /** Fake exposing delegateWorker; lets a test drive activity + completion. */
 class DelegateFakeAgent implements ManagedAgent {
@@ -932,12 +973,12 @@ function makeDelegateManager() {
 test('delegate: dispatches a worker WITHOUT setting session.running', async () => {
   const { manager, agents } = makeDelegateManager()
   const s = manager.createSession({})
-  const res = await manager.delegate(s.id, { objective: '查登录验证码', profile: 'code_scout' })
+  const res = await manager.delegate(s.id, { objective: '??????', profile: 'code_scout' })
   assert.equal(res.ok, true)
-  // Session stays idle — a background worker must not flip the main turn flag.
+  // Session stays idle ? a background worker must not flip the main turn flag.
   assert.notEqual(manager.getSession(s.id)!.status, 'running')
   // The agent received the request with our stable workerId as parent key.
-  assert.equal(agents[0]!.lastInput!.objective, '查登录验证码')
+  assert.equal(agents[0]!.lastInput!.objective, '??????')
   assert.equal(agents[0]!.lastOpts!.workerId, res.ok ? res.workerId : '')
 })
 
@@ -964,20 +1005,20 @@ test('delegate: onActivity terminal update carries summary + origin', async () =
   agents[0]!.lastOpts!.onActivity({
     workOrderId: workerId,
     status: 'passed',
-    summary: '改了 2 个文件',
+    summary: '?? 2 ???',
     changedFiles: ['a.ts', 'b.ts'],
   })
   const evs = manager.getEvents(s.id, 0)!.events.filter((e) => e.type === 'delegation')
   const terminal = evs[evs.length - 1]!
   assert.equal(terminal.data.status, 'passed')
-  assert.equal(terminal.data.summary, '改了 2 个文件')
+  assert.equal(terminal.data.summary, '?? 2 ???')
   assert.equal(terminal.data.origin, 'user')
   assert.deepEqual(terminal.data.changedFiles, ['a.ts', 'b.ts'])
 })
 
 test('delegate: onActivity carries authority + authorityReason to the desktop mirror', async () => {
-  // 桌面舰队面板要显示 worker 星域与命中理由——emitDelegationActivity 必须把
-  // 两个字段都转发进 delegation 事件（此前 authority 接收后未转发）。
+  // ????????? worker ?????????emitDelegationActivity ???
+  // ???????? delegation ????? authority ????????
   const { manager, agents } = makeDelegateManager()
   const s = manager.createSession({})
   const res = await manager.delegate(s.id, { objective: 'go' })
@@ -987,12 +1028,12 @@ test('delegate: onActivity carries authority + authorityReason to the desktop mi
     workOrderId: workerId,
     status: 'running',
     authority: 'tianfu',
-    authorityReason: '命中: 重构+优化',
+    authorityReason: '??: ??+??',
   })
   const evs = manager.getEvents(s.id, 0)!.events.filter((e) => e.type === 'delegation')
   const last = evs[evs.length - 1]!
   assert.equal(last.data.authority, 'tianfu')
-  assert.equal(last.data.authorityReason, '命中: 重构+优化')
+  assert.equal(last.data.authorityReason, '??: ??+??')
 })
 
 test('delegate: empty objective is rejected', async () => {
@@ -1029,22 +1070,22 @@ test('delegate: coexists with a running main turn (anytime dispatch)', async () 
   assert.equal(res.ok, true)
 })
 
-// ── Watchdog stall auto-recovery (桌面端对齐 TUI v3) ────────────────────────
+// ?? Watchdog stall auto-recovery (????? TUI v3) ????????????????????????
 
-test('watchdog:goal 中止后自动续跑：agent 收到第二次 run(continue)，status 回到 running', async () => {
+test('watchdog:goal ????????agent ????? run(continue)?status ?? running', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   agents[0]!.watchdogAbort('watchdog:goal')
   await settle()
 
   assert.deepEqual(agents[0]!.prompts, ['go', 'continue'])
-  assert.equal(manager.getSession(s.id)!.status, 'running', '续跑后不停留在 aborted')
+  assert.equal(manager.getSession(s.id)!.status, 'running', '??????? aborted')
   const ev = manager.getEvents(s.id, 0)!.events.find((e) => e.type === 'watchdog_recovery')
-  assert.ok(ev, '必须追加 watchdog_recovery 事件')
+  assert.ok(ev, '???? watchdog_recovery ??')
   assert.equal(ev!.data.autoContinue, true)
 })
 
-test('普通 watchdog（非 goal）同样自动续跑', async () => {
+test('?? watchdog?? goal???????', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   agents[0]!.watchdogAbort('watchdog')
@@ -1053,38 +1094,38 @@ test('普通 watchdog（非 goal）同样自动续跑', async () => {
   assert.equal(manager.getSession(s.id)!.status, 'running')
 })
 
-test('用户 abort（无 reason）与 convergence 中止不自动续跑', async () => {
+test('?? abort?? reason?? convergence ???????', async () => {
   const { manager, agents } = makeManager()
   const a = manager.createSession({ prompt: 'a' })
-  manager.abort(a.id)                       // FakeAgent.abort → onAbort() 无 reason
+  manager.abort(a.id)                       // FakeAgent.abort ? onAbort() ? reason
   await settle()
-  assert.deepEqual(agents[0]!.prompts, ['a'], '用户中止不得续跑')
+  assert.deepEqual(agents[0]!.prompts, ['a'], '????????')
   assert.equal(manager.getSession(a.id)!.status, 'aborted')
 
   const b = manager.createSession({ prompt: 'b' })
   agents[1]!.callbacks!.onAbort('convergence:no-tool')
   agents[1]!.finish()
   await settle()
-  assert.deepEqual(agents[1]!.prompts, ['b'], 'convergence 中止不得续跑')
+  assert.deepEqual(agents[1]!.prompts, ['b'], 'convergence ??????')
 })
 
-test('密集 stall（tiny-turn 循环）12 次后停手，事件含 stopReason=session-total', async () => {
+test('?? stall?tiny-turn ???12 ???????? stopReason=session-total', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const a = agents[0]!
   for (let i = 0; i < 15; i++) {
-    a.callbacks!.onTurnComplete({}, 1, false)   // tiny-turn：重置 consecutive
+    a.callbacks!.onTurnComplete({}, 1, false)   // tiny-turn??? consecutive
     a.watchdogAbort('watchdog:goal')
     await settle()
   }
   const continues = a.prompts.filter((p) => p === 'continue').length
-  assert.equal(continues, 12, `session-total cap 应在 12 次后停手，实得 ${continues}`)
-  assert.equal(manager.getSession(s.id)!.status, 'aborted', '停手后落 aborted 等用户')
+  assert.equal(continues, 12, `session-total cap ?? 12 ??????? ${continues}`)
+  assert.equal(manager.getSession(s.id)!.status, 'aborted', '???? aborted ???')
   const evs = manager.getEvents(s.id, 0)!.events.filter((e) => e.type === 'watchdog_recovery')
   assert.equal(evs[evs.length - 1]!.data.stopReason, 'session-total')
 })
 
-test('稀疏 stall（每次间隔 2 个工具批）不消耗配额，15 次全续跑', async () => {
+test('?? stall????? 2 ???????????15 ????', async () => {
   const { manager, agents } = makeManager()
   manager.createSession({ prompt: 'go' })
   const a = agents[0]!
@@ -1099,35 +1140,35 @@ test('稀疏 stall（每次间隔 2 个工具批）不消耗配额，15 次全�
   assert.equal(a.prompts.filter((p) => p === 'continue').length, 15)
 })
 
-test('流式 chunk（isError=undefined）不计进度：密集 stall 仍 12 次停手', async () => {
+test('?? chunk?isError=undefined???????? stall ? 12 ???', async () => {
   const { manager, agents } = makeManager()
   manager.createSession({ prompt: 'go' })
   const a = agents[0]!
   for (let i = 0; i < 15; i++) {
-    for (let j = 0; j < 4; j++) a.callbacks!.onToolResult(`t${i}`, 'bash', `chunk${j}`)  // 无 isError
-    a.callbacks!.onToolResult(`t${i}`, 'bash', 'done', false)   // 终态
+    for (let j = 0; j < 4; j++) a.callbacks!.onToolResult(`t${i}`, 'bash', `chunk${j}`)  // ? isError
+    a.callbacks!.onToolResult(`t${i}`, 'bash', 'done', false)   // ??
     a.callbacks!.onTurnComplete({}, 1, false)
-    // 每周期真实进度 = 2 单元 < 4 → 密集
+    // ??????? = 2 ?? < 4 ? ??
     a.watchdogAbort('watchdog:goal')
     await settle()
   }
   const continues = a.prompts.filter((p) => p === 'continue').length
-  assert.equal(continues, 12, `chunk 若被误计会伪装稀疏无限续跑，实得 ${continues}`)
+  assert.equal(continues, 12, `chunk ???????????????? ${continues}`)
 })
 
-test('审批挂起时 stall → suppressed：不续跑，事件可观测', async () => {
+test('????? stall ? suppressed??????????', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const a = agents[0]!
-  void a.callbacks!.onApprovalRequired('t1', 'bash', { command: 'rm x' })  // 挂起不答复
+  void a.callbacks!.onApprovalRequired('t1', 'bash', { command: 'rm x' })  // ?????
   a.watchdogAbort('watchdog:goal')
   await settle()
-  assert.deepEqual(a.prompts, ['go'], '审批挂起的 stall 不得续跑')
+  assert.deepEqual(a.prompts, ['go'], '????? stall ????')
   const ev = manager.getEvents(s.id, 0)!.events.find((e) => e.type === 'watchdog_recovery')
   assert.equal(ev!.data.stopReason, 'suppressed')
 })
 
-test('审批拒绝后 5s grace 窗口内的 stall 被抑制，窗口外恢复续跑（假时钟）', async () => {
+test('????? 5s grace ???? stall ????????????????', async () => {
   let clock = 1_000_000
   const agents: FakeAgent[] = []
   const manager = new RuntimeSessionManager({
@@ -1140,110 +1181,110 @@ test('审批拒绝后 5s grace 窗口内的 stall 被抑制，窗口外恢复续
   const sid = s.id
   const a = agents[0]!
   const pending = a.callbacks!.onApprovalRequired('t1', 'bash', { command: 'rm x' })
-  // requestApproval 用 toolId 作 requestId（session-manager.ts:2101 已核实）
+  // requestApproval ? toolId ? requestId?session-manager.ts:2101 ????
   manager.answerIntervention(sid, 't1', 'reject')
   assert.deepEqual(await pending, { approved: false })
 
-  clock += 1_000                              // 拒绝后 1s——窗口内
+  clock += 1_000                              // ??? 1s?????
   a.watchdogAbort('watchdog:goal')
   await settle()
-  assert.deepEqual(a.prompts, ['go'], 'grace 窗口内不得续跑')
+  assert.deepEqual(a.prompts, ['go'], 'grace ???????')
 
-  clock += 10_000                             // 拒绝后 11s——窗口外
-  manager.run(sid, 'again')                   // 用户重新驱动
+  clock += 10_000                             // ??? 11s?????
+  manager.run(sid, 'again')                   // ??????
   a.watchdogAbort('watchdog:goal')
   await settle()
-  assert.equal(a.prompts.filter((p) => p === 'continue').length, 1, '窗口外恢复续跑')
+  assert.equal(a.prompts.filter((p) => p === 'continue').length, 1, '???????')
 })
 
-test('abort 后用户抢先提交新 prompt：自动续跑让位', async () => {
+test('abort ???????? prompt???????', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const a = agents[0]!
   a.watchdogAbort('watchdog:goal')
-  // 只排干微任务（run().finally 是 promise 回调），不让 setImmediate 宏任务先跑
+  // ???????run().finally ? promise ?????? setImmediate ?????
   for (let i = 0; i < 10; i++) await Promise.resolve()
-  assert.equal(manager.run(s.id, '用户新指令'), true, '此刻 running 已清，用户可提交')
+  assert.equal(manager.run(s.id, '?????'), true, '?? running ????????')
   await settle()
-  assert.deepEqual(a.prompts, ['go', '用户新指令'], '自动 continue 必须让位给用户')
+  assert.deepEqual(a.prompts, ['go', '?????'], '?? continue ???????')
   const ev = manager.getEvents(s.id, 0)!.events.find((e) => e.type === 'watchdog_recovery')
-  assert.equal(ev, undefined, '让位时不产生 recovery 事件')
+  assert.equal(ev, undefined, '?????? recovery ??')
 })
 
-test('watchdog stall 后、setImmediate 执行前用户 abort → 不续跑（窄窗口竞态）', async () => {
+test('watchdog stall ??setImmediate ????? abort ? ??????????', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const a = agents[0]!
   a.watchdogAbort('watchdog:goal')
-  // 只排干微任务（run().finally），setImmediate 宏任务还没跑
+  // ???????run().finally??setImmediate ??????
   for (let i = 0; i < 10; i++) await Promise.resolve()
-  // 用户在此窗口内 abort——abort() 对已停会话目前是空操作（status 已 aborted、
-  // agent 已停、pending 已空），但用户意图是"停"，不应被自动续跑盖掉
+  // ??????? abort??abort() ????????????status ? aborted?
+  // agent ???pending ??????????"?"??????????
   manager.abort(s.id)
   await settle()
-  assert.deepEqual(a.prompts, ['go'], '用户 abort 后不得自动续跑')
+  assert.deepEqual(a.prompts, ['go'], '?? abort ???????')
   const ev = manager.getEvents(s.id, 0)!.events.find((e) => e.type === 'watchdog_recovery')
-  assert.equal(ev, undefined, '用户 abort 抑制续跑，不产生 recovery 事件')
+  assert.equal(ev, undefined, '?? abort ???????? recovery ??')
 })
 
-// ── C2 刹车：watchdog 续跑倒计时可取消 ────────────────────────────────────
+// ?? C2 ???watchdog ???????? ????????????????????????????????????
 
-// 倒计时统一取 200ms 而非 30ms：settle() 自身就要约 15ms，30ms 窗口只有一倍
-// 余量，全量并行下定时器会抢在断言之前跑完，"倒计时内不得续跑"因此偶发假失败。
-// 200ms 给到十余倍余量，同时"确实续跑了"改用轮询，空载时并不会因此变慢。
+// ?????? 200ms ?? 30ms?settle() ????? 15ms?30ms ??????
+// ?????????????????????"????????"????????
+// 200ms ??????????"?????"????????????????
 const CONTINUE_DELAY_MS = 200
 
-test('C2: 续跑先发 pendingAutoContinue 事件，倒计时结束才真正 continue', async () => {
+test('C2: ???? pendingAutoContinue ??????????? continue', async () => {
   const { manager, agents } = makeManager({ watchdogContinueDelayMs: CONTINUE_DELAY_MS })
   const s = manager.createSession({ prompt: 'go' })
   agents[0]!.watchdogAbort('watchdog:goal')
-  await settle() // setImmediate 已跑：事件已追加，但倒计时未到
+  await settle() // setImmediate ???????????????
 
   const ev = manager.getEvents(s.id, 0)!.events.find((e) => e.type === 'watchdog_recovery')
-  assert.ok(ev, '决策后立即追加 watchdog_recovery 事件')
+  assert.ok(ev, '??????? watchdog_recovery ??')
   assert.equal(ev!.data.pendingAutoContinue, true)
   assert.equal(ev!.data.delayMs, CONTINUE_DELAY_MS)
-  assert.deepEqual(agents[0]!.prompts, ['go'], '倒计时内不得续跑')
+  assert.deepEqual(agents[0]!.prompts, ['go'], '????????')
 
   await waitUntil(() => agents[0]!.prompts.length > 1)
-  assert.deepEqual(agents[0]!.prompts, ['go', 'continue'], '倒计时结束后续跑')
+  assert.deepEqual(agents[0]!.prompts, ['go', 'continue'], '????????')
   assert.equal(manager.getSession(s.id)!.status, 'running')
 })
 
-test('C2: 倒计时窗口内用户 abort → 取消续跑并追加 cancelled 事件', async () => {
+test('C2: ???????? abort ? ??????? cancelled ??', async () => {
   const { manager, agents } = makeManager({ watchdogContinueDelayMs: CONTINUE_DELAY_MS })
   const s = manager.createSession({ prompt: 'go' })
   agents[0]!.watchdogAbort('watchdog:goal')
-  await settle() // 倒计时已挂起
+  await settle() // ??????
 
   manager.abort(s.id)
-  // 必须睡过倒计时截止点，否则"没续跑"只是因为还没到点，证明不了取消生效。
+  // ?????????????"???"??????????????????
   await new Promise((r) => setTimeout(r, CONTINUE_DELAY_MS + 100))
-  assert.deepEqual(agents[0]!.prompts, ['go'], '取消后不得续跑')
+  assert.deepEqual(agents[0]!.prompts, ['go'], '???????')
   const evs = manager.getEvents(s.id, 0)!.events.filter((e) => e.type === 'watchdog_recovery')
-  assert.ok(evs.some((e) => e.data.cancelled === true), '必须追加 cancelled 事件供 UI 收卡片')
+  assert.ok(evs.some((e) => e.data.cancelled === true), '???? cancelled ??? UI ???')
 })
 
-test('C2: 倒计时窗口内用户发新 prompt → 定时器清除，continue 不追发', async () => {
+test('C2: ?????????? prompt ? ??????continue ???', async () => {
   const { manager, agents } = makeManager({ watchdogContinueDelayMs: CONTINUE_DELAY_MS })
   const s = manager.createSession({ prompt: 'go' })
   const a = agents[0]!
   a.watchdogAbort('watchdog:goal')
   await settle()
 
-  assert.equal(manager.run(s.id, '用户新指令'), true)
+  assert.equal(manager.run(s.id, '?????'), true)
   await new Promise((r) => setTimeout(r, CONTINUE_DELAY_MS + 100))
-  assert.deepEqual(a.prompts, ['go', '用户新指令'], '用户 prompt 抢占，自动 continue 不得追发')
+  assert.deepEqual(a.prompts, ['go', '?????'], '?? prompt ????? continue ????')
 })
 
-// ── Wave 2: delta 合并缓冲 ────────────────────────────────────────────────────
+// ?? Wave 2: delta ???? ????????????????????????????????????????????????????
 
 test('delta coalescing: first delta lands immediately, burst merges into one windowed event', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const cb = agents[0]!.callbacks!
 
-  cb.onTextDelta('a')          // first of the run → immediate
+  cb.onTextDelta('a')          // first of the run ? immediate
   cb.onTextDelta('b')
   cb.onTextDelta('c')
   cb.onTextDelta('d')
@@ -1293,14 +1334,14 @@ test('delta coalescing: abort drains the buffer before the status event', async 
   assert.ok(tailIdx < statusIdx, 'tail must land before the aborted status')
 })
 
-test('delta coalescing: type switch (thinking↔text) flushes and keeps order', async () => {
+test('delta coalescing: type switch (thinking?text) flushes and keeps order', async () => {
   const { manager, agents } = makeManager()
   const s = manager.createSession({ prompt: 'go' })
   const cb = agents[0]!.callbacks!
 
   cb.onThinkingDelta('think1')  // immediate (first of thinking run)
   cb.onThinkingDelta('think2')  // buffered
-  cb.onTextDelta('answer')      // type switch → flush think2, then immediate
+  cb.onTextDelta('answer')      // type switch ? flush think2, then immediate
 
   const evs = manager['sessions'].get(s.id)!.events.filter(
     (e) => e.type === 'text_delta' || e.type === 'thinking_delta',
@@ -1317,7 +1358,7 @@ test('delta coalescing: oversized buffer flushes at the char cap without waiting
   const cb = agents[0]!.callbacks!
 
   cb.onTextDelta('first')                 // immediate
-  cb.onTextDelta('x'.repeat(3000))        // exceeds cap → immediate flush
+  cb.onTextDelta('x'.repeat(3000))        // exceeds cap ? immediate flush
 
   const evs = manager['sessions'].get(s.id)!.events.filter((e) => e.type === 'text_delta')
   assert.equal(evs.length, 2)
@@ -1330,7 +1371,7 @@ test('delta coalescing: getEvents drains the window and seq stays monotonic', as
   const cb = agents[0]!.callbacks!
 
   cb.onTextDelta('one ')
-  cb.onTextDelta('two')        // buffered — poll must still see it
+  cb.onTextDelta('two')        // buffered ? poll must still see it
   const all = manager.getEvents(s.id, 0)!
   const texts = all.events.filter((e) => e.type === 'text_delta').map((e) => e.data.text)
   assert.deepEqual(texts, ['one ', 'two'])

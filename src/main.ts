@@ -1,15 +1,15 @@
 /**
- * 天枢 T9 主入口 — 纯 ANSI 终端 UI，零 React/Ink 依赖。
+ * ?? T9 ??? ? ? ANSI ?? UI?? React/Ink ???
  *
- * 使用 bootstrap.ts 完成完整初始化，连接 AgentLoop 到 TuiApp 渲染引擎。
+ * ?? bootstrap.ts ?????????? AgentLoop ? TuiApp ?????
  *
- * 运行方式：
+ * ?????
  *   npx tsx src/main.ts
  *   npx tsx src/main.ts --model deepseek-v4-pro
  *   npx tsx src/main.ts --dangerously-skip-permissions
  */
 
-// Windows EPERM scandir noise filter — must register before any dependency
+// Windows EPERM scandir noise filter ? must register before any dependency
 // that might trigger fs operations against system-protected directories.
 import { installEpermFilter } from './platform/eperm-filter.js'
 import { setTargetConventions, applyConfiguredGitBashPath } from './platform.js'
@@ -84,7 +84,7 @@ import type { CacheStatus } from './tui/status-types.js'
 import { TuiPerfMonitor, isTuiPerfEnabled } from './tui/engine/perf-monitor.js'
 import { runTuiShutdownSequence } from './tui/engine/shutdown-sequence.js'
 
-// ── CLI args ───────────────────────────────────────────────────
+// ?? CLI args ???????????????????????????????????????????????????
 
 const args = process.argv.slice(2)
 const modelArgIdx = args.indexOf('--model')
@@ -93,13 +93,13 @@ const providerArgIdx = args.indexOf('--provider')
 const requestedProvider = providerArgIdx >= 0 ? args[providerArgIdx + 1] : undefined
 
 // R1: default startup is a fresh session. Session selection flags (Claude Code parity):
-//   --continue / -c              → resume the most recent session for this cwd
-//   --resume <id|prefix> / -r <id|prefix> → resume a specific session (short prefix ok)
-//   --resume / -r (bare)         → open the session picker after the TUI starts
-//   --new                        → force a brand-new session
-//   --list / `rivet sessions`    → print the session list and exit
-// 排查入口（不启动 TUI）：`rivet logs` 列出会话/缓存/六维/桌面日志的落点，
-// `rivet logs --json` 输出结构化清单便于上报 issue。
+//   --continue / -c              ? resume the most recent session for this cwd
+//   --resume <id|prefix> / -r <id|prefix> ? resume a specific session (short prefix ok)
+//   --resume / -r (bare)         ? open the session picker after the TUI starts
+//   --new                        ? force a brand-new session
+//   --list / `rivet sessions`    ? print the session list and exit
+// ???????? TUI??`rivet logs` ????/??/??/????????
+// `rivet logs --json` ??????????? issue?
 // Resolution + env signalling happens in main() before bootstrap so that
 // getOrCreateSessionId picks it up regardless of call order.
 const sessionCliArgs = parseSessionCliArgs(args)
@@ -109,7 +109,7 @@ const wantSessionPicker = sessionCliArgs.openPicker
 const wantNewSession = sessionCliArgs.forceNew
 const skipWelcome = args.includes('--skip-welcome')
 
-// --stream-events <path> → mirror the run as NDJSON `SessionEvent`s (the same
+// --stream-events <path> ? mirror the run as NDJSON `SessionEvent`s (the same
 // records the sidecar serves to `attach`). A path is required rather than
 // optional: in TUI mode stdout is the render surface.
 const wantScreenReader = args.includes('--screen-reader')
@@ -123,7 +123,7 @@ if (streamEventsIdx >= 0 && !streamEventsPath) {
   process.exit(2)
 }
 
-// ── Lifecycle ──────────────────────────────────────────────────
+// ?? Lifecycle ??????????????????????????????????????????????????
 
 let app: TuiApp | null = null
 let ctx: BootstrapContext | null = null
@@ -134,7 +134,7 @@ const eventStream: EventStreamFile | null = streamEventsPath
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null
 let perfSummaryFlush: Promise<void> = Promise.resolve()
 
-/** advisory status 通道环形缓冲（最近 N 条,cockpit advisory 面板展示） */
+/** advisory status ????????? N ?,cockpit advisory ????? */
 const ADVISORY_STATUS_BUFFER_MAX = 20
 const advisoryStatusNotices: string[] = []
 
@@ -150,12 +150,12 @@ async function shutdown(code: number = 0): Promise<void> {
     cleanup: [
       () => {
         // Delegate core cleanup to bootstrap shutdown handler.
-        ctx?.shutdown()
+        return ctx?.shutdown()
       },
       () => eventStream?.close(),
       () => {
         // Post-teardown resume hint: printed AFTER TUI dispose so it lands on the
-        // normal scrollback and survives the exit — the session id would otherwise
+        // normal scrollback and survives the exit ? the session id would otherwise
         // be undiscoverable ("how do I reconnect?").
         if (ctx) {
           const summary = formatExitSummary(ctx.persist.loadMetadata(), ctx.sessionId)
@@ -191,7 +191,7 @@ process.on('SIGTERM', () => { void shutdown(0) })
 // Last-resort sync hook: even if shutdown() threw or an uncaughtException
 // skipped it, the process-exit event still fires (unless SIGKILL).
 //
-// Terminal modes come first — an uncaught throw skips shutdown()/dispose()
+// Terminal modes come first ? an uncaught throw skips shutdown()/dispose()
 // entirely, stranding the user with a hidden cursor, bracketed paste still
 // armed and the terminal in raw mode (`tput reset` territory). We deliberately
 // do NOT register an `uncaughtException` listener to do this: that would
@@ -208,15 +208,15 @@ process.on('exit', () => {
   try { ctx?.refs.mcpManager?.killChildrenSync?.() } catch { /* best-effort */ }
 })
 
-// ── Main ───────────────────────────────────────────────────────
+// ?? Main ???????????????????????????????????????????????????????
 
 async function main() {
   const stdout = process.stdout
   const stdin = process.stdin
 
-  // ── Headless / config routing ──────────────────────────────
-  // 在 TTY 检查之前：先检测无头模式（-p/--print/--json）、配置命令（config），
-  // 若命中则直接路由到对应处理器，不启动 TUI。
+  // ?? Headless / config routing ??????????????????????????????
+  // ? TTY ?????????????-p/--print/--json???????config??
+  // ?????????????????? TUI?
 
   // rivet config ...
   if (args[0] === 'config') {
@@ -225,22 +225,22 @@ async function main() {
     return
   }
 
-  // rivet serve [--port N] — HTTP+SSE Runtime API (localhost sidecar for 桌面版)
+  // rivet serve [--port N] ? HTTP+SSE Runtime API (localhost sidecar for ???)
   if (args[0] === 'serve') {
     const { serveCommand } = await import('./server/serve.js')
     await serveCommand(args.slice(1))
     return
   }
 
-  // rivet sessions / rivet --list — print the session list and exit
+  // rivet sessions / rivet --list ? print the session list and exit
   if (args[0] === 'sessions' || args.includes('--list')) {
     process.stdout.write(SessionPersist.formatSessionList(process.cwd()) + '\n')
     return
   }
 
-  // rivet browser [status|install [--no-mirror]] — chromium 就绪检查 / 一键安装。
-  // 放在 TTY 门与 bootstrap 之前：装浏览器不需要 agent/配置/联网到模型，且新用户
-  // 最可能在 TUI 起来前就想先把浏览器备好。
+  // rivet browser [status|install [--no-mirror]] ? chromium ???? / ?????
+  // ?? TTY ?? bootstrap ?????????? agent/??/??????????
+  // ???? TUI ?????????????
   if (args[0] === 'browser') {
     const { runBrowserCLI } = await import('./cli/browser-cli.js')
     const code = await runBrowserCLI(args.slice(1))
@@ -249,9 +249,9 @@ async function main() {
   }
 
   // rivet logs [open [desktop]] [--session <id>] [--json]
-  // 日志落点排查。刻意放在 TTY 门与 bootstrap 之前：TUI 起不来（sidecar 崩、
-  // 配置坏、非 TTY 管道里）恰恰是最需要知道日志在哪的时候，这条路径不初始化
-  // agent、不读配置、不联网。
+  // ??????????? TTY ?? bootstrap ???TUI ????sidecar ??
+  // ????? TTY ????????????????????????????
+  // agent??????????
   if (args[0] === 'logs') {
     const { runLogsCLI } = await import('./diagnostics/logs-cli.js')
     const { output, exitCode } = runLogsCLI(args.slice(1), { cwd: process.cwd() })
@@ -261,9 +261,9 @@ async function main() {
   }
 
   // rivet web search <query> / rivet web fetch <url> / rivet web status
-  // web 工具命令行入口与连通性自检——不经过 agent/LLM，确定性可脚本化。
-  // 放在 TTY 门与 bootstrap 之前：纯 CLI（SSH/CI）场景验证代理与 backend 连通性，
-  // 不需要初始化 agent、不联网到模型。
+  // web ?????????????????? agent/LLM?????????
+  // ?? TTY ?? bootstrap ???? CLI?SSH/CI???????? backend ????
+  // ?????? agent????????
   if (args[0] === 'web') {
     const { runWebCLI } = await import('./cli/web-cli.js')
     const code = await runWebCLI(args.slice(1))
@@ -271,7 +271,7 @@ async function main() {
     return
   }
 
-  // ── Session selection → env signalling for getOrCreateSessionId ──
+  // ?? Session selection ? env signalling for getOrCreateSessionId ??
   // Resolve BEFORE the TTY gate so ambiguous/not-found errors are clear even in
   // a pipe; the env is still set before bootstrap reads it via getOrCreateSessionId.
   if (wantNewSession) {
@@ -279,12 +279,12 @@ async function main() {
   } else if (requestedResumeId) {
     const resolved = SessionPersist.resolveSessionId(process.cwd(), requestedResumeId)
     if (!resolved) {
-      process.stderr.write(`未找到匹配会话: "${requestedResumeId}"。用 rivet --list 查看会话列表。\n`)
+      process.stderr.write(`???????: "${requestedResumeId}"?? rivet --list ???????\n`)
       process.exit(1)
     }
     if ('ambiguous' in resolved) {
       process.stderr.write(
-        `会话前缀 "${requestedResumeId}" 匹配到多个会话,请用更长前缀:\n` +
+        `???? "${requestedResumeId}" ???????,??????:\n` +
         resolved.ambiguous.map(id => `  ${id.slice(0, 12)}`).join('\n') + '\n',
       )
       process.exit(1)
@@ -293,11 +293,11 @@ async function main() {
   } else if (wantContinue) {
     process.env.RIVET_RESUME = '1'
   }
-  // 裸 --resume / -r（wantSessionPicker）：不设 env——先开新会话，TUI 启动后
-  // 自动打开 Chronicle 选择器让用户挑（对齐 Claude Code 裸 -r 行为）。
+  // ? --resume / -r?wantSessionPicker???? env????????TUI ???
+  // ???? Chronicle ?????????? Claude Code ? -r ????
 
   // rivet -p "prompt" / rivet --print "prompt" [--json] [--stream-json]
-  // rivet --goal "task" [--budget N] [--json] [--stream-json] — headless goal autonomy
+  // rivet --goal "task" [--budget N] [--json] [--stream-json] ? headless goal autonomy
   const isHeadless = args.includes('-p') || args.includes('--print') || args.includes('--goal')
 
   if (isHeadless) {
@@ -342,8 +342,8 @@ async function main() {
       desktopTools: cfg.agent.desktopTools,
       computerUse: (process.platform === 'darwin' || process.platform === 'win32') && process.env.RIVET_COMPUTER_USE !== '0',
       proEnabled: isProFeatureEnabled(cfg, 'computerUse'),
-      // 透传 network.{proxy,noProxy}：headless 模式 web_search 也需走代理，
-      // 与 web_fetch 对齐（详见 bootstrap.ts 同名调用注释）。
+      // ?? network.{proxy,noProxy}?headless ?? web_search ??????
+      // ? web_fetch ????? bootstrap.ts ????????
       searchBackends: buildSearchBackends(cfg, {
         proxy: {
           ...(cfg.network.proxy ? { proxyUrl: cfg.network.proxy } : {}),
@@ -352,8 +352,8 @@ async function main() {
       }),
       fetchOptions: buildFetchOptions(cfg),
     }
-    // headless 此前完全忽略 --model/--provider（只有 TUI 路径经
-    // bootstrapInteractiveSession 生效）——对齐：显式 flag 优先，缺省走配置默认。
+    // headless ?????? --model/--provider??? TUI ???
+    // bootstrapInteractiveSession ?????????? flag ???????????
     const provName = requestedProvider ?? cfg.provider.default
     const prov = cfg.provider.providers[provName]
     if (!prov) { process.stderr.write(`Provider not configured: ${provName}. Run: rivet config setup <provider>\n`); process.exit(1) }
@@ -367,9 +367,9 @@ async function main() {
 
     // --budget N (default 100) is the hard turn cap for goal mode; it doubles as
     // the GoalTracker iteration budget so the two limits coincide. Non-goal -p
-    // runs keep the original tight 15-turn cap — benchmark/eval harnesses can
-    // raise it via RIVET_HEADLESS_MAX_TURNS (JobBench 多文档任务实证 15 轮不够：
-    // agent 分析到一半被掐断，交付物残缺但进程仍以 success:false 退出)。
+    // runs keep the original tight 15-turn cap ? benchmark/eval harnesses can
+    // raise it via RIVET_HEADLESS_MAX_TURNS (JobBench ??????? 15 ????
+    // agent ??????????????????? success:false ??)?
     const goalBudget = parsed.budget ?? 100
     const headlessMaxTurns = parsed.goal
       ? goalBudget
@@ -377,10 +377,10 @@ async function main() {
     // Tracker is created inside createAgent (attached to the agent) but referenced
     // here so we can read achievement state after the run completes. A ref object
     // (not a bare let) is used so the opaque runHeadless() call invalidates CFA
-    // narrowing — a closure-only assignment would otherwise keep it typed as null.
+    // narrowing ? a closure-only assignment would otherwise keep it typed as null.
     const goalTrackerRef: { current: GoalTrackerInstance | null } = { current: null }
 
-    // Load plugins (async, before creating agent — cache discipline: only at session start).
+    // Load plugins (async, before creating agent ? cache discipline: only at session start).
     // Use a pre-filled registry so conflict detection runs against the real built-in tool set,
     // not an empty set. (Wave 1 regression: empty PluginRegistry let every plugin pass.)
     const pluginRegistry = createDefaultToolRegistry([], registryOptions)
@@ -410,10 +410,10 @@ async function main() {
           toolRegistry.remove(name)
         }
 
-        // B1 deliver_task: headless 模式下也需要交付门禁工具。
-        // 无 DelegationCoordinator，reviewDeps 不可用（deliver_task 内部降级处理）。
+        // B1 deliver_task: headless ?????????????
+        // ? DelegationCoordinator?reviewDeps ????deliver_task ????????
         const b1TaskLedger = createTaskLedger({ taskId: sessionId })
-        // headless 无 pre-existing dirty 概念 — 用空基线
+        // headless ? pre-existing dirty ?? ? ????
         const b1Baseline = createWorktreeBaseline({
           branch: '', head: '', preExistingDirty: [], preExistingUntracked: [], capturedAt: Date.now(),
         })
@@ -427,7 +427,7 @@ async function main() {
           ownership: b1Ownership,
           attribution: b1Attribution,
         })
-        // W1 回归防线: agent 在工具注册后才创建，经 mutable ref 延迟接线
+        // W1 ????: agent ??????????? mutable ref ????
         const headlessAgentRef: { current: import('./agent/loop.js').AgentLoop | null } = { current: null }
         toolRegistry.register(createDeliverTaskTool(() => ({
           taskLedger: b1TaskLedger,
@@ -437,10 +437,10 @@ async function main() {
           isGoalAchieved: () => goalTrackerRef.current?.isGoalAchieved() ?? false,
           getLastVerdict: () => goalTrackerRef.current?.getLastVerdict() ?? null,
           getImpactedTests: () => headlessAgentRef.current ? [...headlessAgentRef.current.getEvidenceState().impactedTests] : [],
-          // 收编 #2：冗余义务门禁消费（headless 生产注入）
+          // ?? #2??????????headless ?????
           getObligationStore: () => headlessAgentRef.current?.obligations.getStore()
             ?? { obligations: [] },
-          // 证据防火墙 Phase 2：claim tracker（headless 生产注入；hook 未装配时 fail-open）
+          // ????? Phase 2?claim tracker?headless ?????hook ???? fail-open?
           getClaimTracker: () => headlessAgentRef.current?.externalClaimTracker?.(),
           scoutFirewallConfig: cfg.agent.scoutEvidenceFirewall,
         })))
@@ -451,12 +451,12 @@ async function main() {
           ))
         }
 
-        // Headless DelegationCoordinator — 此前只在 --goal 模式创建（供 goal
-        // judge），-p 模式没有任何编排工具可用。常驻创建并注册 galaxy：
-        // headless 冒烟/benchmark 需要真实的星河扇出（worker 侧缓存指标经
-        // worker cache-log.jsonl 落盘，是预热收益的量化来源）。
-        // 注意：必须在 createAgentConfig（取 toolDefinitions）之前注册，
-        // 否则模型看不到工具定义——registry 有但 prompt 里没有，工具"不在线"。
+        // Headless DelegationCoordinator ? ???? --goal ?????? goal
+        // judge??-p ???????????????????? galaxy?
+        // headless ??/benchmark ??????????worker ??????
+        // worker cache-log.jsonl ???????????????
+        // ?????? createAgentConfig?? toolDefinitions??????
+        // ?????????????registry ?? prompt ??????"???"?
         const headlessCoordinator = createHeadlessCoordinator({
           toolRegistry,
           provider: prov,
@@ -469,16 +469,17 @@ async function main() {
         const headlessGalaxyTool = createGalaxyTool({
           delegateBatch: async (requests, policy, abortSignal, onProgress, onWorkerSettled) =>
             headlessCoordinator.delegateBatch(requests, policy, abortSignal, onProgress, onWorkerSettled),
-          // 路由学习（收编 #5）：headless 无 SharedRuntime，per-session 建库即可。
+          getRuntimeSnapshot: () => headlessCoordinator.getRuntimeSnapshot(),
+          // ??????? #5??headless ? SharedRuntime?per-session ?????
           domainKnowledgeStore: new DomainKnowledgeStore(join(process.cwd(), '.rivet', 'knowledge')),
-          // DP 证据冗余（收编 #2）：agent 创建后由 headlessAgentRef 惰性提供。
+          // DP ??????? #2??agent ???? headlessAgentRef ?????
           get obligationTracker() { return headlessAgentRef.current?.obligations },
         })
         toolRegistry.register(headlessGalaxyTool)
 
-        // starflow — 星流代码级编排（council→team→galaxy 硬门禁状态机）。
-        // headless 不注册 council_convene / team_orchestrate（模型不可见），
-        // 星流按相同 coordinator 包装等价自构三个子工具实例。
+        // starflow ? ????????council?team?galaxy ????????
+        // headless ??? council_convene / team_orchestrate????????
+        // ????? coordinator ??????????????
         toolRegistry.register(createStarflowTool({
           councilTool: createCouncilConveneTool({
             delegateBatch: async (requests, policy, abortSignal, onProgress) =>
@@ -522,13 +523,13 @@ async function main() {
           // Side-path criteria extraction for the completion judge. Async + fail-open:
           // criteria default to a generic template. With the headless coordinator
           // wired, the judge actually runs; without it, it degrades to inconclusive.
-          // （coordinator 已在上方常驻创建——goal judge 与 galaxy 共用同一实例。）
+          // ?coordinator ??????????goal judge ? galaxy ????????
           if (agent.config.goalJudge?.enabled !== false) {
             // Fail-closed: browser verification requires interactive TUI approval
             // (web_fetch/browser need permission prompts). Headless degrades to
             // web_fetch-only read-only mode; full browser is disabled.
             if (cfg.agent.goal?.judge?.browser === true) {
-              process.stderr.write('[goal] ⚠ goal-judge browser disabled in headless mode — web_fetch read-only only\n')
+              process.stderr.write('[goal] ? goal-judge browser disabled in headless mode ? web_fetch read-only only\n')
             }
 
             const goal = parsed.goal
@@ -551,8 +552,8 @@ async function main() {
                 tracker.setSuccessCriteria(criteria)
                 process.stderr.write(`[goal] judge criteria:\n${criteria.map((c, i) => `  ${i + 1}. ${c}`).join('\n')}\n`)
               } catch {
-                // non-fatal — judge falls back to wide judgment
-                process.stderr.write('[goal] criteria extraction failed — judge will use wide judgment\n')
+                // non-fatal ? judge falls back to wide judgment
+                process.stderr.write('[goal] criteria extraction failed ? judge will use wide judgment\n')
               }
             })()
           }
@@ -572,7 +573,7 @@ async function main() {
     process.exit(exitCode)
   }
 
-  // ── Interactive TUI (requires TTY) ──────────────────────────
+  // ?? Interactive TUI (requires TTY) ??????????????????????????
 
   const forceRecoveryCli = process.env.RIVET_FORCE_RECOVERY_CLI === '1'
 
@@ -581,7 +582,7 @@ async function main() {
     process.exit(1)
   }
 
-  // ── Bootstrap agent runtime ──────────────────────────────────
+  // ?? Bootstrap agent runtime ??????????????????????????????????
   process.stderr.write('[T9] Initializing agent runtime...\n')
   maybePrintStaticPromptCacheWarning()
 
@@ -600,8 +601,8 @@ async function main() {
       process.stderr.write('Running first-time setup wizard...\n\n')
       const { runProviderConfigWizard } = await import('./config/provider-wizard.js')
       const result = await runProviderConfigWizard()
-      // 用户跳过 wizard——降级启动（无 key 进 TUI，发消息时报错指引配 key）。
-      // 与桌面端「先进界面再提醒」体验对齐，不让新用户被困在启动门。
+      // ???? wizard???????? key ? TUI?????????? key??
+      // ??????????????????????????????
       if (result.skipped) {
         process.stderr.write('\nStarting in degraded mode (no API key). Configure via /config or `rivet config setup`.\n\n')
         ctx = await bootstrapInteractiveSession({
@@ -627,40 +628,40 @@ async function main() {
     }
   }
 
-  // ── 主题装载 ──────────────────────────────────────────────────
-  // 1. 注册 ~/.rivet/themes/*.json 自定义主题（custom:<name> 引用）
-  // 2. 解析配置值：'auto' → OSC 11 背景检测（500ms 超时，COLORFGBG 兜底）
-  //    → cobalt(dark)/paper(light)；未配置时保持向后兼容的 tianshu。
-  // 3. setTheme 对未知名（如自定义主题文件被删）no-op，落到 tianshu 兜底。
+  // ?? ???? ??????????????????????????????????????????????????
+  // 1. ?? ~/.rivet/themes/*.json ??????custom:<name> ???
+  // 2. ??????'auto' ? OSC 11 ?????500ms ???COLORFGBG ???
+  //    ? cobalt(dark)/paper(light)???????????? tianshu?
+  // 3. setTheme ????????????????no-op??? tianshu ???
   loadCustomThemes()
   const configuredTheme = ctx.config.ui?.theme ?? 'tianshu'
   let themeName: string = configuredTheme
   if (configuredTheme === 'auto') {
-    // 必须在 TUI 接管 stdin 前查询——此处 raw-mode 探测后即恢复。
+    // ??? TUI ?? stdin ??????? raw-mode ???????
     const detected = await detectTerminalBackground()
     themeName = autoThemeFor(detected)
     if (process.env['RIVET_DEBUG']) {
-      process.stderr.write(`[T9] Theme auto-detect: ${detected} background → ${themeName}\n`)
+      process.stderr.write(`[T9] Theme auto-detect: ${detected} background ? ${themeName}\n`)
     }
   }
   if (!setTheme(themeName)) setTheme('tianshu')
   const theme = getTheme()
 
-  // ── Spinner 词池 / reducedMotion 配置接线 ─────────────────────
+  // ?? Spinner ?? / reducedMotion ???? ?????????????????????
   if (ctx.config.ui?.spinnerVerbs?.length) {
     configureSpinnerVerbs(ctx.config.ui.spinnerVerbs, ctx.config.ui.spinnerVerbsMode ?? 'replace')
   }
   if (ctx.config.ui?.reducedMotion) setReducedMotion(true)
 
-  // 读屏档是 reducedMotion 的超集：冻结字形还不够，会反复被朗读的是每 120ms
-  // 的重绘本身。CLI 开关优先于配置。
+  // ???? reducedMotion ????????????????????? 120ms
+  // ??????CLI ????????
   screenReaderMode = wantScreenReader || ctx.config.ui?.screenReader === true
   if (screenReaderMode) {
     setReducedMotion(true)
     app?.setScreenReader(true)
   }
 
-  // Provider/Model/Session 已在欢迎屏头部展示，常规启动不再重复打印。
+  // Provider/Model/Session ?????????????????????
   if (process.env['RIVET_DEBUG']) {
     process.stderr.write(`[T9] Provider: ${ctx.provider.name}, Model: ${ctx.config.provider.default}\n`)
     process.stderr.write(`[T9] Session: ${ctx.sessionId.slice(0, 8)}...\n`)
@@ -669,9 +670,9 @@ async function main() {
   // Store heartbeat for shutdown cleanup
   heartbeatInterval = ctx.heartbeatInterval
 
-  // ── Advisory status 通道点亮（dark cockpit 单感官通道）──────────
-  // status 条目不进 prompt、不占 Top-N 预算,只落环形缓冲进 cockpit
-  // advisory 面板。未设 sink 的路径(server/desktop)保持 bus 回退。
+  // ?? Advisory status ?????dark cockpit ????????????????
+  // status ???? prompt??? Top-N ??,??????? cockpit
+  // advisory ????? sink ???(server/desktop)?? bus ???
   ctx.agent.advisoryBus.setStatusSink(entries => {
     for (const e of entries) {
       advisoryStatusNotices.push(e.content)
@@ -681,7 +682,7 @@ async function main() {
     }
   })
 
-  // ── Recovery CLI fallback ────────────────────────────────────
+  // ?? Recovery CLI fallback ????????????????????????????????????
   if (forceRecoveryCli) {
     const { runRecoveryCli } = await import('./recovery-cli.js')
     await runRecoveryCli(ctx)
@@ -689,18 +690,18 @@ async function main() {
     return
   }
 
-  // ── Build TuiApp ─────────────────────────────────────────────
+  // ?? Build TuiApp ?????????????????????????????????????????????
   const currentModel = ctx.provider.models[0]
   const modelName = currentModel?.alias ?? currentModel?.id ?? 'unknown'
 
-  // git branch（启动时读取一次，GlanceBar 显示）
+  // git branch?????????GlanceBar ???
   let gitBranch: string | undefined
   try {
     gitBranch = execSync('git rev-parse --abbrev-ref HEAD', {
       cwd: process.cwd(),
       stdio: ['ignore', 'pipe', 'ignore'],
     }).toString().trim() || undefined
-  } catch { /* 非 git 目录 */ }
+  } catch { /* ? git ?? */ }
 
   app = new TuiApp({
     stdout,
@@ -711,7 +712,7 @@ async function main() {
     history: loadHistory(),
     contextWindow: currentModel?.contextWindow,
     gitBranch,
-    // 审批时判定工作区外路径，显示「批准并记住此目录」选项。
+    // ???????????????????????????
     cwd: ctx.cwd,
     perfMonitor: new TuiPerfMonitor({ enabled: isTuiPerfEnabled(args) }),
     onPerfSummary: summary => {
@@ -720,10 +721,10 @@ async function main() {
   })
 
   // Register overlays with real data
-  // app 在此处必定非 null（前有 app = new TuiApp 赋值，无重赋 null 路径）
+  // app ?????? null??? app = new TuiApp ?????? null ???
   const tuiApp = app!
   tuiApp.setApprovalMode(ctx!.config.agent.approval ?? 'auto-safe')
-  // 审批提示的 Ctrl+E 风险解释：侧路请求，只在按键时才发。
+  // ????? Ctrl+E ??????????????????
   tuiApp.setRiskExplainer(async (toolName, input) => explainToolRisk({
     client: ctx?.agent.config.client,
     promptEngine: ctx!.agent.config.promptEngine,
@@ -731,7 +732,7 @@ async function main() {
     contextWindow: ctx!.agent.config.contextWindow,
     recordUsage: (usage, model) => ctx?.agent.recordSidePathUsage('risk-explain', usage, model),
   }, { toolName, input }))
-  // `/btw` 侧问：同一条侧路纪律，流式回填浮层。
+  // `/btw` ??????????????????
   tuiApp.setSideQuestionAsker(async (question, onDelta) => askSideQuestion({
     client: ctx?.agent.config.client,
     promptEngine: ctx!.agent.config.promptEngine,
@@ -739,29 +740,29 @@ async function main() {
     contextWindow: ctx!.agent.config.contextWindow,
     recordUsage: (usage, model) => ctx?.agent.recordSidePathUsage('side-question', usage, model),
   }, { question, onDelta }))
-  // Plan submit 成功后自动弹出审批面板（替代手动 /plan-approve）。
+  // Plan submit ???????????????? /plan-approve??
   ctx!.agent.onPlanApprovalRequested = (info) => {
-    // 工具执行期间直接推 overlay 可能与 turn 收尾渲染冲突，defer 到下一事件循环。
-    // 预览摘要在开面板时一次性读取（避免渲染路径每帧读盘；修订重提同 slug 也能取到新内容）。
+    // ????????? overlay ??? turn ???????defer ????????
+    // ??????????????????????????????? slug ?????????
     setImmediate(() => tuiApp.openPlanApprovalPanel(info, planExcerptFor(info.slug)))
-    // Goal 模式倒计时自动批准（2026-07-24，与 sidecar 同语义同 env）：
-    // goal 激活 + 窗口开启才武装；非 goal 会话保持纯手动审批。
+    // Goal ??????????2026-07-24?? sidecar ???? env??
+    // goal ?? + ????????? goal ??????????
     const delayMs = resolveAutoApproveMs()
     if (shouldArm(ctx!.refs.goalTrackerRef.current?.isActive() === true, delayMs)) {
       tuiApp.armPlanAutoApprove(info.slug, delayMs)
     }
   }
-  // 倒计时触发守卫：idle（非运行中）+ goal 仍激活 + 计划仍 submitted。
+  // ????????idle??????+ goal ??? + ??? submitted?
   tuiApp.planAutoApproveGuardsProvider = () => ({
     idle: !tuiApp.isAgentBusy,
     goalActive: ctx!.refs.goalTrackerRef.current?.isActive() === true,
     planStillSubmitted: listPlansSync(ctx!.agent.cwd).find(p => p.slug === tuiApp.planAutoApproveSlug)?.status === 'submitted',
   })
-  // 倒计时到期 → 自动批准并执行（默认方案：Recommended 否则首个，与面板 approve 同逻辑）。
+  // ????? ? ?????????????Recommended ???????? approve ?????
   tuiApp.onPlanAutoApproveFire = (slug) => {
     const plan = listPlansSync(ctx!.agent.cwd).find(p => p.slug === slug)
     const option = plan?.options?.find(o => o.label.includes('Recommended')) ?? plan?.options?.[0]
-    tuiApp.commitStatic(`⏳ Goal 模式：倒计时结束，自动批准计划「${plan?.title ?? slug}」并执行`)
+    tuiApp.commitStatic(`? Goal ????????????????${plan?.title ?? slug}????`)
     void approvePlanAndKickoff(
       {
         cwd: ctx!.agent.cwd,
@@ -773,7 +774,7 @@ async function main() {
       option?.label,
     )
   }
-  // ask_user_question 含单选选项时自动弹出选择面板（替代手动输入编号）。
+  // ask_user_question ?????????????????????????
   ctx!.agent.onAskUserQuestionRequested = (info) => {
     setImmediate(() => tuiApp.openAskUserQuestionPanel(info))
   }
@@ -782,10 +783,10 @@ async function main() {
     tuiApp.setSessionStarDomain(initialDomain)
   }
   tuiApp.setDomainSyncProvider(() => ctx!.agent.getSessionDomain()?.name ?? undefined)
-  // 实时思考强度：优先 agent 当前生效 effort（auto-reasoning 动态调整），回退 config floor。
+  // ????????? agent ???? effort?auto-reasoning ???????? config floor?
   tuiApp.setReasoningEffortProvider(() => ctx!.agent.getReasoningEffort() ?? ctx!.agent.config.reasoningEffort)
 
-  // ── GlanceBar 密度默认档 + 可脚本化 statusline 接线 ─────────────
+  // ?? GlanceBar ????? + ???? statusline ?? ?????????????
   if (ctx!.config.ui?.glanceDensity) tuiApp.glanceDensity = ctx!.config.ui.glanceDensity
   let statusLineTimer: ReturnType<typeof setInterval> | null = null
   if (ctx!.config.ui?.statusLine?.command) {
@@ -809,7 +810,7 @@ async function main() {
     statusLineTimer.unref?.()
   }
 
-  // ── 会话级 UI 状态恢复（side panel / todo）─────────────────────
+  // ?? ??? UI ?????side panel / todo??????????????????????
   const initialMeta = ctx!.persist.loadMetadata()
   if (initialMeta?.sidePanelOpen) {
     tuiApp.setSidePanelOpen(true)
@@ -821,9 +822,9 @@ async function main() {
     ctx!.persist.updateMetadata({ sidePanelOpen: open })
   })
 
-  // ── /cache 面板数据源 ─────────────────────────────────────────
-  // 本会话实时口径与 GlanceBar 同源（getTotalUsage + getRecentTurnHitRate），
-  // 历史走跨会话聚合器，官方账单走共享凭证降级链。三者都在 source 内做 TTL 缓存。
+  // ?? /cache ????? ?????????????????????????????????????????
+  // ???????? GlanceBar ???getTotalUsage + getRecentTurnHitRate??
+  // ??????????????????????????? source ?? TTL ???
   const cachePanelSource = new CachePanelSource({
     sessionsRoot: () => sessionsDir(ctx!.cwd),
     resolvePricing: model => findModelPricing(
@@ -862,14 +863,14 @@ async function main() {
     onUpdate: () => { tuiApp.refreshOverlay('cache') },
   })
 
-  // 命令面板的过滤列表：display 与 paletteExec 必须共用同一份（含实时 query 过滤 + 排序），
-  // 否则选中索引会错位（Enter 执行到错误命令）。
+  // ??????????display ? paletteExec ??????????? query ?? + ????
+  // ??????????Enter ?????????
   const filteredPaletteCommands = (): PaletteCommand[] => {
     const base = getPaletteCommands().filter(c => c.name.startsWith('/') || c.name.startsWith('__surface:'))
     return filterCommands(base, tuiApp.getOverlayQuery())
   }
-  // 待批计划(submitted)映射为 plan-picker 条目。同步读盘,供渲染 provider 与
-  // Shift+Tab 触发判定共用。多方案计划附上方案标签。
+  // ????(submitted)??? plan-picker ???????,??? provider ?
+  // Shift+Tab ???????????????????
   const pendingPlanPickerEntries = (): PlanPickerEntry[] => {
     try {
       return listPlansSync(ctx!.agent.cwd)
@@ -885,14 +886,14 @@ async function main() {
       return []
     }
   }
-  // 审批卡片的计划正文预览：剥 frontmatter 与 Status/Model 留痕行后取前 6 行
-  // 非空行（截 76 列）。读不到计划（已删/盘外）返回 undefined，面板退化为纯标题。
+  // ????????????? frontmatter ? Status/Model ?????? 6 ?
+  // ????? 76 ???????????/????? undefined??????????
   const planExcerptFor = (slug: string): string | undefined => {
     try {
       const doc = listPlansSync(ctx!.agent.cwd).find(p => p.slug === slug)
       if (!doc) return undefined
       const rawLines = doc.content.split('\n')
-      // 仅剥开头一处 frontmatter（--- ... ---），正文中的 --- 分隔线保留。
+      // ?????? frontmatter?--- ... ---?????? --- ??????
       let start = 0
       if (rawLines[0]?.trim() === '---') {
         const close = rawLines.findIndex((l, i) => i > 0 && l.trim() === '---')
@@ -903,7 +904,7 @@ async function main() {
         const t = raw.trim()
         if (!t) continue
         if (t.startsWith('> **Status:') || t.startsWith('> **Model:')) continue
-        out.push(t.length > 76 ? `${t.slice(0, 75)}…` : t)
+        out.push(t.length > 76 ? `${t.slice(0, 75)}?` : t)
         if (out.length >= 6) break
       }
       return out.length > 0 ? out.join('\n') : undefined
@@ -912,9 +913,9 @@ async function main() {
     }
   }
   tuiApp.registerOverlays({
-    // Pager — scrollback 内容 或 当前选中 worker 的 detail（用于 /tasks Enter）
+    // Pager ? scrollback ?? ? ???? worker ? detail??? /tasks Enter?
     pagerContent: () => {
-      // Job 日志（/jobs Enter）— 优先于 worker detail
+      // Job ???/jobs Enter?? ??? worker detail
       const jobId = tuiApp.getJobDetailId()
       if (jobId) {
         const text = tuiApp.getJobDetailView(jobId)
@@ -922,7 +923,7 @@ async function main() {
           return {
             content: text,
             page: 0,
-            title: `后台任务日志: ${jobId}`,
+            title: `??????: ${jobId}`,
             messages: parseScrollbackTranscript(text),
           }
         }
@@ -938,7 +939,7 @@ async function main() {
           messages,
         }
       }
-      // verbose 层（`v` 切换）：从会话真实历史重建含完整工具输出的转录
+      // verbose ??`v` ???????????????????????
       if (tuiApp.isPagerVerbose()) {
         const verbose = buildVerboseTranscript(ctx!.session.getMessages())
         return {
@@ -975,7 +976,7 @@ async function main() {
         milestones,
       }
     },
-    // Command palette — 实时 query 过滤（与 paletteExec 共用 filteredPaletteCommands）
+    // Command palette ? ?? query ???? paletteExec ?? filteredPaletteCommands?
     paletteCommands: () => {
       const cmds = filteredPaletteCommands()
       return {
@@ -984,7 +985,7 @@ async function main() {
         searchText: tuiApp.getOverlayQuery() || undefined,
       }
     },
-    // Cockpit — 运行时仪表盘
+    // Cockpit ? ??????
     cockpitSnapshot: () => {
       if (!ctx) return undefined as any
       const metrics = tuiApp.getMetrics()
@@ -998,7 +999,7 @@ async function main() {
         advisoryStatusNotices,
       })
     },
-    // Rewind — 最近用户消息（携带真实 messageIndex 作为回溯边界）
+    // Rewind ? ??????????? messageIndex ???????
     rewindEntries: () => {
       const messages = ctx?.session.getMessages() ?? []
       const all: { index: number; messageIndex: number; content: string }[] = []
@@ -1011,9 +1012,9 @@ async function main() {
       })
       return { entries: all.slice(-30), selectedIndex: 0 }
     },
-    // Rewind phase 2 — 摘要动作的缓存代价是否值得标注（非前缀缓存 provider 不标）
+    // Rewind phase 2 ? ????????????????????? provider ???
     rewindCachePreserving: () => ctx?.agent.compaction.isCachePreservingProvider() ?? false,
-    // Rewind phase 2 — 精确到选中消息的代码回滚会影响哪些文件
+    // Rewind phase 2 ? ???????????????????
     rewindFilePreview: (messageIndex: number) => {
       const fh = ctx?.agent.getFileHistory()
       if (!fh) return []
@@ -1023,7 +1024,7 @@ async function main() {
     // Chronicle
     chronicleEntries: () => {
       try {
-        // listMainSessions 已读 meta 并按 updatedAt 排序,与 /resume 序号同源。
+        // listMainSessions ?? meta ?? updatedAt ??,? /resume ?????
         const sessions = SessionPersist.listMainSessions(process.cwd()).slice(0, 20)
         const entries = sessions.map((s, i) => {
           const title = (s.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
@@ -1032,7 +1033,7 @@ async function main() {
           return {
             index: i + 1,
             time: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : '',
-            summary: `${s.id.slice(0, 8)}  ${turns}轮 ${model}${title ? '  ' + title : ''}`,
+            summary: `${s.id.slice(0, 8)}  ${turns}? ${model}${title ? '  ' + title : ''}`,
             current: s.id === ctx!.sessionId,
             id: s.id,
           }
@@ -1042,7 +1043,7 @@ async function main() {
         return { entries: [] }
       }
     },
-    // History search — Ctrl+R 反向搜索（searchHistory 评分排序：前缀 +10 / 词命中 +5）
+    // History search ? Ctrl+R ?????searchHistory ??????? +10 / ??? +5?
     historySearchData: () => {
       const query = tuiApp.getOverlayQuery()
       const all = loadHistory()
@@ -1053,13 +1054,13 @@ async function main() {
         query,
       }
     },
-    // Tasks — /tasks 显示子代理（per-worker，来自舰队读模型；filter 由 overlay nav 决定）
+    // Tasks ? /tasks ??????per-worker?????????filter ? overlay nav ???
     tasksData: () => tuiApp.getTasksData(),
-    // Jobs — /jobs 显示后台 shell 任务（来自 TUI job 读模型）
+    // Jobs ? /jobs ???? shell ????? TUI job ????
     jobsData: () => tuiApp.getJobsData(),
-    // Cache — /cache DeepSeek 缓存面板（period 由 overlay nav 注入）
+    // Cache ? /cache DeepSeek ?????period ? overlay nav ???
     cachePanelData: () => cachePanelSource.data(),
-    // Domain Picker — 裸 /domain 打开的 CC 风星域选择器（entries 由共享 builder 构造）
+    // Domain Picker ? ? /domain ??? CC ???????entries ??? builder ???
     domainPickerData: () => ({
       entries: buildDomainPickerEntries(ctx!.agent.getSessionDomain()),
       selectedIndex: 0,
@@ -1086,8 +1087,8 @@ async function main() {
     themePickerData: () => {
       const currentTheme = getActiveThemeName()
       const defaultTheme = ctx?.config.ui?.theme
-      // 内置主题 + ~/.rivet/themes/*.json 自定义主题（custom: 前缀）。
-      // 描述从主题元数据取（theme-palettes.ts 单一事实来源）。
+      // ???? + ~/.rivet/themes/*.json ??????custom: ????
+      // ??????????theme-palettes.ts ????????
       const builtins = (Object.keys(THEMES) as ThemeName[]).map(t => ({
         name: t as string,
         current: t === currentTheme,
@@ -1108,85 +1109,85 @@ async function main() {
         selectedIndex: 0,
       }
     },
-    // Effort / Permission 选择面板——/effort 或 /permission 无参数时弹出，上下选择 + 回车确认。
+    // Effort / Permission ??????/effort ? /permission ??????????? + ?????
     choicePanelData: () => {
       if (tuiApp.choicePanelKind === 'permission') {
         const current = ctx?.agent.config.approvalMode ?? 'auto-safe'
         const entries = [
-          { id: 'manual', label: 'Manual', description: '每个高风险工具都弹确认。最大控制，适合敏感项目。', current: current === 'manual' },
-          { id: 'auto-safe', label: 'Auto', description: '低/无风险工具自动执行，高风险仍需确认。可配每 N 轮暂停检查点。', current: current === 'auto-safe', recommended: true },
-          { id: 'dangerously-skip-permissions', label: 'YOLO', description: '全自动执行，无审批打扰；写边界仍在（沙箱自动开启），仅工作区外写会询问。回滚兜底（/rollback + git 检查点）。需二次确认。', current: current === 'dangerously-skip-permissions' },
+          { id: 'manual', label: 'Manual', description: '????????????????????????', current: current === 'manual' },
+          { id: 'auto-safe', label: 'Auto', description: '?/????????????????????? N ???????', current: current === 'auto-safe', recommended: true },
+          { id: 'dangerously-skip-permissions', label: 'YOLO', description: '?????????????????????????????????????????/rollback + git ???????????', current: current === 'dangerously-skip-permissions' },
         ]
-        return { title: '权限模式 / Permission', choices: entries, selectedIndex: Math.max(0, entries.findIndex(e => e.current)) }
+        return { title: '???? / Permission', choices: entries, selectedIndex: Math.max(0, entries.findIndex(e => e.current)) }
       }
       if (tuiApp.choicePanelKind === 'permission-yolo-confirm') {
         const entries = [
-          { id: 'cancel', label: '取消', description: '保持当前权限模式不变。', current: true },
-          { id: 'confirm-yolo', label: '⚠ 确认进入 YOLO', description: '无轮次刹车 · 无进度播报 · 所有工具直接执行（沙箱仍拦项目外写入）。回滚兜底：/rollback + git 检查点。也可直接输入 /yes。设为默认后重启仍是 YOLO。' },
+          { id: 'cancel', label: '??', description: '???????????', current: true },
+          { id: 'confirm-yolo', label: '? ???? YOLO', description: '????? ? ????? ? ?????????????????????????/rollback + git ?????????? /yes?????????? YOLO?' },
         ]
-        return { title: '确认 YOLO 模式 / Confirm YOLO', choices: entries, selectedIndex: 0 }
+        return { title: '?? YOLO ?? / Confirm YOLO', choices: entries, selectedIndex: 0 }
       }
       if (tuiApp.choicePanelKind === 'plan-approval') {
         const info = tuiApp.pendingPlanApproval
-        const title = info?.title ?? '待审批计划'
-        // 标题区附计划正文预览（开面板时提取，剥掉 frontmatter/留痕行的前 6 行）。
+        const title = info?.title ?? '?????'
+        // ???????????????????? frontmatter/????? 6 ???
         const excerpt = tuiApp.planApprovalExcerpt
-        // Goal 倒计时行：每次渲染重算剩余秒（armed 时 1s tick 驱动重绘）。
+        // Goal ???????????????armed ? 1s tick ??????
         const countdown = tuiApp.planAutoApproveRemainSec
         const countdownLine = countdown !== undefined
-          ? `\n⏳ Goal 模式：${countdown}s 后自动批准（批准/驳回即取消；Esc 收起不取消）`
+          ? `\n? Goal ???${countdown}s ????????/??????Esc ??????`
           : ''
         const fullTitle = excerpt
-          ? `计划审批 / Plan Approval\n「${title}」${countdownLine}\n──\n${excerpt}`
-          : `计划审批 / Plan Approval\n「${title}」${countdownLine}`
+          ? `???? / Plan Approval\n?${title}?${countdownLine}\n??\n${excerpt}`
+          : `???? / Plan Approval\n?${title}?${countdownLine}`
         const entries = []
         const options = info?.options ?? []
         if (options.length > 1) {
-          // 多方案计划：每个方案一个「批准并执行」条目，Recommended 带 ★ 并预定位光标。
+          // ??????????????????????Recommended ? ? ???????
           for (const [i, o] of options.entries()) {
             const recommended = /recommended/i.test(o.label)
-            const cleanLabel = o.label.replace(/\s*[(（]?\s*recommended\s*[)）]?/i, '').trim()
+            const cleanLabel = o.label.replace(/\s*[(?]?\s*recommended\s*[)?]?/i, '').trim()
             entries.push({
               id: `approve:${i}`,
-              label: `批准并执行 — ${cleanLabel}`,
-              description: o.description || `以方案「${cleanLabel}」执行计划`,
+              label: `????? ? ${cleanLabel}`,
+              description: o.description || `????${cleanLabel}?????`,
               recommended,
             })
           }
         } else {
-          entries.push({ id: 'approve', label: '批准并执行', description: `执行计划「${title}」`, recommended: true })
+          entries.push({ id: 'approve', label: '?????', description: `?????${title}?`, recommended: true })
         }
         entries.push(
-          { id: 'reject', label: '驳回修订', description: '标记为 REJECTED，agent 可继续修改' },
-          { id: 'reject-exit', label: '驳回并退出计划模式', description: '驳回计划并退出 plan mode' },
-          { id: '__reject_comment__', label: '驳回并填写反馈…', description: '输入反馈后驳回，agent 可继续修订' },
+          { id: 'reject', label: '????', description: '??? REJECTED?agent ?????' },
+          { id: 'reject-exit', label: '?????????', description: '??????? plan mode' },
+          { id: '__reject_comment__', label: '????????', description: '????????agent ?????' },
         )
         const recommendedIndex = Math.max(0, entries.findIndex(e => e.recommended))
         return { title: fullTitle, choices: entries, selectedIndex: recommendedIndex, inputSubMode: tuiApp.getChoicePanelInputState() }
       }
       if (tuiApp.choicePanelKind === 'ask-user-question') {
-        // ask 面板走 app.ts 的 Tab 化专用渲染器（buildAskPanelData），
-        // 不经过通用 choicePanelData 管线——这里是不可达的兜底。
+        // ask ??? app.ts ? Tab ???????buildAskPanelData??
+        // ????? choicePanelData ??????????????
         return { title: '', choices: [], selectedIndex: 0 }
       }
       const current = ctx?.agent.getReasoningEffort() ?? ctx?.agent.config.reasoningEffort ?? 'high'
       const isAuto = ctx?.agent.config.autoReasoning && !ctx?.agent.userReasoningOverride
       const entries: Array<{ id: string; label: string; description: string; recommended?: boolean; current?: boolean }> = [
-        { id: 'auto', label: 'Auto', description: '按任务复杂度自动选档（架构/安全/根因→max，重构/调试→high，查看→low）', recommended: isAuto, current: isAuto },
-        { id: 'max', label: 'Max', description: '完整推理链。最深度思考，适合架构设计、安全审查、根因排查', current: !isAuto && current === 'max' },
-        { id: 'high', label: 'High', description: '认真推理。复杂重构、bug 修复、功能实现', current: !isAuto && current === 'high' },
-        { id: 'medium', label: 'Medium', description: '标准编码。常规改动、添加测试', current: !isAuto && current === 'medium' },
-        { id: 'low', label: 'Low', description: '轻量推理。简单查询、读取文件', current: !isAuto && current === 'low' },
-        { id: 'off', label: 'Off', description: '关闭思考。最快响应，纯执行', current: !isAuto && current === 'off' },
+        { id: 'auto', label: 'Auto', description: '?????????????/??/???max???/???high????low?', recommended: isAuto, current: isAuto },
+        { id: 'max', label: 'Max', description: '????????????????????????????', current: !isAuto && current === 'max' },
+        { id: 'high', label: 'High', description: '??????????bug ???????', current: !isAuto && current === 'high' },
+        { id: 'medium', label: 'Medium', description: '??????????????', current: !isAuto && current === 'medium' },
+        { id: 'low', label: 'Low', description: '??????????????', current: !isAuto && current === 'low' },
+        { id: 'off', label: 'Off', description: '?????????????', current: !isAuto && current === 'off' },
       ]
-      return { title: '推理强度 / Reasoning Effort', choices: entries, selectedIndex: Math.max(0, entries.findIndex(e => e.current)) }
+      return { title: '???? / Reasoning Effort', choices: entries, selectedIndex: Math.max(0, entries.findIndex(e => e.current)) }
     },
-    // Plan Picker — /plan-approve 无参打开的待批计划选择器。
-    // 同步读盘（渲染路径不能 await），只列出等待批准的 submitted 计划。
+    // Plan Picker ? /plan-approve ?????????????
+    // ??????????? await?????????? submitted ???
     planPickerData: () => ({ entries: pendingPlanPickerEntries(), selectedIndex: 0 }),
   }, /* paletteExec: */ (index: number) => {
-    // Command palette Enter 回调：执行选中命令。
-    // 必须用与 display 相同的过滤后列表，否则 query 过滤时索引错位。
+    // Command palette Enter ??????????
+    // ???? display ??????????? query ????????
     const cmds = filteredPaletteCommands()
     const name = cmds[index]?.name
     if (!name) return
@@ -1211,27 +1212,27 @@ async function main() {
       }
     }
   }, /* rewindExec: */ (messageIndex: number, mode: RewindMode) => {
-    // Rewind Enter 回调：按选择的粒度恢复（仅对话 / 仅代码 / 对话+代码），
-    // 或对选定区段做定点摘要（/compact 压全部，这里只压用户圈定的一段）。
+    // Rewind Enter ??????????????? / ??? / ??+????
+    // ????????????/compact ?????????????????
     const messages = ctx?.session.getMessages() ?? []
     const target = messages[messageIndex]
     const content = target && typeof target.content === 'string' ? target.content : ''
 
     if (mode === 'summarize-from' || mode === 'summarize-to') {
       const scope = mode === 'summarize-from' ? 'from' : 'to'
-      tuiApp.commitStatic(`⏳ 正在摘要${scope === 'from' ? '此消息之后' : '此消息之前'}的对话…`)
+      tuiApp.commitStatic(`? ????${scope === 'from' ? '?????' : '?????'}????`)
       void ctx?.agent.compaction.summarizeRange({ scope, messageIndex }).then(
         result => {
           if (!result.ok) {
-            tuiApp.commitStatic(`摘要失败：${result.reason}`, { isError: true })
+            tuiApp.commitStatic(`?????${result.reason}`, { isError: true })
             return
           }
           const saved = result.beforeTokens - result.afterTokens
           tuiApp.commitStatic(
-            `⏪ 已把 ${result.replaced} 条消息压成摘要 — ${result.beforeTokens} → ${result.afterTokens} tokens（省 ${saved}）`,
+            `? ?? ${result.replaced} ??????? ? ${result.beforeTokens} ? ${result.afterTokens} tokens?? ${saved}?`,
           )
         },
-        err => tuiApp.commitStatic(`摘要失败：${(err as Error).message}`, { isError: true }),
+        err => tuiApp.commitStatic(`?????${(err as Error).message}`, { isError: true }),
       )
       return
     }
@@ -1244,45 +1245,45 @@ async function main() {
       if (fh) {
         const ids = collectPostBoundaryEditIds(messages, messageIndex)
         fh.rewindToBoundary(ids).then(
-          changed => tuiApp.commitStatic(`⏪ 已把 ${changed.length} 个文件恢复到此消息${changed.length ? '' : '（无可恢复的编辑）'}`),
-          err => tuiApp.commitStatic(`回滚代码失败：${(err as Error).message}`),
+          changed => tuiApp.commitStatic(`? ?? ${changed.length} ?????????${changed.length ? '' : '?????????'}`),
+          err => tuiApp.commitStatic(`???????${(err as Error).message}`),
         )
       } else {
-        tuiApp.commitStatic('无文件历史，无法恢复代码。')
+        tuiApp.commitStatic('?????????????')
       }
     }
 
     if (doConvo && messageIndex >= 0) {
       ctx!.session.rewindToMessages(messages.slice(0, messageIndex))
       ctx!.agent.config.promptEngine.resetAppendixBaseline()
-      tuiApp.commitStatic('⏪ 已截断对话到此消息 — 已回填输入框。')
+      tuiApp.commitStatic('? ????????? ? ???????')
       tuiApp.setInput(content)
     }
   }, /* chronicleExec: */ (id: string) => {
-    // Chronicle Enter 回调：直接切换到所选会话（对齐 Claude Code 选择器一步到位）。
-    // 经 /resume slash 命令派发,复用同一条恢复链路(onSessionSwitch:
-    // 消息历史 + todos + goal + 侧栏 + 计划模式),含"已在当前会话"守卫。
+    // Chronicle Enter ??????????????? Claude Code ?????????
+    // ? /resume slash ????,?????????(onSessionSwitch:
+    // ???? + todos + goal + ?? + ????),?"??????"???
     void tuiApp.tryDispatchSlash(`/resume ${id}`)
   }, /* domainPickerExec: */ (key: string) => {
-    // Domain Picker Enter 回调：应用选中星域，引擎照常注入方法论，scrollback 仅写单行确认。
+    // Domain Picker Enter ????????????????????scrollback ???????
     const midSession = ctx!.agent.getSessionTurnCount() > 0
     if (key === 'auto') {
       ctx!.agent.resetSessionDomain()
       tuiApp.setSessionStarDomain(undefined)
-      tuiApp.commitStatic('Domain → Auto（按任务匹配）')
+      tuiApp.commitStatic('Domain ? Auto???????')
     } else {
       const d = starDomainRegistry.get(key)
       if (d) {
         ctx!.agent.setSessionDomain({ id: d.id, name: d.name, volatileBlock: d.volatileBlock, motto: d.motto, courageThreshold: d.courageThreshold })
         tuiApp.setSessionStarDomain(d.name)
-        tuiApp.commitStatic(`Domain → ${d.name} (${d.decisionStyle})`)
+        tuiApp.commitStatic(`Domain ? ${d.name} (${d.decisionStyle})`)
       } else {
         return
       }
     }
     if (midSession) tuiApp.commitStatic(DOMAIN_SWITCH_CACHE_WARNING)
   }, /* modelPickerExec: */ (modelId: string) => {
-    // Model Picker Enter 回调：执行模型切换。
+    // Model Picker Enter ??????????
     try { ctx!.agent.abort() } catch {}
     const res = switchAgentRuntime(ctx!, modelId)
     if (res.ok && res.modelName) {
@@ -1290,32 +1291,32 @@ async function main() {
       attachJobSubscription()
       tuiApp.commitStatic(`Model switched to: ${res.modelName}`)
     } else {
-      tuiApp.commitStatic(`⚠️ Model switch failed: ${res.error ?? 'unknown error'}`)
+      tuiApp.commitStatic(`?? Model switch failed: ${res.error ?? 'unknown error'}`)
     }
   }, /* domainPickerSaveDefaultExec: */ (key: string) => {
-    // Domain Picker S 键回调：应用星域 + 设为默认并持久化。
+    // Domain Picker S ???????? + ?????????
     const midSession = ctx!.agent.getSessionTurnCount() > 0
     if (key === 'auto') {
       ctx!.agent.resetSessionDomain()
       tuiApp.setSessionStarDomain(undefined)
-      tuiApp.commitStatic('Domain → Auto（按任务匹配）')
+      tuiApp.commitStatic('Domain ? Auto???????')
     } else {
       const d = starDomainRegistry.get(key)
       if (d) {
         ctx!.agent.setSessionDomain({ id: d.id, name: d.name, volatileBlock: d.volatileBlock, motto: d.motto, courageThreshold: d.courageThreshold })
         tuiApp.setSessionStarDomain(d.name)
-        tuiApp.commitStatic(`Domain → ${d.name} (${d.decisionStyle})`)
+        tuiApp.commitStatic(`Domain ? ${d.name} (${d.decisionStyle})`)
       } else {
-        tuiApp.commitStatic(`⚠️ 未知星域: ${key}`)
+        tuiApp.commitStatic(`?? ????: ${key}`)
         return
       }
     }
     try { setDefaultDomainConfig({ defaultDomain: key }) } catch (err) {
-      tuiApp.commitStatic(`⚠️ 设置默认失败: ${(err as Error).message}`)
+      tuiApp.commitStatic(`?? ??????: ${(err as Error).message}`)
     }
     if (midSession) tuiApp.commitStatic(DOMAIN_SWITCH_CACHE_WARNING)
   }, /* modelPickerSaveDefaultExec: */ (provider: string, modelId: string) => {
-    // Model Picker S 键回调：切换模型 + 设为默认并持久化。
+    // Model Picker S ???????? + ?????????
     try { ctx!.agent.abort() } catch {}
     const res = switchAgentRuntime(ctx!, modelId)
     if (res.ok && res.modelName) {
@@ -1323,56 +1324,56 @@ async function main() {
       attachJobSubscription()
       tuiApp.commitStatic(`Model switched to: ${res.modelName}`)
     } else {
-      tuiApp.commitStatic(`⚠️ Model switch failed: ${res.error ?? 'unknown error'}`)
+      tuiApp.commitStatic(`?? Model switch failed: ${res.error ?? 'unknown error'}`)
     }
     try {
       setDefaultModelConfig({ defaultModel: `${provider}:${modelId}` })
     } catch (err) {
-      tuiApp.commitStatic(`⚠️ 设置默认失败: ${(err as Error).message}`)
+      tuiApp.commitStatic(`?? ??????: ${(err as Error).message}`)
     }
   }, /* themePickerExec: */ (themeName: string) => {
-    // Theme Picker Enter 回调：切换主题。
+    // Theme Picker Enter ????????
     setTheme(themeName as ThemeName)
     tuiApp.forceRedraw()
     tuiApp.commitStatic(`Theme switched to: ${themeName}`)
   }, /* themePickerSaveDefaultExec: */ (themeName: string) => {
-    // Theme Picker S 键回调：切换主题 + 设为默认并持久化。
+    // Theme Picker S ???????? + ?????????
     setTheme(themeName as ThemeName)
     tuiApp.forceRedraw()
     tuiApp.commitStatic(`Theme switched to: ${themeName}`)
     try {
       setUiConfig({ theme: themeName })
     } catch (err) {
-      tuiApp.commitStatic(`⚠️ 设置默认失败: ${(err as Error).message}`)
+      tuiApp.commitStatic(`?? ??????: ${(err as Error).message}`)
     }
   }, /* choicePanelExec: */ (id: string) => {
-    // 应用并持久化权限模式：会话内即时生效（agent）+ 底栏 badge 同步（tuiApp）+
-    // 写入 ~/.rivet/config.json（重启后仍是该模式，无需重选）。
+    // ???????????????????agent?+ ?? badge ???tuiApp?+
+    // ?? ~/.rivet/config.json????????????????
     const applyPermission = (mode: string) => {
       ctx!.agent.setApprovalMode(mode as import('./agent/loop-types.js').ApprovalMode)
       tuiApp.setApprovalMode(mode)
       // Switching to YOLO mid-session must also raise the write boundary.
       applySandboxPolicyForApprovalMode(mode)
-      // YOLO 联动无限轮次：真正全自动，不被 maxTurns 截断。
-      // 其他模式恢复默认 200 轮预算。
+      // YOLO ??????????????? maxTurns ???
+      // ???????? 200 ????
       const yoloMaxTurns = mode === 'dangerously-skip-permissions' ? 0 : 200
       ctx!.agent.config.maxTurns = yoloMaxTurns
       try {
         persistApprovalDefault(mode)
       } catch (err) {
-        tuiApp.commitStatic(`⚠ 权限模式已切换但持久化失败: ${(err as Error).message}`)
+        tuiApp.commitStatic(`? ?????????????: ${(err as Error).message}`)
       }
       const label = { manual: 'Manual', 'auto-safe': 'Auto', 'dangerously-skip-permissions': 'YOLO' }[mode] ?? mode
-      const turnNote = mode === 'dangerously-skip-permissions' ? '（无限轮次）' : ''
-      tuiApp.commitStatic(`权限模式 → ${label}${turnNote}（已设为默认，重启后仍生效）`)
+      const turnNote = mode === 'dangerously-skip-permissions' ? '??????' : ''
+      tuiApp.commitStatic(`???? ? ${label}${turnNote}??????????????`)
     }
 
     if (tuiApp.choicePanelKind === 'permission') {
-      // Permission 选择面板回调
+      // Permission ??????
       tuiApp.choicePanelKind = 'effort' // reset
       if (id === 'dangerously-skip-permissions') {
-        // YOLO 需二次确认。面板在 exec 后会被 deactivateOverlay 关闭（app.ts），
-        // 故用 setImmediate 在关闭之后再把确认面板推起来。
+        // YOLO ????????? exec ??? deactivateOverlay ???app.ts??
+        // ?? setImmediate ???????????????
         setImmediate(() => {
           tuiApp.choicePanelKind = 'permission-yolo-confirm'
           tuiApp.activateOverlay('choice-panel')
@@ -1383,19 +1384,19 @@ async function main() {
       return
     }
     if (tuiApp.choicePanelKind === 'permission-yolo-confirm') {
-      // YOLO 确认面板回调
+      // YOLO ??????
       tuiApp.choicePanelKind = 'effort' // reset
       if (id === 'confirm-yolo') {
         applyPermission('dangerously-skip-permissions')
       } else {
-        tuiApp.commitStatic('已取消 — 权限模式未改变。')
+        tuiApp.commitStatic('??? ? ????????')
       }
       return
     }
     if (tuiApp.choicePanelKind === 'plan-approval') {
-      // 计划审批面板回调：approve / approve:<idx> / reject / reject-exit。
+      // ?????????approve / approve:<idx> / reject / reject-exit?
       const info = tuiApp.pendingPlanApproval
-      // 任何审批决策 = 用户参与——取消倒计时自动批准
+      // ?????? = ???????????????
       tuiApp.cancelPlanAutoApprove()
       tuiApp.choicePanelKind = 'effort' // reset
       tuiApp.pendingPlanApproval = undefined
@@ -1411,27 +1412,27 @@ async function main() {
         const option = info.options?.find(o => o.label.includes('Recommended')) ?? info.options?.[0]
         void approvePlanAndKickoff(deps, info.slug, option?.label)
       } else if (id.startsWith('approve:')) {
-        // 多方案计划：面板内选定的方案（索引编码在条目 id 里）。
+        // ?????????????????????? id ???
         const idx = Number(id.slice('approve:'.length))
         const option = Number.isInteger(idx) ? info.options?.[idx] : undefined
         void approvePlanAndKickoff(deps, info.slug, option?.label)
       } else if (id === 'reject') {
         void rejectPlan(ctx!.agent.cwd, info.slug).then(doc => {
-          deps.notify(doc ? `计划「${info.title}」已驳回，可继续修订。` : '计划不存在或已被删除。')
+          deps.notify(doc ? `???${info.title}???????????` : '???????????')
         })
       } else if (id === 'reject-exit') {
         void rejectPlan(ctx!.agent.cwd, info.slug).then(doc => {
           ctx!.agent.exitPlanMode()
-          deps.notify(doc ? `计划「${info.title}」已驳回，已退出 plan mode。` : '已退出 plan mode。')
+          deps.notify(doc ? `???${info.title}???????? plan mode?` : '??? plan mode?')
         })
       } else if (id === '__reject_comment__') {
         const comment = tuiApp.choicePanelInputBuffer.trim()
         void rejectPlan(ctx!.agent.cwd, info.slug).then(doc => {
           if (!doc) {
-            deps.notify('计划不存在或已被删除。')
+            deps.notify('???????????')
             return
           }
-          deps.notify(`计划「${info.title}」已驳回${comment ? '（含反馈）' : ''}，可继续修订。`)
+          deps.notify(`???${info.title}????${comment ? '?????' : ''}???????`)
           if (comment) {
             deps.submitToAgent(
               `User rejected the plan. Feedback:\n\n${comment}\n\nRevise the plan in \`.rivet/plans/${info.slug}.md\`, then call plan action=submit again.`,
@@ -1448,12 +1449,12 @@ async function main() {
       if (!done) return
       return
     }
-    // Effort 选择面板回车回调。
+    // Effort ?????????
     ctx!.agent.setReasoningEffort(id as import('./agent/auto-reasoning.js').ReasoningEffort | 'auto')
-    const label = id === 'auto' ? 'Auto（按任务复杂度自动选档）' : id
-    tuiApp.commitStatic(`Reasoning effort → ${label}`)
+    const label = id === 'auto' ? 'Auto????????????' : id
+    tuiApp.commitStatic(`Reasoning effort ? ${label}`)
   }, /* connectExec: */ (commit, summary) => {
-    // Connect 向导提交回调：写盘 → 重载 → 内存回填 → 即时切到新默认模型。
+    // Connect ????????? ? ?? ? ???? ? ??????????
     try {
       if (commit.mode === 'preset') {
         setupProvider(commit.setup)
@@ -1467,7 +1468,7 @@ async function main() {
         })
       }
     } catch (e) {
-      tuiApp.commitStatic(`⚠️ 配置保存失败: ${e instanceof Error ? e.message : String(e)}`)
+      tuiApp.commitStatic(`?? ??????: ${e instanceof Error ? e.message : String(e)}`)
       return
     }
 
@@ -1494,12 +1495,12 @@ async function main() {
 
     tuiApp.commitStatic(
       liveApplied
-        ? `✅ ${summary}`
-        : `✅ ${summary}\n（已保存到配置。若模型未切换，重启天枢后生效。）`,
+        ? `? ${summary}`
+        : `? ${summary}\n????????????????????????`,
     )
   }, /* planPickerExec: */ (slug: string) => {
-    // Plan Picker Enter 回调：批准选中计划并自动 kickoff 分波执行（与 /plan-approve 共用）。
-    // 手动批准 = 用户参与——取消倒计时自动批准
+    // Plan Picker Enter ???????????? kickoff ?????? /plan-approve ????
+    // ???? = ???????????????
     tuiApp.cancelPlanAutoApprove()
     void approvePlanAndKickoff(
       {
@@ -1511,38 +1512,38 @@ async function main() {
       slug,
     )
   }, /* initExec: */ (commit, summary) => {
-    // /init 向导提交回调：逐项应用（不存在才创建，存在则补缺/跳过），输出逐项报告。
+    // /init ????????????????????????/???????????
     try {
       const report = applyInitCommit(ctx!.agent.cwd, commit)
-      tuiApp.commitStatic(`✅ ${summary}\n${formatInitApplyReport(report)}`)
+      tuiApp.commitStatic(`? ${summary}\n${formatInitApplyReport(report)}`)
     } catch (e) {
-      tuiApp.commitStatic(`⚠️ 项目初始化失败: ${e instanceof Error ? e.message : String(e)}`)
+      tuiApp.commitStatic(`?? ???????: ${e instanceof Error ? e.message : String(e)}`)
     }
   })
 
-  // ── Worker 直达通道（WaveC）─────────────────────────────────
-  // /tasks x 键 → per-worker AbortController；worker 视图输入 → per-order steer 队列。
-  // 动态读 refs.coordinator：switchModel 会重建 coordinator，闭包不能捕获旧实例。
+  // ?? Worker ?????WaveC??????????????????????????????????
+  // /tasks x ? ? per-worker AbortController?worker ???? ? per-order steer ???
+  // ??? refs.coordinator?switchModel ??? coordinator???????????
   tuiApp.setWorkerKill(workerId => ctx?.refs.coordinator?.killWorker(workerId) ?? false)
   tuiApp.setWorkerSteer((workerId, text) => ctx?.refs.coordinator?.steerWorker(workerId, text) ?? false)
 
-  // ── 后台 Job 直达通道 ─────────────────────────────────────────
-  // agent.jobs 是 SessionJobs（EventEmitter）。/model 切换会 new AgentLoop →
-  // 新建 SessionJobs，故订阅必须可重入：每次 (re)attach 到当前 ctx.agent.jobs。
-  // subscribedJobs 去重防止对同一实例重复 on()。
+  // ?? ?? Job ???? ?????????????????????????????????????????
+  // agent.jobs ? SessionJobs?EventEmitter??/model ??? new AgentLoop ?
+  // ?? SessionJobs???????????? (re)attach ??? ctx.agent.jobs?
+  // subscribedJobs ??????????? on()?
   let subscribedJobs: import('./tools/job-store.js').SessionJobs | undefined
   let jobListener: ((ev: import('./tools/job-store.js').JobEvent) => void) | undefined
   const attachJobSubscription = () => {
     const jobs = ctx?.agent.jobs
     if (!jobs || jobs === subscribedJobs) return
-    // 换实例时旧实例的 listener 必须摘除——否则旧 job 的事件继续进读模型，
-    // 而 kill 已路由到新实例，读模型与真实状态分叉。
+    // ???????? listener ????????? job ??????????
+    // ? kill ???????????????????
     if (subscribedJobs && jobListener) subscribedJobs.removeListener('event', jobListener)
     subscribedJobs = jobs
     jobListener = (ev: import('./tools/job-store.js').JobEvent) => { tuiApp.handleJobEvent(ev) }
     jobs.on('event', jobListener)
-    // 回填：attach 之前已存在的 job（重启/换实例后的首轮）不能是空的——
-    // 按当前快照补一发合成事件进读模型。
+    // ???attach ?????? job???/???????????????
+    // ?????????????????
     for (const snap of jobs.list()) {
       tuiApp.handleJobEvent({ kind: snap.status === 'running' ? 'started' : 'exit', job: snap })
     }
@@ -1551,10 +1552,10 @@ async function main() {
   tuiApp.setJobKill(jobId => ctx?.agent.jobs?.kill(jobId) ?? false)
   tuiApp.setJobLogs(jobId => ctx?.agent.jobs?.logs(jobId) ?? null)
 
-  // ── SlashRouter ──────────────────────────────────────────────
+  // ?? SlashRouter ??????????????????????????????????????????????
   registerTuiSlashCommands(app, ctx)
 
-  // slash 命令提示列表：静态 palette 命令 + 动态已加载 skill 的 /skill <name>
+  // slash ????????? palette ?? + ????? skill ? /skill <name>
   const paletteHints = getPaletteCommands()
     .filter(c => c.name.startsWith('/'))
     .map(c => ({ name: c.name, description: c.description, ...(c.argsHint ? { argsHint: c.argsHint } : {}) }))
@@ -1564,16 +1565,16 @@ async function main() {
   }))
   app.setSlashCommands([...paletteHints, ...skillHints])
 
-  // ── 真实指标 provider（GlanceBar cache/ctx/cost）─────────────
-  // 闭包动态读 module-level ctx：/model 切换时 switchAgentRuntime 原地改 ctx.agent，
-  // ctx.session 不变，因此读取始终命中当前 runtime（天然 /model 切换安全）。
+  // ?? ???? provider?GlanceBar cache/ctx/cost??????????????
+  // ????? module-level ctx?/model ??? switchAgentRuntime ??? ctx.agent?
+  // ctx.session ????????????? runtime??? /model ??????
   let prevCacheStatus: CacheStatus = 'healthy'
   app.setMetricsProvider(() => {
     if (!ctx) return null
     const session = ctx.session
     const total = session.getTotalUsage()
-    // 真实定价：从 provider config 查当前模型的 pricing（CNY per 1M tokens），
-    // 按 input/output/cacheRead/cacheWrite/reasoning 五档精确计算。无 pricing 时回退 0。
+    // ?????? provider config ?????? pricing?CNY per 1M tokens??
+    // ? input/output/cacheRead/cacheWrite/reasoning ???????? pricing ??? 0?
     const providers = ctx.agent.config.allProviders ?? {}
     const providerName = ctx.agent.config.providerName
     const modelId = ctx?.provider.models[0]?.id
@@ -1596,13 +1597,13 @@ async function main() {
     }
   })
 
-  // ── 常驻任务面板 provider（todo 列表）──────────────────────
-  // 统一读本会话 refs.todoStore（多会话隔离的 canonical 源）。TUI 下它就是全局
-  // defaultStore，故与旧的 getTodos() 行为一致；server/桌面下则各会话独立。
+  // ?? ?????? provider?todo ?????????????????????????
+  // ?????? refs.todoStore??????? canonical ???TUI ??????
+  // defaultStore????? getTodos() ?????server/??????????
   app.setTodosProvider(() => ctx!.refs.todoStore.read())
 
-  // ── 当前已批准计划指针 provider ─────────────────────────────
-  // 读 PromptEngine 中的 activePlanPointer，供右侧面板 lightweight 展示当前计划。
+  // ?? ????????? provider ?????????????????????????????
+  // ? PromptEngine ?? activePlanPointer?????? lightweight ???????
   app.setActivePlanProvider(() => ctx!.agent.config.promptEngine?.getActivePlanPointer())
   app.setPlanDraftProvider(() => {
     const agent = ctx!.agent
@@ -1618,21 +1619,21 @@ async function main() {
     }
   })
 
-  // ── Goal / plan-mode / plan-trace providers ──────────────────
-  // 把 AgentLoop 的运行时状态暴露给 TUI，用于 GlanceBar 和 side panel。
+  // ?? Goal / plan-mode / plan-trace providers ??????????????????
+  // ? AgentLoop ????????? TUI??? GlanceBar ? side panel?
   app.setGoalTrackerProvider(() => ctx!.refs.goalTrackerRef.current)
   app.setPlanModeProvider(() => ctx!.agent.planModeState === 'planning')
   app.setAskModeProvider(() => ctx!.agent.askModeState === 'asking')
-  // Shift+Tab：纯 Plan Mode 叠层开关（不兼审批环）。
-  // 进入记住当前审批模式且不改 approval；退出原样恢复（YOLO 不会被冲成 auto-safe/manual）。
-  // 审批切换仍走 /permission 与 /yes；planning 期间改审批会同步更新 stash。未批准 draft 保留在 .rivet/plans/。
-  // enterPlanMode 内部会自动退出 Ask（互斥）。
+  // Shift+Tab?? Plan Mode ????????????
+  // ????????????? approval????????YOLO ????? auto-safe/manual??
+  // ?????? /permission ? /yes?planning ?????????? stash???? draft ??? .rivet/plans/?
+  // enterPlanMode ??????? Ask?????
   app.setPlanModeToggleHandler(() => {
     const agent = ctx!.agent
     const setSessionApproval = (mode: ApprovalMode) => {
       agent.setApprovalMode(mode)
       app!.setApprovalMode(mode)
-      // YOLO 联动无限轮次（与 /yes、权限面板一致）
+      // YOLO ???????? /yes????????
       agent.config.maxTurns = mode === 'dangerously-skip-permissions' ? 0 : 200
     }
     const current = agent.config.approvalMode ?? 'auto-safe'
@@ -1646,7 +1647,7 @@ async function main() {
       agent.enterPlanMode()
       const path = agent.getActivePlanFilePath()
       const hint = shiftTabPlanToggleHint('enter', decision.stashMode)
-      app!.commitStatic(path ? `${hint}（计划文件: \`${path}\`）` : hint)
+      app!.commitStatic(path ? `${hint}?????: \`${path}\`?` : hint)
       return
     }
     agent.exitPlanMode()
@@ -1656,66 +1657,66 @@ async function main() {
   })
   app.setPlanTraceProvider(() => ctx!.agent.planTrace)
 
-  // 同步 vision 状态到 TUI，使其能在用户气泡中提示图片处理方式。
+  // ?? vision ??? TUI???????????????????
   app.setVisionInfo(
     ctx!.agent.config.supportsVision ?? false,
     !!ctx!.agent.config.visionClient,
     ctx!.agent.config.visionBridge?.source,
   )
 
-  // ── Wire agent → TuiApp ──────────────────────────────────────
-  // 消息队列已收编进 TuiApp：streaming 时 Enter 由 TuiApp 入队（steerBuffer），
-  // onSteerDrain 由 TuiApp callbacks 真实 drain，此处无需外层 override。
+  // ?? Wire agent ? TuiApp ??????????????????????????????????????
+  // ???????? TuiApp?streaming ? Enter ? TuiApp ???steerBuffer??
+  // onSteerDrain ? TuiApp callbacks ?? drain??????? override?
   app.onSubmit((text, images) => {
     const trimmed = text.trim()
     if (!trimmed) return
 
-    // 将 slash 命令解析为 agent prompt（对齐 Ink resolveAppPromptInput）。
-    // /review → "deliver_task(...)"；未知 slash → null → 显示错误提示。
+    // ? slash ????? agent prompt??? Ink resolveAppPromptInput??
+    // /review ? "deliver_task(...)"??? slash ? null ? ???????
     const resolved = resolveAppPromptInput(trimmed, process.cwd(), app!.getCommandPredicate())
     if (resolved === null) {
       // Backstop: a registered slash command (e.g. /plan-approve) may slip past
       // normal dispatch. Give the registry one more chance before reporting
-      // "Unknown command" — kills the silent failure users hit on /plan-* copy-paste.
+      // "Unknown command" ? kills the silent failure users hit on /plan-* copy-paste.
       app!.rejectSubmit()
       void (async () => {
         const handled = await app!.tryDispatchSlash(trimmed)
         if (!handled) {
           const firstTok = trimmed.split(/\s/)[0]
           const planHint = firstTok?.startsWith('/plan')
-            ? '\n提示: /plan-approve 无参打开待批计划选择器，或 /plan-list 查看全部计划。'
+            ? '\n??: /plan-approve ????????????? /plan-list ???????'
             : ''
-          app!.commitStatic(`⚠️  Unknown command: ${firstTok}\nType /help for available commands.${planHint}`)
+          app!.commitStatic(`??  Unknown command: ${firstTok}\nType /help for available commands.${planHint}`)
         }
       })()
       return
     }
 
-    // workflow 声明的 EXTENDED 工具在发 run 前挂载——prompt 契约与工具可见性同源
-    // （会话 5158719d：/council 指示调 council_convene 而门控把它摘了 → 模型被迫模拟）。
+    // workflow ??? EXTENDED ???? run ?????prompt ??????????
+    // ??? 5158719d?/council ??? council_convene ??????? ? ????????
     for (const toolName of resolved.requiredTools ?? []) {
       const mount = ctx!.agent.enableTool(toolName)
       if (mount.status === 'mounted') {
         const costNote = mount.cacheImpact === 'prefix-invalidated'
-          ? '（下一请求前缀缓存一次性 MISS，后续轮次按新工具集重新缓存）'
+          ? '???????????? MISS???????????????'
           : ''
-        app!.commitStatic(`🔧 已为本次 workflow 挂载工具 ${toolName}${costNote}`)
+        app!.commitStatic(`?? ???? workflow ???? ${toolName}${costNote}`)
       }
-      // already-active / gating-off → 静默（工具本就可见）
-      // unknown / not-extended → 不应发生（requiredTools 与 EXTENDED_TOOLS 的一致性由 workflow 测试钉住）
+      // already-active / gating-off ? ??????????
+      // unknown / not-extended ? ?????requiredTools ? EXTENDED_TOOLS ????? workflow ?????
     }
 
-    // 单一权威：TuiApp.agentBusy 是唯一的 streaming 闩。app.onSubmit 只在 TuiApp
-    // 判定空闲时触发（busy 时输入已被 TuiApp 入队 steerBuffer），故此处无需再自管
-    // isStreaming 标志——正是「双门异步清除时机不同」造成 Esc 后死会话的根因。
-    // run 生命周期回调（完成/错误/中止）由 bridge 桥接到 TuiApp，并带世代守卫。
+    // ?????TuiApp.agentBusy ???? streaming ??app.onSubmit ?? TuiApp
+    // ????????busy ????? TuiApp ?? steerBuffer??????????
+    // isStreaming ???????????????????? Esc ????????
+    // run ?????????/??/???? bridge ??? TuiApp????????
     const base = wrapCallbacksWithTuiApp(app!)
     // The tap wraps the OUTSIDE of the bridge rather than riding its `original`
     // parameter: bridge.ts lets `original.onApprovalRequired` *replace* the
     // app's handler (bridge.ts:77-80), so passing an observer in there would
     // hijack the approval UI. Decorating the finished set only observes.
     //
-    // Both consumers share one tap — a second tap would double-count `seq`.
+    // Both consumers share one tap ? a second tap would double-count `seq`.
     const sinks: EventSink[] = []
     if (eventStream) sinks.push(eventStream.sink)
     if (screenReaderMode) {
@@ -1732,23 +1733,23 @@ async function main() {
     })
   })
 
-  // ── Wire abort ───────────────────────────────────────────────
+  // ?? Wire abort ???????????????????????????????????????????????
   app.onAbort(() => {
     if (ctx) {
       ctx.agent.abort()
     }
   })
 
-  // ── Wire exit ────────────────────────────────────────────────
+  // ?? Wire exit ????????????????????????????????????????????????
   app.onExit(() => {
     void shutdown(0)
   })
 
-  // ── First-run template prompt (before clearing screen) ───────
+  // ?? First-run template prompt (before clearing screen) ???????
   if (ctx.templatesPendingAgents && !args.includes('--dangerously-skip-permissions')) {
     // Detect git availability to advise first-run users. Git is optional (the
     // agent runs in-place without it), but unlocks worktree isolation, commit,
-    // diff review, and checkpoints. Use `git --version` — `git rev-parse
+    // diff review, and checkpoints. Use `git --version` ? `git rev-parse
     // --is-inside-work-tree` fails outside a repo even when git is installed.
     const gitAvailable = (() => {
       try {
@@ -1759,7 +1760,7 @@ async function main() {
       }
     })()
 
-    // Interactive picker with ↑↓ navigation — replaces the old readline prompt
+    // Interactive picker with ?? navigation ? replaces the old readline prompt
     // that leaked keystrokes into the TUI input ("press 1 becomes chat message").
     const options = ['Create both (AGENTS.md + .rivet.md)', 'Skip'] as const
     let selectedIdx = 0
@@ -1768,31 +1769,31 @@ async function main() {
       stdout.write('\x1B[2K\r') // clear current line
       stdout.write('\x1B[1A\x1B[2K\r') // clear previous line
       for (let i = 0; i < options.length; i++) {
-        const prefix = i === idx ? '\x1B[7m ❯' : '   '
+        const prefix = i === idx ? '\x1B[7m ?' : '   '
         const suffix = i === idx ? ' \x1B[0m' : ''
         stdout.write(`${prefix} ${options[i]}${suffix}\n`)
       }
-      stdout.write(`\n  ↑↓ navigate · Enter confirm · Esc skip\n`)
+      stdout.write(`\n  ?? navigate ? Enter confirm ? Esc skip\n`)
       // Move cursor back up so re-render overwrites the same lines
       stdout.write(`\x1B[${options.length + 2}A`)
     }
 
     stdout.write('\n')
-    stdout.write('╭─ First-run setup ────────────────────────────────╮\n')
-    stdout.write('│ This project has no AGENTS.md or .rivet.md.     │\n')
-    stdout.write('│ Create them from templates?                      │\n')
-    stdout.write('╰──────────────────────────────────────────────────╯\n')
+    stdout.write('?? First-run setup ?????????????????????????????????\n')
+    stdout.write('? This project has no AGENTS.md or .rivet.md.     ?\n')
+    stdout.write('? Create them from templates?                      ?\n')
+    stdout.write('????????????????????????????????????????????????????\n')
     if (!gitAvailable) {
       stdout.write('\n')
-      stdout.write('  ⚠ 未检测到 git。git 是可选依赖——不装也能正常用，\n')
-      stdout.write('    但安装后可解锁：委派隔离 / 检查点回滚 / commit / diff 审查。\n')
-      stdout.write('    安装：https://git-scm.com/downloads\n')
+      stdout.write('  ? ???? git?git ???????????????\n')
+      stdout.write('    ???????????? / ????? / commit / diff ???\n')
+      stdout.write('    ???https://git-scm.com/downloads\n')
       stdout.write('\n')
     }
     stdout.write('\n')
     renderPicker(selectedIdx)
 
-    // Read keys in raw mode — no readline buffering that leaks into TUI.
+    // Read keys in raw mode ? no readline buffering that leaks into TUI.
     let created = false
     let aborted = false
     if (process.stdin.isTTY) {
@@ -1806,7 +1807,7 @@ async function main() {
             const str = chunk.toString()
             buf += str
 
-            // Arrow keys arrive as ESC sequences: ↑ = \x1B[A, ↓ = \x1B[B
+            // Arrow keys arrive as ESC sequences: ? = \x1B[A, ? = \x1B[B
             if (buf === '\x1B[A' || buf === '\x1B[1;2A') {
               // Up
               selectedIdx = (selectedIdx - 1 + options.length) % options.length
@@ -1821,7 +1822,7 @@ async function main() {
               buf = ''
               return
             }
-            // k / j — vim-style up/down
+            // k / j ? vim-style up/down
             if (buf === 'k' && selectedIdx > 0) {
               selectedIdx--
               renderPicker(selectedIdx)
@@ -1841,10 +1842,10 @@ async function main() {
               resolve()
               return
             }
-            // Direct number selection (1-2) — still works for muscle memory
+            // Direct number selection (1-2) ? still works for muscle memory
             if (str === '1') { selectedIdx = 0; created = true; resolve(); return }
             if (str === '2') { selectedIdx = 1; created = false; resolve(); return }
-            // Escape — skip
+            // Escape ? skip
             if (str === '\x1B' && buf.length === 1) {
               aborted = true
               resolve()
@@ -1873,7 +1874,7 @@ async function main() {
         appended: result.appended,
         skipped: result.skipped,
       })
-      stdout.write(`✓ Created: ${result.created.join(', ') || 'none'}\n`)
+      stdout.write(`? Created: ${result.created.join(', ') || 'none'}\n`)
     } else {
       applyProjectTemplates(process.cwd(), { agentsMode: 'skip' })
       recordTemplatesDecision(process.cwd(), 'declined')
@@ -1885,15 +1886,15 @@ async function main() {
     recordTemplatesDecision(process.cwd(), 'declined')
   }
 
-  // ── Clear screen ─────────────────────────────────────────────
+  // ?? Clear screen ?????????????????????????????????????????????
   stdout.write('\x1B[2J\x1B[H')
 
-  // ── Welcome message（CC 头式 3 行紧凑头） ─────────────────────
+  // ?? Welcome message?CC ?? 3 ????? ?????????????????????
   const existingMsgCount = ctx.session.getMessages().length
   if (!skipWelcome) {
     const installRoot = detectInstallRoot()
-    // 首屏框与输入框的线框同源——否则 thick/dots 星域下刊头是 thin、输入框
-    // 是域个性，两个框并排时风格断裂。（提前取 id：let  narrowing 不进闭包）
+    // ???????????????? thick/dots ?????? thin????
+    // ???????????????????? id?let  narrowing ?????
     const sessionDomainId = ctx.agent.getSessionDomain()?.id
     const welcomeLines = formatWelcome({
       modelName,
@@ -1918,18 +1919,18 @@ async function main() {
     }
   }
 
-  // 自然流：欢迎页写完后直接渲染底部 chrome（GlanceBar + 输入框），输入框以 append
-  // 模式落在欢迎页正下方，随交互增长由终端原生滚动保持在视口底部。
+  // ???????????????? chrome?GlanceBar + ????????? append
+  // ???????????????????????????????
   //
-  // 不补空行撑底 —— 试过两种补法都不成立：补在欢迎屏之后，欢迎屏钉在顶部、输入框沉到
-  // 底，中间撑开一大片空白（Claude Code v2.1.168 的 #66191 形态）；补在欢迎屏之前，
-  // 整块下沉，空白全堆到上方。输出流 append-only，凭空造出的空白只能二选一地堆在某侧，
-  // 两者都比自然流难看。真正扎眼的「输入框下方死区」另有其因（活动期动态段恒定垫高、
-  // 轮末塌回），已由 getDynamicBudget 的轮内高水位治本。
+  // ?????? ?? ????????????????????????????????
+  // ????????????Claude Code v2.1.168 ? #66191 ????????????
+  // ???????????????? append-only???????????????????
+  // ????????????????????????????????????????
+  // ???????? getDynamicBudget ?????????
   app.start()
 
-  // 首屏交接提醒（resume 场景）：上下文已过半的会话，建议先 /handoff 再开新会话——
-  // 交接自动注入新会话，比整段回连省前缀重建成本。
+  // ???????resume ????????????????? /handoff ???????
+  // ???????????????????????
   if (existingMsgCount > 0) {
     try {
       const est = ctx.session.getEstimatedTokens()
@@ -1940,11 +1941,11 @@ async function main() {
     } catch { /* best-effort */ }
   }
 
-  // ── 会话恢复入口（Claude Code parity）───────────────────────────
-  // 裸 --resume/-r：自动打开 Chronicle 会话选择器（Enter 直接切换）。
-  // 普通新会话启动：仅 wantSessionPicker 时开选择器。启动页的
-  // 「↺ N 个历史会话 · /resume 恢复」提示行已移除（2026-07-25）——resume
-  // 功能保留但不主动展示，降低顺手回连带来的碎缓存风险。
+  // ?? ???????Claude Code parity????????????????????????????
+  // ? --resume/-r????? Chronicle ??????Enter ??????
+  // ????????? wantSessionPicker ??????????
+  // ?? N ????? ? /resume ??????????2026-07-25???resume
+  // ??????????????????????????
   {
     const recentSessions = SessionPersist.listMainSessions(process.cwd())
       .filter(s => s.id !== ctx!.sessionId && (s.turnCount ?? 0) > 0
@@ -1953,41 +1954,41 @@ async function main() {
       if (recentSessions.length > 0) {
         app.activateOverlay('chronicle')
       } else {
-        app.commitStatic('没有可恢复的历史会话 — 已开启新会话。')
+        app.commitStatic('?????????? ? ???????')
       }
     }
   }
 
-  // Resume 会话的计划模式恢复：上次退出时在 planning 且 draft 仍在 → 重进计划模式。
+  // Resume ???????????????? planning ? draft ?? ? ???????
   {
     const restoredPlan = restorePlanModeFromMeta(ctx.agent, ctx.cwd, initialMeta)
     if (restoredPlan) {
-      app.commitStatic(`🔍 已恢复计划模式（draft: ${restoredPlan}）— /plan-mode 退出或批准计划后执行。`)
+      app.commitStatic(`?? ????????draft: ${restoredPlan}?? /plan-mode ???????????`)
     }
   }
 
-  // 首次启动引导：默认服务商没有可用密钥（且非 OAuth）→ 自动打开 /connect 向导，
-  // 让新用户点选内置服务商 + 粘贴密钥即可开跑，无需手改 config.json。
+  // ????????????????????? OAuth?? ???? /connect ???
+  // ??????????? + ????????????? config.json?
   if (ctx && !ctx.auth && (!ctx.apiKey || ctx.apiKey.trim() === '') && existingMsgCount === 0) {
-    app.commitStatic('尚未配置模型服务商的 API 密钥 — 正在打开配置向导（/connect 可随时再次打开）。')
+    app.commitStatic('?????????? API ?? ? ?????????/connect ?????????')
     app.startConnect()
   }
 
-  // 启动期主动环境体检：git 缺失时(尤其 Windows，Git Bash 是命令执行首选 shell)
-  // 醒目提示，而非等命令失败后被动提醒。异步、失败静默、不阻塞启动。
+  // ??????????git ???(?? Windows?Git Bash ??????? shell)
+  // ????????????????????????????????
   void (async () => {
     try {
       const env = await detectEnv(process.cwd())
       const banner = formatGitMissingBanner(env.git.available, env.platform)
       if (banner) app?.commitStatic(banner)
     } catch {
-      // fail-open: 环境探测失败不打扰用户
+      // fail-open: ???????????
     }
   })()
 
-  // 浏览器体检：仅当工具集含 browser_debug(frontend/full preset)时才查——纯 CLI
-  // 用户(minimal)不需要 chromium，不该每次启动被浏览器提示打扰。缺失则给一键
-  // 安装入口。异步、失败静默、不阻塞启动(同 git banner 姿态)。
+  // ???????????? browser_debug(frontend/full preset)?????? CLI
+  // ??(minimal)??? chromium??????????????????????
+  // ??????????????????(? git banner ??)?
   void (async () => {
     try {
       const { resolveToolPreset } = await import('./tools/tool-preset.js')
@@ -1997,11 +1998,11 @@ async function main() {
       const banner = formatBrowserMissingBanner(probe)
       if (banner) app?.commitStatic(banner)
     } catch {
-      // fail-open: 浏览器探测失败不打扰用户
+      // fail-open: ????????????
     }
   })()
 
-  // 异步检查更新：不阻塞启动，失败静默，有新版本时写入 scrollback 提示。
+  // ????????????????????????? scrollback ???
   if (!process.env.RIVET_NO_UPDATE_CHECK) {
     void (async () => {
       try {
@@ -2010,7 +2011,7 @@ async function main() {
           app.commitStatic(formatUpdateBanner(update.current, update.latest))
         }
       } catch {
-        // fail-open: 离线/注册表不可达时不打扰用户
+        // fail-open: ??/????????????
       }
     })()
   }

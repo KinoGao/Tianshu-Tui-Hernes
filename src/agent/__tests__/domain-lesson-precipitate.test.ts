@@ -33,7 +33,7 @@ function blockedResult(summary: string): WorkerResult {
 }
 
 describe('precipitateDomainLessons', () => {
-  // ── failed → defect_pattern ──
+  // ?? failed ? defect_pattern ??
 
   test('extracts defect_pattern from failed result', () => {
     const store = makeStore()
@@ -43,11 +43,11 @@ describe('precipitateDomainLessons', () => {
       const lessons = store.recall('tianquan', 10)
       const dp = lessons.find(l => l.kind === 'defect_pattern')
       assert.ok(dp)
-      assert.ok(dp!.text.includes('此类任务失败模式:'))
+      assert.ok(dp!.text.includes('????????:'))
     } finally { cleanup() }
   })
 
-  // ── passed → nothing (generators deleted) ──
+  // ?? passed ? nothing (generators deleted) ??
 
   test('passed result produces no lessons (generators deleted)', () => {
     const store = makeStore()
@@ -73,9 +73,9 @@ describe('precipitateDomainLessons', () => {
     } finally { cleanup() }
   })
 
-  // ── blocked → adversarial_input (English signals) ──
+  // ?? blocked ? adversarial_input (English signals) ??
 
-  test('blocked with "scope/outside" → 权限/范围限制', () => {
+  test('blocked with "scope/outside" ? ??/????', () => {
     const store = makeStore()
     try {
       const count = precipitateDomainLessons(store, { domainId: 'pojun', results: [blockedResult('scope file is outside the project')], objective: 'explore edge cases' })
@@ -83,11 +83,11 @@ describe('precipitateDomainLessons', () => {
       const lessons = store.recall('pojun', 10)
       const blocked = lessons.find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.includes('权限/范围限制触发:'))
+      assert.ok(blocked!.text.includes('??/??????:'))
     } finally { cleanup() }
   })
 
-  test('blocked with "requires approval" → 需人工审批', () => {
+  test('blocked with "requires approval" ? ?????', () => {
     const store = makeStore()
     try {
       const count = precipitateDomainLessons(store, { domainId: 'tianfu', results: [blockedResult('operation gated: requires explicit user approval')], objective: 'write config' })
@@ -95,11 +95,11 @@ describe('precipitateDomainLessons', () => {
       const lessons = store.recall('tianfu', 10)
       const blocked = lessons.find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.includes('需人工审批触发:'))
+      assert.ok(blocked!.text.includes('???????:'))
     } finally { cleanup() }
   })
 
-  test('blocked with "timed out" → 超时/熔断', () => {
+  test('blocked with "timed out" ? ??/??', () => {
     const store = makeStore()
     try {
       const count = precipitateDomainLessons(store, { domainId: 'pojun', results: [blockedResult('worker timed out after 120 seconds')], objective: 'deep scan' })
@@ -107,49 +107,49 @@ describe('precipitateDomainLessons', () => {
       const lessons = store.recall('pojun', 10)
       const blocked = lessons.find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.includes('超时/熔断触发:'))
+      assert.ok(blocked!.text.includes('??/????:'))
     } finally { cleanup() }
   })
 
-  // ── blocked → adversarial_input (Chinese signals) ──
+  // ?? blocked ? adversarial_input (Chinese signals) ??
 
-  test('Chinese "超出范围权限不足" → 权限/范围限制', () => {
+  test('Chinese "????????" ? ??/????', () => {
     const store = makeStore()
     try {
-      const count = precipitateDomainLessons(store, { domainId: 'pojun', results: [blockedResult('操作超出范围，权限不足无法完成')], objective: 'explore edge cases' })
+      const count = precipitateDomainLessons(store, { domainId: 'pojun', results: [blockedResult('???????????????')], objective: 'explore edge cases' })
       assert.ok(count >= 1)
       const lessons = store.recall('pojun', 10)
       const blocked = lessons.find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.includes('权限/范围限制触发:'))
+      assert.ok(blocked!.text.includes('??/??????:'))
     } finally { cleanup() }
   })
 
-  test('Chinese "需要人工审批" → 需人工审批', () => {
+  test('Chinese "??????" ? ?????', () => {
     const store = makeStore()
     try {
-      const count = precipitateDomainLessons(store, { domainId: 'tianfu', results: [blockedResult('该操作需要人工审批才能继续执行')], objective: 'destructive op' })
+      const count = precipitateDomainLessons(store, { domainId: 'tianfu', results: [blockedResult('???????????????')], objective: 'destructive op' })
       assert.ok(count >= 1)
       const lessons = store.recall('tianfu', 10)
       const blocked = lessons.find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.includes('需人工审批触发:'))
+      assert.ok(blocked!.text.includes('???????:'))
     } finally { cleanup() }
   })
 
-  test('Chinese "超时中断" → 超时/熔断', () => {
+  test('Chinese "????" ? ??/??', () => {
     const store = makeStore()
     try {
-      const count = precipitateDomainLessons(store, { domainId: 'pojun', results: [blockedResult('worker 超时中断，任务未完成')], objective: 'long scan' })
+      const count = precipitateDomainLessons(store, { domainId: 'pojun', results: [blockedResult('worker ??????????')], objective: 'long scan' })
       assert.ok(count >= 1)
       const lessons = store.recall('pojun', 10)
       const blocked = lessons.find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.includes('超时/熔断触发:'))
+      assert.ok(blocked!.text.includes('??/????:'))
     } finally { cleanup() }
   })
 
-  // ── edge cases ──
+  // ?? edge cases ??
 
   test('"microscope" does not match scope signal (word boundary)', () => {
     const store = makeStore()
@@ -158,7 +158,7 @@ describe('precipitateDomainLessons', () => {
       assert.ok(count >= 1)
       const blocked = store.recall('pojun', 10).find(l => l.kind === 'adversarial_input')
       assert.ok(blocked)
-      assert.ok(blocked!.text.startsWith('执行受阻:'))
+      assert.ok(blocked!.text.startsWith('????:'))
     } finally { cleanup() }
   })
 
@@ -183,11 +183,11 @@ describe('buildDomainKnowledgeBlock', () => {
   test('returns formatted block with lessons', () => {
     const store = makeStore()
     try {
-      store.deposit({ domainId: 'tianquan', kind: 'defect_pattern', text: '边界检查缺失', evidence: 'e' })
+      store.deposit({ domainId: 'tianquan', kind: 'defect_pattern', text: '??????', evidence: 'e' })
       store.flushSync()
       const block = buildDomainKnowledgeBlock(store, 'tianquan')
-      assert.ok(block.includes('天权'))
-      assert.ok(block.includes('边界检查缺失'))
+      assert.ok(block.includes('??'))
+      assert.ok(block.includes('??????'))
     } finally { cleanup() }
   })
 
@@ -217,7 +217,7 @@ describe('buildDomainKnowledgeBlock', () => {
   })
 })
 
-// ── 星河路由记录（收编 #5）：沉淀 → 召回 → 持久化 ──
+// ?? ????????? #5???? ? ?? ? ??? ??
 
 describe('galaxy routing records', () => {
   test('record + recall by taskShape (newest first)', () => {
@@ -228,8 +228,8 @@ describe('galaxy routing records', () => {
       store.recordGalaxyRouting({ dimensionName: 'search', authority: 'tianji', taskShape: 'search', status: 'passed' })
 
       const review = store.recallGalaxyRouting('review')
-      // 追加式：两条都在（胜率统计需要多次执行记录）；同毫秒时间戳下
-      // 排序不做强断言，只验证内容与去重后的集合
+      // ??????????????????????????????
+      // ????????????????????
       assert.equal(review.length, 2)
       assert.deepEqual(review.map(r => r.status).sort(), ['failed', 'passed'])
       const search = store.recallGalaxyRouting('search')
@@ -252,6 +252,19 @@ describe('galaxy routing records', () => {
     } finally { cleanup() }
   })
 
+  test('batch record + recall preserves all routing facts', () => {
+    const store = makeStore()
+    try {
+      store.recordGalaxyRoutingBatch([
+        { dimensionName: 'review', authority: 'yaoguang', taskShape: 'review', status: 'passed' },
+        { dimensionName: 'search', authority: 'tianji', taskShape: 'search', status: 'failed' },
+      ])
+
+      assert.equal(store.recallGalaxyRouting('review').length, 1)
+      assert.equal(store.recallGalaxyRouting('search')[0]!.status, 'failed')
+    } finally { cleanup() }
+  })
+
   test('unknown taskShape recalls nothing', () => {
     const store = makeStore()
     try {
@@ -261,7 +274,7 @@ describe('galaxy routing records', () => {
   })
 })
 
-// ── 批级共享信息素块（收编 #3）：worker prompt 注入侧 ──
+// ?? ??????????? #3??worker prompt ??? ??
 
 describe('formatBatchStigmergyBlock', () => {
   test('formats top signals by decayed strength, empty store returns empty string', async () => {
@@ -270,8 +283,8 @@ describe('formatBatchStigmergyBlock', () => {
     await store.deposit({ path: 'src/b.ts', signal: 'dead-end', strength: 0.9, context: 'recursion' })
 
     const block = await formatBatchStigmergyBlock(store)
-    assert.ok(block.includes('本批共享信号'))
-    assert.ok(block.includes('[dead-end] src/b.ts — recursion'), '高强度的 dead-end 应排前')
+    assert.ok(block.includes('??????'))
+    assert.ok(block.includes('[dead-end] src/b.ts ? recursion'), '???? dead-end ???')
     assert.ok(block.includes('[fragile] src/a.ts'))
 
     const empty = await formatBatchStigmergyBlock(new StigmergyStore(undefined))
@@ -285,6 +298,6 @@ describe('formatBatchStigmergyBlock', () => {
     }
     const block = await formatBatchStigmergyBlock(store)
     const matches = block.match(/^\- /gm)?.length ?? 0
-    assert.ok(matches <= 3, `最多 3 条，got ${matches}`)
+    assert.ok(matches <= 3, `?? 3 ??got ${matches}`)
   })
 })
