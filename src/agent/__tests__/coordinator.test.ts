@@ -1812,10 +1812,71 @@ describe('DelegationCoordinator', () => {
       scope: { files: ['src/handoff-claim.ts'] },
     })
     await startedPromise
-    await coordinator.shutdownAndWait(1_000)
+    assert.equal(await coordinator.shutdownAndWait(1_000), true)
     await pending
 
     assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-claim.ts'), true)
+  })
+
+  it('shutdownAndWait reports a timeout while a provider ignores abort', async () => {
+    const claims = new Map<string, string>()
+    const sessionRegistry = {
+      acquireClaim: (sessionId: string, filePath: string) => {
+        const owner = claims.get(filePath)
+        if (owner && owner !== sessionId) return false
+        claims.set(filePath, sessionId)
+        return true
+      },
+      releaseClaim: (sessionId: string, filePath: string) => {
+        if (claims.get(filePath) === sessionId) claims.delete(filePath)
+      },
+    }
+    let started!: () => void
+    const startedPromise = new Promise<void>(resolve => { started = resolve })
+    let finish!: () => void
+    const finishPromise = new Promise<void>(resolve => { finish = resolve })
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 1,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      sessionRegistry: sessionRegistry as never,
+      sessionId: 's-main',
+      runWorker: async config => {
+        started()
+        await finishPromise
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getMessages: () => [], getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    const pending = coordinator.delegate({
+      parentTurnId: 'handoff_timeout',
+      objective: 'Keep a write claim while the provider ignores abort.',
+      kind: 'patch_proposal',
+      profile: 'patcher',
+      scope: { files: ['src/handoff-timeout-claim.ts'] },
+    })
+    await startedPromise
+    assert.equal(await coordinator.shutdownAndWait(1), false)
+    assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-timeout-claim.ts'), false)
+
+    finish()
+    await pending
+    assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-timeout-claim.ts'), true)
   })
 
   it('blocks write worker when files are already claimed by another session', async () => {

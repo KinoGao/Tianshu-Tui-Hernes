@@ -923,10 +923,15 @@ export class DelegationCoordinator {
    * released session claims and global file reservations.  The bounded wait is
    * important for providers that ignore AbortSignal; those are reported as a
    * shutdown timeout and the process can still exit without hanging forever.
+   *
+   * Returns false when the timeout elapsed before every delegation settled.
+   * Callers that own the session registry must keep its claims in that case:
+   * a worker may still be writing after the abort signal was delivered.
    */
-  async shutdownAndWait(timeoutMs = 8_000): Promise<void> {
+  async shutdownAndWait(timeoutMs = 8_000): Promise<boolean> {
     this.abortInFlight()
     const pending = [...this.activeDelegations]
+    let settled = true
     if (pending.length > 0) {
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
@@ -934,6 +939,7 @@ export class DelegationCoordinator {
           Promise.allSettled(pending).then(() => undefined),
           new Promise<void>((resolve) => {
             timer = setTimeout(() => {
+              settled = false
               debugLog(`[coordinator] shutdown timed out with ${this.activeDelegations.size} delegation(s) still settling`)
               resolve()
             }, timeoutMs)
@@ -945,6 +951,7 @@ export class DelegationCoordinator {
       }
     }
     this.clearDispatchState()
+    return settled
   }
 
   shutdown(): void {

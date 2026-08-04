@@ -1428,11 +1428,25 @@ export function createShutdownHandler(ctx: BootstrapContext): () => Promise<void
         try { ctx.refs.mcpManager?.killChildrenSync?.() } catch { /* best-effort */ }
         void ctx.refs.mcpManager?.shutdown?.()
         // Wait for coordinator finally blocks so session claims are released
-        // before a handoff or the next process can enter this workspace.
+        // before a handoff or the next process can enter this workspace.  Do
+        // not unregister on a timeout: an abort is advisory for providers that
+        // ignore AbortSignal, and their worker may still be writing files.
+        let workersSettled = !ctx.refs.coordinator
         try {
-          if (ctx.refs.coordinator?.shutdownAndWait) await ctx.refs.coordinator.shutdownAndWait()
-          else ctx.refs.coordinator?.shutdown()
-        } catch { /* best-effort */ }
+          if (ctx.refs.coordinator?.shutdownAndWait) {
+            workersSettled = await ctx.refs.coordinator.shutdownAndWait()
+          } else if (ctx.refs.coordinator) {
+            ctx.refs.coordinator.shutdown()
+            workersSettled = false
+          }
+        } catch {
+          workersSettled = false
+        }
+        let mainRunSettled = false
+        try { mainRunSettled = !ctx.agent.isRunning() } catch { /* fail closed */ }
+        if (workersSettled && mainRunSettled) {
+          try { ctx.refs.sessionRegistry?.unregister(ctx.sessionId) } catch { /* best-effort */ }
+        }
         if (process.stdin.isTTY && process.stdin.setRawMode) {
           process.stdin.setRawMode(false)
         }
