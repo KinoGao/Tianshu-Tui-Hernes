@@ -3874,9 +3874,11 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
         app.commitStatic('   ⚠️ 若有其他天枢/rivet 会话在运行，请一并退出——否则 npm 覆盖全局包时仍会命中文件占用而失败。')
         app.commitStatic(`   日志：${schedule.logPath}`)
         setTimeout(() => {
-          ctx.shutdown()
-          app.dispose()
-          process.exit(0)
+          void (async () => {
+            await ctx.shutdown()
+            app.dispose()
+            process.exit(0)
+          })()
         }, 400)
         return true
       }
@@ -3898,9 +3900,11 @@ export function registerTuiSlashCommands(app: TuiApp, ctx: BootstrapContext): vo
 
       app.commitStatic('✅ Update complete. Restarting...')
       setTimeout(() => {
-        ctx.shutdown()
-        app.dispose()
-        restartProcess(ctx.sessionId)
+        void (async () => {
+          await ctx.shutdown()
+          app.dispose()
+          restartProcess(ctx.sessionId)
+        })()
       }, 250)
       return true
     },

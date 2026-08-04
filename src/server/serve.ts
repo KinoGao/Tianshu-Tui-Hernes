@@ -747,25 +747,28 @@ export async function runServe(opts: RunServeOptions = {}): Promise<RunningServe
       sessions.abortAll()
       // Wave L: 与 TUI createShutdownHandler 对称——abort 中止 turn 后，对所有
       // session 显式 shutdown 释放 coordinator stallSweep + 在途 worker 句柄。
-      // 进程退出 OS 会回收，但显式 shutdown 语义清晰、对齐双侧路径。
-      sessions.shutdownAll()
-      void wiring?.stop()
-      wiring?.dispose()
-      taskRegistry?.dispose()
-      scheduler?.stop()
-      // Kill MCP child processes synchronously — async shutdown() may not
-      // complete before the process exits, leaving orphaned subprocesses.
-      sharedRuntime.mcpManager?.killChildrenSync()
-      // Wave G: 释放 per-cwd 共享 Meridian/LSP 资源（module may still be loading).
-      if (serveAgentMod) {
-        serveAgentMod.disposeSharedCwdResources(sharedRuntime)
-      } else {
-        sharedRuntime.meridianIndexers.clear()
-        sharedRuntime.lspManagers.clear()
-        sharedRuntime.domainStores.clear()
+      // 共享资源要等 claims/worker finally 完成后再拆，避免 handoff 紧接着
+      // 进入同一工作区时撞上上一会话的文件归属。
+      const finish = () => {
+        void wiring?.stop()
+        wiring?.dispose()
+        taskRegistry?.dispose()
+        scheduler?.stop()
+        // Kill MCP child processes synchronously — async shutdown() may not
+        // complete before the process exits, leaving orphaned subprocesses.
+        sharedRuntime.mcpManager?.killChildrenSync()
+        // Wave G: 释放 per-cwd 共享 Meridian/LSP 资源（module may still be loading).
+        if (serveAgentMod) {
+          serveAgentMod.disposeSharedCwdResources(sharedRuntime)
+        } else {
+          sharedRuntime.meridianIndexers.clear()
+          sharedRuntime.lspManagers.clear()
+          sharedRuntime.domainStores.clear()
+        }
+        loopHealth.stop()
+        server.close(cb)
       }
-      loopHealth.stop()
-      server.close(cb)
+      void sessions.shutdownAll().then(finish, finish)
     },
   }
 }

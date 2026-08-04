@@ -375,7 +375,7 @@ export interface ManagedAgent {
    * worker。与 abort() 严格分离——abort 中止当前 turn 但保留 agent 可继续运行，
    * shutdown 是终结性操作。Optional 以兼容 lightweight test doubles。
    */
-  shutdown?(): void
+  shutdown?(): void | Promise<void>
   /**
    * I1: 直接召集议事会评审一个 artifact 中的 council-plan-json 草案。
    * 由桌面 CouncilSurface 调用；实际实现持有 coordinator 与 artifactStore。
@@ -3556,13 +3556,19 @@ export class RuntimeSessionManager {
    * abortAll() 分离：abortAll 仅中止当前 turn，shutdownAll 是终结性操作。
    * best-effort：任一 session shutdown 抛错不影响其他。
    */
-  shutdownAll(): void {
+  shutdownAll(): Promise<void> {
     if (this.idleSweepTimer) {
       clearInterval(this.idleSweepTimer)
       this.idleSweepTimer = undefined
     }
+    const pending: Promise<void>[] = []
     for (const s of this.sessions.values()) {
-      try { s.agent?.shutdown?.() } catch { /* best-effort */ }
+      try {
+        const result = s.agent?.shutdown?.()
+        if (result && typeof (result as Promise<void>).then === 'function') {
+          pending.push(Promise.resolve(result).catch(() => undefined))
+        }
+      } catch { /* best-effort */ }
       try { s.jobs?.killAll() } catch { /* best-effort */ }
       // Drain any coalescing delta window so the tail is never lost on exit.
       try { this.flushDeltaBuf(s) } catch { /* best-effort */ }
@@ -3570,6 +3576,7 @@ export class RuntimeSessionManager {
     }
     // Flush any buffered events to disk before exit.
     this.persistence?.flushSync?.()
+    return pending.length > 0 ? Promise.all(pending).then(() => undefined) : Promise.resolve()
   }
 
   /**

@@ -150,7 +150,7 @@ async function shutdown(code: number = 0): Promise<void> {
     cleanup: [
       () => {
         // Delegate core cleanup to bootstrap shutdown handler.
-        ctx?.shutdown()
+        return ctx?.shutdown()
       },
       () => eventStream?.close(),
       () => {

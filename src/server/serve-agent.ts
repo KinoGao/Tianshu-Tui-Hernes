@@ -736,9 +736,13 @@ export function buildManagedAgent(
     },
     // Wave L: 进程退出释放本 session 的 coordinator timer + in-flight worker
     // 句柄。abort() 仅中止当前 turn；shutdown() 是终结性操作。
-    shutdown: () => {
+    shutdown: async () => {
       try { void agent.cancelIdleCompaction() } catch { /* best-effort */ }
-      try { stores.refs.coordinator?.shutdown() } catch { /* best-effort */ }
+      const coordinator = stores.refs.coordinator
+      try {
+        if (coordinator?.shutdownAndWait) await coordinator.shutdownAndWait()
+        else coordinator?.shutdown()
+      } catch { /* best-effort */ }
       shared?.sessions?.clearCoordinatorRef(sessionId)
     },
     // I1: 桌面端议事会入口，直接评审 artifact 中的 council-plan-json。
@@ -988,4 +992,3 @@ async function delegateWorkerOnCoordinator(
     evidenceStatus: result?.evidenceStatus,
   })
 }
-

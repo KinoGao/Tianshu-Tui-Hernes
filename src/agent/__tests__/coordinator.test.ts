@@ -1754,6 +1754,70 @@ describe('DelegationCoordinator', () => {
     assert.equal(sessionRegistry.acquireClaim('other-session', 'src/claim-failure-cleanup.ts'), true)
   })
 
+  it('shutdownAndWait waits for an aborted writer before handoff', async () => {
+    const claims = new Map<string, string>()
+    const sessionRegistry = {
+      acquireClaim: (sessionId: string, filePath: string) => {
+        const owner = claims.get(filePath)
+        if (owner && owner !== sessionId) return false
+        claims.set(filePath, sessionId)
+        return true
+      },
+      releaseClaim: (sessionId: string, filePath: string) => {
+        if (claims.get(filePath) === sessionId) claims.delete(filePath)
+      },
+    }
+    let started!: () => void
+    const startedPromise = new Promise<void>(resolve => { started = resolve })
+    const coordinator = new DelegationCoordinator({
+      baseToolRegistry: makeRegistry(),
+      modelCards: cards,
+      maxWorkers: 1,
+      runtimeFactory: (order, card, workerRegistry) => ({
+        order,
+        client: {} as StreamClient,
+        promptEngine: new PromptEngine({ model: card.model, maxTokens: 1024, staticCtx: { tools: workerRegistry.getDefinitions() }, volatileCtx: { cwd: '/repo' } }),
+        toolRegistry: workerRegistry,
+        cwd: '/repo',
+        maxTurns: 2,
+        contextWindow: card.contextWindow,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+      }),
+      sessionRegistry: sessionRegistry as never,
+      sessionId: 's-old',
+      runHands: async config => {
+        await config.runAgent('', { onTurnComplete: () => {} } as never, '/repo')
+        return { result: resultFor(config.order.id), usage: {} }
+      },
+      runWorker: async config => {
+        started()
+        await new Promise<void>(resolve => {
+          if (config.abortSignal?.aborted) { resolve(); return }
+          config.abortSignal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+        return {
+          result: resultFor(config.order.id),
+          transcript: { text: '', thinking: '', toolUses: [], toolResults: [], errors: [], repairAttempts: 0 },
+          session: { getMessages: () => [], getTurnCount: () => 1 } as never,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        }
+      },
+    })
+
+    const pending = coordinator.delegate({
+      parentTurnId: 'handoff_writer',
+      objective: 'Hold a write claim until shutdown explicitly releases it before the next session starts.',
+      kind: 'patch_proposal',
+      profile: 'patcher',
+      scope: { files: ['src/handoff-claim.ts'] },
+    })
+    await startedPromise
+    await coordinator.shutdownAndWait(1_000)
+    await pending
+
+    assert.equal(sessionRegistry.acquireClaim('s-new', 'src/handoff-claim.ts'), true)
+  })
+
   it('blocks write worker when files are already claimed by another session', async () => {
     const claims = new Map<string, string>()
     // Pre-claim a file for another session

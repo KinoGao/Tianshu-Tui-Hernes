@@ -143,6 +143,10 @@ describe('STARFLOW_ORCHESTRATOR', () => {
     assert.equal(saved.phases.council.status, 'passed')
     assert.equal(saved.phases.team.status, 'passed')
     assert.equal(saved.phases.galaxy.status, 'passed')
+    assert.equal(typeof saved.phases.council.elapsedMs, 'number')
+    assert.equal(typeof saved.phases.team.elapsedMs, 'number')
+    assert.ok(saved.phases.team.rawPath, 'phase output should have a durable fallback report')
+    assert.match(readFileSync(saved.phases.team.rawPath, 'utf8'), /team standard/)
     assert.ok(saved.updatedAt > 0)
     // 报告：交付检查清单 + deliver_task 提示
     assert.match(run.report, /交付检查清单/)
@@ -225,6 +229,10 @@ describe('STARFLOW_ORCHESTRATOR', () => {
     assert.equal(calls.council[1]!.input.rounds, 2, '复议强制反驳轮')
     assert.equal(calls.team.length, 2)
     assert.equal(run.state.teamRetries, 1)
+    assert.ok(run.state.phases.team?.rawPath)
+    const teamRaw = readFileSync(run.state.phases.team!.rawPath!, 'utf8')
+    assert.match(teamRaw, /未提供计划/)
+    assert.match(teamRaw, /team standard/)
     assert.match(run.report, /复议 1 次后通过/)
   })
 

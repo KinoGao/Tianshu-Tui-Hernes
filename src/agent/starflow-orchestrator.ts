@@ -581,6 +581,25 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
   }
   // 非 resume 的显式重跑：丢弃旧状态从头来（freshState 已覆盖）。
   let teamRetried = false
+  const phaseStartedAt = new Map<'council' | 'team' | 'galaxy' | 'deliver', number>()
+  const phaseOutputs = new Map<'council' | 'team' | 'galaxy' | 'deliver', string[]>()
+  const beginPhase = (phase: 'council' | 'team' | 'galaxy' | 'deliver'): void => {
+    if (!phaseStartedAt.has(phase)) phaseStartedAt.set(phase, now())
+  }
+  const rememberPhaseOutput = (phase: 'council' | 'team' | 'galaxy' | 'deliver', content: string): void => {
+    if (!content.trim()) return
+    const outputs = phaseOutputs.get(phase) ?? []
+    outputs.push(content)
+    phaseOutputs.set(phase, outputs)
+  }
+  const phaseRawContent = (phase: 'council' | 'team' | 'galaxy' | 'deliver', fallback: string): string => {
+    const outputs = phaseOutputs.get(phase)
+    return outputs && outputs.length > 0 ? outputs.join('\n\n--- phase output ---\n\n') : fallback
+  }
+  const phaseElapsed = (phase: 'council' | 'team' | 'galaxy' | 'deliver'): number | undefined => {
+    const started = phaseStartedAt.get(phase)
+    return started === undefined ? undefined : Math.max(0, now() - started)
+  }
 
   const checkpoint = async (
     phase: 'council' | 'team' | 'galaxy' | 'deliver',
@@ -595,8 +614,8 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
   const block = async (phase: 'council' | 'team' | 'galaxy', reason: string, summary: string, rawContent = summary): Promise<StarflowRun> => {
     state.phase = phase
     state.blockedReason = reason
-    const previousAt = state.phases[phase]?.at ?? now()
-    await checkpoint(phase, { status: 'blocked', summary, at: now(), elapsedMs: Math.max(0, now() - previousAt) }, rawContent)
+    const elapsedMs = phaseElapsed(phase)
+    await checkpoint(phase, { status: 'blocked', summary, at: now(), ...(elapsedMs === undefined ? {} : { elapsedMs }) }, phaseRawContent(phase, rawContent))
     deps.params.onOutput?.(`${GLYPH} 星流 · ${phase} 阶段已保存中断检查点，可用 resume: true 续跑\n`)
     return { state, report: buildReport(state, teamRetried) }
   }
@@ -607,8 +626,8 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
     status: 'passed' | 'skipped' = 'passed',
     rawContent = summary,
   ): Promise<void> => {
-    const previousAt = state.phases[phase]?.at ?? now()
-    await checkpoint(phase, { status, summary, at: now(), elapsedMs: Math.max(0, now() - previousAt) }, rawContent)
+    const elapsedMs = phaseElapsed(phase)
+    await checkpoint(phase, { status, summary, at: now(), ...(elapsedMs === undefined ? {} : { elapsedMs }) }, phaseRawContent(phase, rawContent))
     state.phase = next
     state.blockedReason = undefined
     state.updatedAt = now()
@@ -617,6 +636,7 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
 
   // ── 阶段 1：council 评审 ─────────────────────────────────────────────
   if (state.phase === 'council') {
+    beginPhase('council')
     deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 1/4 council 评审\n`)
     const councilInput: Record<string, unknown> = { objective: input.objective, confirm: true }
     if (input.draftItems && input.draftItems.length > 0) {
@@ -633,8 +653,10 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
         deps.councilTool.execute({ ...subParams(deps, 'council'), input: councilInput }))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      rememberPhaseOutput('council', message)
       return block('council', `council 执行中断：${message}`, message)
     }
+    rememberPhaseOutput('council', result.content)
     const gate = councilGate(result)
     if (!gate.ok) return block('council', gate.reason, firstLine(result.content), result.content)
     const planJson = extractPlanJson(result.content)
@@ -644,6 +666,7 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
 
   // ── 阶段 2：team 波次（失败可回 council 复议一次） ─────────────────────
   if (state.phase === 'team') {
+    beginPhase('team')
     deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 2/4 team 波次\n`)
     for (;;) {
       // 多波计划：team_orchestrate 每次只派一个就绪波次，按续波提示逐波推进。
@@ -658,8 +681,10 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
             deps.teamTool.execute({ ...subParams(deps, `${waveTag}-w${fromWave}`), input: teamInput }))
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
+          rememberPhaseOutput('team', message)
           return block('team', `team 执行中断：${message}`, message)
         }
+        rememberPhaseOutput('team', lastResult.content)
         const gate = teamGate(lastResult)
         if (!gate.ok) {
           // 复议上限 1 次：回 council（rounds:2 复议轮）重审契约后再跑 team。
@@ -676,22 +701,27 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
             reInput.objective = augmentCouncilObjective(input.objective, input.draftItems, deps.cwd, { precheck: false })
           }
           if (input.seats && input.seats.length > 0) reInput.seats = input.seats
+          phaseStartedAt.set('council', now())
           let reResult: ToolResult
           try {
             reResult = await runWithPhaseHeartbeat(deps, 'council', () =>
               deps.councilTool.execute({ ...subParams(deps, 'council-retry'), input: reInput }))
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
+            rememberPhaseOutput('council', message)
             return block('team', `复议执行中断：${message}`, message)
           }
+          rememberPhaseOutput('council', reResult.content)
           const reGate = councilGate(reResult)
           if (!reGate.ok) return block('team', `复议未过：${reGate.reason}`, firstLine(reResult.content), reResult.content)
           state.planJson = extractPlanJson(reResult.content) ?? state.planJson
+          const reElapsedMs = phaseElapsed('council')
           await checkpoint('council', {
             status: reGate.ok ? 'passed' : 'blocked',
             summary: firstLine(reResult.content),
             at: now(),
-          }, reResult.content)
+            ...(reElapsedMs === undefined ? {} : { elapsedMs: reElapsedMs }),
+          }, phaseRawContent('council', reResult.content))
           break // 跳出波次循环，外层 for(;;) 重跑 team
         }
         const next = nextWaveOf(lastResult)
@@ -709,6 +739,7 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
 
   // ── 阶段 3：galaxy 攻坚 ──────────────────────────────────────────────
   if (state.phase === 'galaxy') {
+    beginPhase('galaxy')
     const derived = input.galaxyDims ?? deriveGalaxyDims(input.draftItems)
     if (derived.length < 2) {
       // 无显式维度也无可派生草稿——galaxy schema 要求 min 2，不足即跳过。
@@ -727,8 +758,10 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
         }))
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        rememberPhaseOutput('galaxy', message)
         return block('galaxy', `galaxy 执行中断：${message}`, message)
       }
+      rememberPhaseOutput('galaxy', result.content)
       const gate = galaxyGate(result)
       if (!gate.ok) return block('galaxy', gate.reason, firstLine(result.content), result.content)
       const truncated = derived.length > 5 ? `（草稿 ${derived.length} 项截断为 5 维）` : ''
@@ -738,6 +771,7 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
 
   // ── 阶段 4：交付清单（硬门禁归 deliver_task，此处只输出清单） ────────────
   if (state.phase === 'deliver') {
+    beginPhase('deliver')
     await pass('deliver', 'done', '交付清单已输出，待调用 deliver_task')
   }
 

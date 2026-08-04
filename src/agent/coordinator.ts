@@ -794,10 +794,15 @@ export class DelegationCoordinator {
    *  share one concurrency budget instead of each having its own. */
   private activeWorkerCount = 0
   private readonly workerWaiters: Array<() => void> = []
+  private shuttingDown = false
   /** P1-8: global in-flight file claim table. Captures scope + write intent
    *  for every dispatched order so checkGlobalFileConflict can detect cross-
    *  wave overlap (WorkOrderQueue only guards within one batch). */
   private readonly inflightFiles = new Map<string, { files: string[]; writes: boolean }>()
+  /** Every dispatch promise currently owned by this coordinator.  Keeping the
+   * promise itself (rather than only its AbortController) lets handoff wait for
+   * the delegateOrder finally blocks that release file claims. */
+  private readonly activeDelegations = new Set<Promise<CoordinatorRun>>()
 
   constructor(private config: DelegationCoordinatorConfig) {
     this.runWorker = config.runWorker ?? runWorkerSession
@@ -885,11 +890,19 @@ export class DelegationCoordinator {
    *
    * 不清理 mailbox / circuitBreaker / collaboration——它们不持有 timer/进程级资源。
    */
-  shutdown(): void {
+  private abortInFlight(): void {
+    this.shuttingDown = true
     this.stopStallSweep()
     for (const controller of this.orderControllers.values()) {
       try { controller.abort() } catch { /* ignore */ }
     }
+    // Dispatches that are waiting for a semaphore slot do not have an order
+    // controller yet. Waking their waiters lets the parent abort propagate and
+    // prevents a successor session from inheriting a permanently occupied slot.
+    while (this.workerWaiters.length > 0) this.workerWaiters.shift()?.()
+  }
+
+  private clearDispatchState(): void {
     this.orderControllers.clear()
     this.policyCancelledIds.clear()
     this.liveMessages.clear()
@@ -902,6 +915,41 @@ export class DelegationCoordinator {
     this.steerQueues.clear()
     this.backgroundRuns.clear()
     this.backgroundPromises.clear()
+    this.inflightFiles.clear()
+  }
+
+  /**
+   * Abort the current run and wait until delegateOrder finally blocks have
+   * released session claims and global file reservations.  The bounded wait is
+   * important for providers that ignore AbortSignal; those are reported as a
+   * shutdown timeout and the process can still exit without hanging forever.
+   */
+  async shutdownAndWait(timeoutMs = 8_000): Promise<void> {
+    this.abortInFlight()
+    const pending = [...this.activeDelegations]
+    if (pending.length > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          Promise.allSettled(pending).then(() => undefined),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(() => {
+              debugLog(`[coordinator] shutdown timed out with ${this.activeDelegations.size} delegation(s) still settling`)
+              resolve()
+            }, timeoutMs)
+            timer.unref?.()
+          }),
+        ])
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    }
+    this.clearDispatchState()
+  }
+
+  shutdown(): void {
+    this.abortInFlight()
+    this.clearDispatchState()
   }
 
   // ── WC: TUI worker 视图直达通道（steer / kill） ──
@@ -1721,6 +1769,7 @@ export class DelegationCoordinator {
    *  waiter 队列移除并 reject，不再出现「主控已超时、槽位释放后僵尸唤醒
    *  继续跑完整 worker」。 */
   private async acquireWorkerSlot(parentSignal?: AbortSignal): Promise<void> {
+    if (this.shuttingDown) throw new Error('Coordinator is shutting down')
     while (this.activeWorkerCount >= this.config.maxWorkers) {
       await new Promise<void>((resolve, reject) => {
         let settled = false
@@ -1740,6 +1789,7 @@ export class DelegationCoordinator {
         this.workerWaiters.push(wake)
         parentSignal?.addEventListener('abort', onAbort, { once: true })
       })
+      if (this.shuttingDown) throw new Error('Coordinator is shutting down')
     }
     this.activeWorkerCount++
   }
@@ -1775,7 +1825,24 @@ export class DelegationCoordinator {
    *  in-flight file claims for cross-wave conflict detection, and passes the
    *  wave's abort signal / mailbox down explicitly instead of inheriting them
    *  from shared instance state. */
-  private async runDelegationWithGlobalGate(
+  private runDelegationWithGlobalGate(
+    order: WorkOrder,
+    parentSignal: AbortSignal | undefined,
+    mailbox: WorkerMailbox,
+  ): Promise<CoordinatorRun> {
+    const promise = this.runDelegationWithGlobalGateImpl(order, parentSignal, mailbox)
+    this.activeDelegations.add(promise)
+    // Do not use a bare finally() here: its derived promise would rethrow a
+    // worker rejection as an unhandled rejection. The original promise is
+    // still returned to the caller, while this observer only removes tracking.
+    void promise.then(
+      () => { this.activeDelegations.delete(promise) },
+      () => { this.activeDelegations.delete(promise) },
+    )
+    return promise
+  }
+
+  private async runDelegationWithGlobalGateImpl(
     order: WorkOrder,
     parentSignal: AbortSignal | undefined,
     mailbox: WorkerMailbox,

@@ -215,7 +215,7 @@ export interface BootstrapContext {
   domainKnowledgeStore: DomainKnowledgeStore
   meridianIndexer: MeridianIndexer
   cwd: string
-  shutdown: () => void
+  shutdown: () => Promise<void>
   /** Persist the final TUI perf summary through the existing telemetry writer. */
   flushTuiPerfSummary: (summary: TuiPerfSummary) => Promise<void>
   heartbeatInterval: ReturnType<typeof setInterval>
@@ -1399,46 +1399,48 @@ function makeAttackEvidenceVerifier(agent: AgentLoop): import('./tools/attack-ca
   }
 }
 
-export function createShutdownHandler(ctx: BootstrapContext): () => void {
-  let isShuttingDown = false
+export function createShutdownHandler(ctx: BootstrapContext): () => Promise<void> {
+  let shutdownPromise: Promise<void> | undefined
   return () => {
-    if (isShuttingDown) return
-    isShuttingDown = true
-
-    try {
-      // Mark a clean exit. Next startup mints a fresh session by default;
-      // returning here requires explicit --continue / --resume <id> (R1).
-      try { ctx.persist.updateMetadata({ cleanExit: true }) } catch { /* best-effort */ }
-      // resume 缓存继承的 shutdown flush：覆盖 collapse watermark 等不经
-      // commit 钩子的漂移（边界写由 wireFrozenSnapshotPersist 已覆盖）。
-      try { ctx.persist.writeFrozenSnapshot(ctx.agent.config.promptEngine.exportFrozenSnapshot()) } catch { /* best-effort */ }
-      ctx.persist.compactOai(ctx.session.getMessages())
-      if (ctx.fileHistory) {
-        persistFileHistory(
-          join(getSessionDir(ctx.cwd), ctx.sessionId, 'file-history.json'),
-          ctx.fileHistory.getAllSnapshots(),
-        )
+    if (shutdownPromise) return shutdownPromise
+    shutdownPromise = (async () => {
+      try {
+        // Mark a clean exit. Next startup mints a fresh session by default;
+        // returning here requires explicit --continue / --resume <id> (R1).
+        try { ctx.persist.updateMetadata({ cleanExit: true }) } catch { /* best-effort */ }
+        // resume 缓存继承的 shutdown flush：覆盖 collapse watermark 等不经
+        // commit 钩子的漂移（边界写由 wireFrozenSnapshotPersist 已覆盖）。
+        try { ctx.persist.writeFrozenSnapshot(ctx.agent.config.promptEngine.exportFrozenSnapshot()) } catch { /* best-effort */ }
+        ctx.persist.compactOai(ctx.session.getMessages())
+        if (ctx.fileHistory) {
+          persistFileHistory(
+            join(getSessionDir(ctx.cwd), ctx.sessionId, 'file-history.json'),
+            ctx.fileHistory.getAllSnapshots(),
+          )
+        }
+        ctx.agent.flushStigmergySync()
+        ctx.agent.abort()
+      } catch (err) {
+        try { process.stderr.write(`[shutdown] callback error: ${(err as Error)?.message}\n`) } catch { /* noop */ }
+      } finally {
+        if (ctx.heartbeatInterval) clearInterval(ctx.heartbeatInterval)
+        try { ctx.refs.lspManager?.dispose() } catch { /* best-effort */ }
+        try { ctx.refs.mcpManager?.killChildrenSync?.() } catch { /* best-effort */ }
+        void ctx.refs.mcpManager?.shutdown?.()
+        // Wait for coordinator finally blocks so session claims are released
+        // before a handoff or the next process can enter this workspace.
+        try {
+          if (ctx.refs.coordinator?.shutdownAndWait) await ctx.refs.coordinator.shutdownAndWait()
+          else ctx.refs.coordinator?.shutdown()
+        } catch { /* best-effort */ }
+        if (process.stdin.isTTY && process.stdin.setRawMode) {
+          process.stdin.setRawMode(false)
+        }
+        killAllSync()
+        // Note: does NOT call process.exit — callers should do so after additional cleanup
       }
-      ctx.agent.flushStigmergySync()
-      ctx.agent.abort()
-    } catch (err) {
-      try { process.stderr.write(`[shutdown] callback error: ${(err as Error)?.message}\n`) } catch { /* noop */ }
-    } finally {
-      if (ctx.heartbeatInterval) clearInterval(ctx.heartbeatInterval)
-      try { ctx.refs.lspManager?.dispose() } catch { /* best-effort */ }
-      try { ctx.refs.mcpManager?.killChildrenSync?.() } catch { /* best-effort */ }
-      void ctx.refs.mcpManager?.shutdown?.()
-      // Wave K (P0): clear stallSweep interval + abort in-flight workers.
-      // 进程退出时 OS 会回收，但显式 shutdown 让语义清晰、并对齐 sidecar 的
-      // switchModel 路径。同时让 unit test 退出更干净（unref 的 timer 不必依赖
-      // process 真退出来释放）。
-      try { ctx.refs.coordinator?.shutdown() } catch { /* best-effort */ }
-      if (process.stdin.isTTY && process.stdin.setRawMode) {
-        process.stdin.setRawMode(false)
-      }
-      killAllSync()
-      // Note: does NOT call process.exit — callers should do so after additional cleanup
-    }
+    })()
+    return shutdownPromise
   }
 }
 
@@ -2314,7 +2316,7 @@ export async function bootstrapInteractiveSession(opts: BootstrapOptions = {}): 
     config, provider, apiKey, auth, sessionId, session, persist,
     claimStore, fileHistory, toolRegistry, agent, refs,
     domainKnowledgeStore, meridianIndexer, cwd,
-    shutdown: () => {}, // placeholder, replaced below
+    shutdown: async () => {}, // placeholder, replaced below
     flushTuiPerfSummary: async () => {}, // placeholder; TUI bridge is attached on final context
     heartbeatInterval,
   })
