@@ -664,4 +664,13 @@ describe('STARFLOW_ITERATION_C_BASELINE_PRECHECK', () => {
     await runStarflow(deps, baseInput({ draftItems: [{ id: 'x', title: 't', detail: 'd' }] }))
     assert.doesNotMatch(calls.council[0]!.input.objective as string, /基线预检/)
   })
+
+  it('autoReview:false 跳过 Galaxy 追加审查波次', async () => {
+    const { deps, calls } = makeDeps({})
+    const run = await runStarflow(deps, baseInput({ autoReview: false }))
+
+    assert.equal(run.state.phase, 'done')
+    assert.equal(calls.galaxy.length, 1)
+    assert.equal(calls.galaxy[0]!.input.autoReview, false)
+  })
 })

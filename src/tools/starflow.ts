@@ -64,6 +64,7 @@ const inputSchema = z.object({
   draftItems: z.array(draftItemSchema).optional(),
   galaxyDims: z.array(dimensionSchema).min(2).max(5).optional(),
   rounds: z.union([z.literal(1), z.literal(2)]).optional(),
+  autoReview: z.boolean().optional(),
   seats: z.array(seatSchema).optional(),
   confirm: z.boolean().optional(),
   resume: z.boolean().optional(),
@@ -176,6 +177,7 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
             maxItems: 5,
           },
           rounds: { type: 'number', enum: [1, 2], description: 'council 辩论轮数（默认 1；高风险任务传 2 启用反驳轮）。' },
+          autoReview: { type: 'boolean', default: true, description: 'Whether Galaxy adds the automatic review wave; defaults to true.' },
           seats: {
             type: 'array',
             description: 'council 席位覆盖（同 council_convene 的 seats，透传到首轮与复议轮）。修订轮推荐只召回「上轮否决的席位 + 与修订点相关的域席」，而非默认全量。',
@@ -204,7 +206,7 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
       if (!parsed.success) {
         return { content: `星流参数错误：${parsed.error.message}`, isError: true, errorKind: 'format_error' }
       }
-      const { objective, draftItems, galaxyDims, rounds, seats, confirm, resume } = parsed.data
+      const { objective, draftItems, galaxyDims, rounds, seats, autoReview, confirm, resume } = parsed.data
 
       // galaxy 维度的最终来源：显式 galaxyDims 优先，缺省从 draftItems 派生。
       const dims: StarflowGalaxyDimension[] = galaxyDims ?? deriveGalaxyDims(draftItems)
@@ -236,7 +238,7 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
       // ── Phase 2: Execute ──────────────────────────────────────────
       const run = await runStarflow(
         { councilTool: deps.councilTool, teamTool: deps.teamTool, galaxyTool: deps.galaxyTool, cwd: deps.cwd, params },
-        { objective, ...(draftItems ? { draftItems } : {}), ...(galaxyDims ? { galaxyDims } : {}), ...(rounds ? { rounds } : {}), ...(seats && seats.length > 0 ? { seats } : {}), ...(resume ? { resume } : {}) },
+        { objective, ...(draftItems ? { draftItems } : {}), ...(galaxyDims ? { galaxyDims } : {}), ...(rounds ? { rounds } : {}), ...(seats && seats.length > 0 ? { seats } : {}), ...(autoReview === undefined ? {} : { autoReview }), ...(resume ? { resume } : {}) },
       )
       const blocked = run.state.phase !== 'done'
       return {

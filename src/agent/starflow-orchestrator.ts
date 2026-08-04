@@ -115,6 +115,8 @@ export interface StarflowInput {
    *  修订轮推荐只召回「上轮否决的席位 + 与修订点相关的域席」，而非默认全量。 */
   seats?: StarflowSeat[]
   /** 从 `.rivet/starflow/` 状态文件续跑——已过门禁的阶段不重复执行。 */
+  /** Optional Galaxy post-review wave; defaults to enabled. */
+  autoReview?: boolean
   resume?: boolean
 }
 
@@ -879,7 +881,7 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
       try {
         result = await runWithPhaseHeartbeat(deps, 'galaxy', () => deps.galaxyTool.execute({
           ...subParams(deps, 'galaxy'),
-          input: { objective: input.objective, dimensions: dims, autoReview: true, confirm: true },
+          input: { objective: input.objective, dimensions: dims, autoReview: input.autoReview ?? true, confirm: true },
         }))
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
