@@ -375,7 +375,7 @@ export interface ManagedAgent {
    * worker。与 abort() 严格分离——abort 中止当前 turn 但保留 agent 可继续运行，
    * shutdown 是终结性操作。Optional 以兼容 lightweight test doubles。
    */
-  shutdown?(): void | Promise<void>
+  shutdown?(): void | boolean | Promise<void | boolean>
   /**
    * I1: 直接召集议事会评审一个 artifact 中的 council-plan-json 草案。
    * 由桌面 CouncilSurface 调用；实际实现持有 coordinator 与 artifactStore。
@@ -1117,7 +1117,7 @@ export class RuntimeSessionManager {
    *  worker handles). The lightweight record/events stay; ensureAgent rebuilds
    *  on demand. Caller guarantees the session is not running. */
   private releaseAgent(s: InternalSession): void {
-    let shutdownResult: void | Promise<void> | undefined
+    let shutdownResult: void | boolean | Promise<void | boolean> | undefined
     try { shutdownResult = s.agent?.shutdown?.() } catch { /* best-effort */ }
     s.agent = null
     // A built agent may own claims even when the session has gone idle.  Wait
@@ -1125,10 +1125,10 @@ export class RuntimeSessionManager {
     // that ignored abort could race a new session during idle eviction.
     if (shutdownResult && typeof (shutdownResult as Promise<void>).then === 'function') {
       void Promise.resolve(shutdownResult).then(
-        () => this.releaseClaimsIfIdle(s),
-        () => this.releaseClaimsIfIdle(s),
+        (settled) => { if (settled !== false) this.releaseClaimsIfIdle(s) },
+        () => undefined,
       )
-    } else {
+    } else if (shutdownResult !== false) {
       this.releaseClaimsIfIdle(s)
     }
   }
@@ -3580,14 +3580,16 @@ export class RuntimeSessionManager {
     }
     const pending: Promise<void>[] = []
     for (const s of this.sessions.values()) {
-      let shutdownResult: void | Promise<void> | undefined
+      let shutdownResult: void | boolean | Promise<void | boolean> | undefined
       try {
         shutdownResult = s.agent?.shutdown?.()
       } catch { /* best-effort */ }
-      const releaseIdleClaims = () => this.releaseClaimsIfIdle(s)
+      const releaseIdleClaims = (settled?: void | boolean) => {
+        if (settled !== false) this.releaseClaimsIfIdle(s)
+      }
       if (shutdownResult && typeof (shutdownResult as Promise<void>).then === 'function') {
-        pending.push(Promise.resolve(shutdownResult).then(releaseIdleClaims, releaseIdleClaims))
-      } else {
+        pending.push(Promise.resolve(shutdownResult).then(releaseIdleClaims, () => undefined))
+      } else if (shutdownResult !== false) {
         releaseIdleClaims()
       }
       try { s.jobs?.killAll() } catch { /* best-effort */ }

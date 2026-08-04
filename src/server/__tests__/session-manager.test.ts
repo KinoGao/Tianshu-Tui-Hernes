@@ -466,6 +466,16 @@ test('R1: idle-agent eviction waits for async shutdown before releasing claims',
   assert.deepEqual(calls.released, [s.id])
 })
 
+test('R1: idle-agent eviction keeps claims when shutdown reports a timeout', () => {
+  const { manager, calls } = makeManagerWithRegistry()
+  const s = manager.createSession({ cwd: '/tmp/proj' })
+  const internal = manager['sessions'].get(s.id)!
+  internal.agent = { shutdown: () => false } as ManagedAgent
+
+  manager['releaseAgent'](internal)
+  assert.deepEqual(calls.released, [], 'a timed-out coordinator may still be writing')
+})
+
 test('R1: shutdownAll releases claims for idle sessions after agent shutdown', async () => {
   const { manager, calls } = makeManagerWithRegistry()
   const s = manager.createSession({ cwd: '/tmp/proj' })

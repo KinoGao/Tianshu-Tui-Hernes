@@ -739,11 +739,18 @@ export function buildManagedAgent(
     shutdown: async () => {
       try { void agent.cancelIdleCompaction() } catch { /* best-effort */ }
       const coordinator = stores.refs.coordinator
+      let settled = !coordinator
       try {
-        if (coordinator?.shutdownAndWait) await coordinator.shutdownAndWait()
-        else coordinator?.shutdown()
-      } catch { /* best-effort */ }
+        if (coordinator?.shutdownAndWait) settled = await coordinator.shutdownAndWait()
+        else if (coordinator) {
+          coordinator.shutdown()
+          settled = false
+        }
+      } catch {
+        settled = false
+      }
       shared?.sessions?.clearCoordinatorRef(sessionId)
+      return settled
     },
     // I1: 桌面端议事会入口，直接评审 artifact 中的 council-plan-json。
     conveneCouncil: (input) => conveneCouncilOnCoordinator(agent, stores.refs.coordinator, stores.refs, input),
