@@ -17,6 +17,7 @@ import {
   starflowStatePath,
   type StarflowGalaxyDimension,
 } from '../agent/starflow-orchestrator.js'
+import { validateGalaxyDimensionContract } from '../agent/galaxy-contract.js'
 import type { Tool, ToolCallParams, ToolResult } from './types.js'
 
 const GLYPH = '🌠'
@@ -207,6 +208,21 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
 
       // galaxy 维度的最终来源：显式 galaxyDims 优先，缺省从 draftItems 派生。
       const dims: StarflowGalaxyDimension[] = galaxyDims ?? deriveGalaxyDims(draftItems)
+
+      // Fail before council/team when the downstream Galaxy plan is ambiguous.
+      // Codex validates spawn arguments before creating children; Starflow
+      // should not spend two earlier phases on a plan that Galaxy rejects.
+      const contractIssues = validateGalaxyDimensionContract(dims)
+      if (contractIssues.length > 0) {
+        return {
+          content: [
+            'Starflow Galaxy contract validation failed:',
+            ...contractIssues.map(issue => '- dimension #' + (issue.dimensionIndex + 1) + ': ' + issue.message),
+          ].join('\n'),
+          isError: true,
+          errorKind: 'format_error',
+        }
+      }
 
       // ── Phase 1: Proposal（confirm 缺省/false）────────────────────
       // 纯静态方案展示——不调任何子工具（零派发），与 galaxy proposal 同构。

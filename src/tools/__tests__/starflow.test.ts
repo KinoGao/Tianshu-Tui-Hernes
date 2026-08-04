@@ -124,6 +124,27 @@ describe('STARFLOW_TOOL', () => {
     assert.equal(oneDim.errorKind, 'format_error')
   })
 
+  it('invalid Galaxy contract is rejected before council/team/galaxy dispatch', async () => {
+    const { tool, calls } = makeTool()
+    const invalid = await tool.execute({
+      toolUseId: 'tu_contract_preflight',
+      cwd: '/repo',
+      input: {
+        objective: 'validate starflow before dispatch',
+        galaxyDims: [
+          { name: 'review', objective: 'check', authority: 'yaoguang', authorities: ['yaoguang', 'tianji'] },
+          { name: 'backend', objective: 'inspect', authority: 'tianji' },
+        ],
+        confirm: true,
+      },
+    })
+
+    assert.equal(invalid.isError, true)
+    assert.equal(invalid.errorKind, 'format_error')
+    assert.match(invalid.content, /Starflow Galaxy contract validation failed|must set either/i)
+    assert.equal(calls.council.length + calls.team.length + calls.galaxy.length, 0)
+  })
+
   it('timeoutMs 覆盖三阶段串行预算（大于任一单工具的 10 分钟）', () => {
     const { tool } = makeTool()
     const budget = tool.timeoutMs?.({ input: { objective: 'x' }, toolUseId: 'tu_7', cwd: '/repo' })
