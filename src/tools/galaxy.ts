@@ -433,7 +433,11 @@ function formatGalaxyResult(
     const fallbackNote = target.requestedModel && actualModel && actualModel !== target.requestedModel
       ? ` ⚠ 模型回退：请求 ${target.requestedModel} → 实际 ${actualModel}`
       : ''
-    lines.push(`  ${target.label}: ${digest}${fallbackNote}`)
+    // M2 时间账：每维度 wall-clock（含等槽排队）——排队长/执行慢可区分。
+    const wallNote = r.durationMs !== undefined
+      ? ` · ${(r.durationMs / 1000).toFixed(1)}s`
+      : ''
+    lines.push(`  ${target.label}: ${digest}${fallbackNote}${wallNote}`)
     if (r.changedFiles.length > 0) {
       lines.push(`      changed: ${r.changedFiles.slice(0, 5).join(', ')}`)
       if (r.changedFiles.length > 5) lines.push(`      … (+${r.changedFiles.length - 5} more)`)

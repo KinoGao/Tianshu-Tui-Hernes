@@ -2937,6 +2937,7 @@ describe('DelegationCoordinator', () => {
     assert.equal(run.results.length, 6)
     assert.equal(explorePeak, 4, 'explore 池应突破 maxWorkers=2 跑到 4 并发')
     assert.equal(writePeak, 1, 'write 池守 maxWriteWorkers=1')
+    assert.ok(run.results.every(r => typeof r.durationMs === 'number'), 'M2: settle 结果携带 wall-clock 墙钟')
   })
 
   it('S1 分池：未配置池帽时行为与旧版一致（总并发 ≤ maxWorkers）', async () => {

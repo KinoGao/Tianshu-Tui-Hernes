@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createGalaxyTool, type GalaxyCoordinator } from '../galaxy.js'
 import { deriveStableWorkOrderId, type CoordinatorRun, type DelegationRequest } from '../../agent/coordinator.js'
 
-function makeRun(requests: DelegationRequest[]): CoordinatorRun {
+function makeRun(requests: DelegationRequest[], opts?: { durationMs?: number }): CoordinatorRun {
   return {
     status: 'completed',
     results: requests.map(r => ({
@@ -16,6 +16,7 @@ function makeRun(requests: DelegationRequest[]): CoordinatorRun {
       risks: [],
       nextActions: [],
       evidenceStatus: 'verified',
+      ...(opts?.durationMs !== undefined ? { durationMs: opts.durationMs } : {}),
       // 真实 coordinator 会把派发侧身份盖章进 WorkerResult（work-order.ts
       // workerResultSchema.profile/authority）——mock 同形，供终态透传断言。
       profile: r.profile,
@@ -869,5 +870,34 @@ describe('GALAXY_PLAN_PRECHECK', () => {
     const dpWithModel = recorded.find(r => r.taskShape === 'review' && r.model === 'MiniMax-M2.7')
     assert.ok(dpWithModel, '副本 2 轮换模型的记录必须带实际模型进入路由事实')
     assert.ok(recorded.some(r => r.taskShape === 'review' && r.model === undefined), '副本 1 默认路由无 model 覆盖')
+  })
+
+  it('M2: 维度报告展示 wall-clock（含等槽排队的总墙钟）', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const coordinator = capturingCoordinator(calls)
+    const originalRun = coordinator.delegateBatch
+    coordinator.delegateBatch = async (requests) => {
+      const run = await originalRun!(requests)
+      for (const r of run.results) r.durationMs = 1250
+      return run
+    }
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_timebook',
+      cwd: '/repo',
+      input: {
+        objective: 'time book across dimensions',
+        dimensions: [
+          { name: 'frontend', objective: '改前端', authority: 'wenqu', profile: 'patcher', files: ['src/app.ts'] },
+          { name: 'review', objective: '审查', authority: 'yaoguang', profile: 'reviewer' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.match(result.content, /· 1\.3s/, '每维度耗时（1.25s → 1.3s）进报告')
   })
 })

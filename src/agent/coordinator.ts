@@ -1918,7 +1918,15 @@ export class DelegationCoordinator {
     parentSignal: AbortSignal | undefined,
     mailbox: WorkerMailbox,
   ): Promise<CoordinatorRun> {
+    // M2 时间账：从进全局门到 settle 的总墙钟（含等槽排队）——galaxy 报告
+    // 据此暴露「哪一维最慢、哪里在排队」，维度划分质量从此有数据支撑。
+    const startedAt = Date.now()
     const promise = this.runDelegationWithGlobalGateImpl(order, parentSignal, mailbox)
+      .then(run => {
+        const wall = Math.max(0, Date.now() - startedAt)
+        for (const result of run.results) result.durationMs = wall
+        return run
+      })
     this.activeDelegations.add(promise)
     // Do not use a bare finally() here: its derived promise would rethrow a
     // worker rejection as an unhandled rejection. The original promise is

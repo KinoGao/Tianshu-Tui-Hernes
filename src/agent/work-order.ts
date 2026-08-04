@@ -296,6 +296,9 @@ export const workerResultSchema = z.object({
    *  由解析侧在 terminal 路径盖章——worker 自报不可信，但 hands 路径会经
    *  parseWorkerResult 内部往返一次，ingest 侧也要放行此键（同 failureReason 纪律）。 */
   parseErrorKind: z.enum(['no_json', 'json_syntax', 'schema_field', 'truncated']).optional(),
+  /** M2 时间账：worker 从进全局并发门到 settle 的墙钟（含等槽排队），由
+   *  coordinator 在 settle 后补账——非 worker 自报字段，不进 ingest schema。 */
+  durationMs: z.number().optional(),
 })
 
 const workerResultIngestSchema = z.object({
