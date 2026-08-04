@@ -331,7 +331,7 @@ describe('classifyToolFailure（结构优先的工具失败分类）', () => {
 
     const gate = classifyToolFailure({ errorKind: 'runtime_gate' }, '协调器正在关闭')
     assert.equal(gate.class, 'runtime_gate')
-    assert.equal(gate.retryable, true)
+    assert.equal(gate.retryable, false)
   })
 
   it('结构短路结果与文本分类的 retryable 语义一致', () => {

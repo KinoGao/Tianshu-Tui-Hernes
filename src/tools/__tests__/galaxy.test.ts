@@ -94,6 +94,30 @@ describe('GALAXY_TOOL', () => {
     assert.equal(calls.length, 0, 'shutdown gate must reject before fan-out')
   })
 
+  it('keeps dispatch fail-open when optional runtime telemetry throws', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const coordinator = capturingCoordinator(calls)
+    coordinator.getRuntimeSnapshot = () => { throw new Error('health probe unavailable') }
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_runtime_probe',
+      cwd: '/repo',
+      input: {
+        objective: 'dispatch despite optional telemetry failure',
+        dimensions: [
+          { name: 'backend', objective: 'inspect backend', authority: 'tianji' },
+          { name: 'review', objective: 'review the plan', authority: 'yaoguang' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, undefined, `unexpected error: ${result.content}`)
+    assert.equal(calls.length, 1, 'telemetry failure must not suppress a valid dispatch')
+  })
+
   it('rejects duplicate EP authorities and malformed DP replicas atomically', async () => {
     const calls: Array<{ requests: DelegationRequest[] }> = []
     const tool = createGalaxyTool(capturingCoordinator(calls))

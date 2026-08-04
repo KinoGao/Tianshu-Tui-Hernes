@@ -1028,10 +1028,16 @@ export class DelegationCoordinator {
    */
   getRuntimeSnapshot(): RuntimeCoordinatorSnapshot {
     let activeClaims = 0
+    let providerDegradation = 0
     try {
       activeClaims = this.config.activeClaims?.().length ?? 0
     } catch {
       // Diagnostics must remain fail-open when a claim store is unavailable.
+    }
+    try {
+      providerDegradation = this.config.providerHealth?.getDegradationRatio() ?? 0
+    } catch {
+      // A broken health probe must not break worker dispatch or diagnostics.
     }
     return {
       activeWorkers: this.activeWorkerCount,
@@ -1041,7 +1047,7 @@ export class DelegationCoordinator {
       inFlightFileScopes: this.inflightFiles.size,
       backgroundRunning: [...this.backgroundRuns.values()].filter(run => run.status === 'running').length,
       activeClaims,
-      providerDegradation: this.config.providerHealth?.getDegradationRatio() ?? 0,
+      providerDegradation,
       shuttingDown: this.shuttingDown,
     }
   }

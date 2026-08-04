@@ -587,7 +587,13 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       // begun. Other degraded signals remain observable and are handled by the
       // coordinator's normal liveness/claim gates rather than being blanket
       // rejected here.
-      const runtime = coordinator.getRuntimeSnapshot?.()
+      let runtime: RuntimeCoordinatorSnapshot | undefined
+      try {
+        runtime = coordinator.getRuntimeSnapshot?.()
+      } catch {
+        // Runtime telemetry is advisory; a broken snapshot must not prevent a
+        // normal Galaxy dispatch. The coordinator's own gates remain active.
+      }
       if (runtime?.shuttingDown) {
         return {
           content: '星河已拦截：协调器正在关闭或移交中，暂不接受新的集群派发；请等待当前任务收尾后重试。',
