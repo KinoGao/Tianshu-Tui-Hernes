@@ -32,6 +32,7 @@ import type { Tool, ToolCallParams, ToolResult } from './types.js'
 import { createActivityStreamer, createDelegationActivityMapper, progressSnippet } from './worker-activity-stream.js'
 import type { WorkerActivityEvent } from '../agent/coordinator.js'
 import { validateGalaxyDimensionContract } from '../agent/galaxy-contract.js'
+import { buildGalaxyBudgetInputs, isReviewGalaxyDimension, mapGalaxyDimensionToProfile } from '../agent/galaxy-budget.js'
 
 // ── Coordinator interface（与 delegate_batch 同构） ──────────────────────
 
@@ -146,20 +147,6 @@ function mapDimensionToKind(name: string): WorkOrderKind {
   return DIMENSION_KIND_MAP[key] ?? 'code_search'
 }
 
-function mapDimensionToProfile(name: string): string {
-  const key = name.toLowerCase().replace(/[\s_-]/g, '')
-  if (key === 'review' || key === 'verify') return 'reviewer'
-  if (key === 'plan') return 'planner'
-  if (key === 'docs' || key === 'research') return 'doc_scout'
-  // 实现类维度（含 design/frontend/backend 等）默认用 patcher（可写）
-  return 'patcher'
-}
-
-function isReviewDimension(name: string): boolean {
-  const key = name.toLowerCase().replace(/[\s_-]/g, '')
-  return key === 'review' || key === 'verify'
-}
-
 function galaxyWorkerParentTurnId(
   toolUseId: string,
   dimensionIndex: number,
@@ -233,7 +220,7 @@ function formatGalaxyProposal(
     '',
     `目标：${objective}`,
     '',
-    `分子 Agent 组成（${dimensions.length} 个维度${autoReview && !dimensions.some(d => isReviewDimension(d.name)) ? ' + 1 自动审查' : ''}）：`,
+    `分子 Agent 组成（${dimensions.length} 个维度${autoReview && !dimensions.some(d => isReviewGalaxyDimension(d.name)) ? ' + 1 自动审查' : ''}）：`,
   ]
 
   for (let i = 0; i < dimensions.length; i++) {
@@ -249,7 +236,7 @@ function formatGalaxyProposal(
     lines.push(`     ${d.objective}`)
   }
 
-  if (autoReview && !dimensions.some(d => isReviewDimension(d.name))) {
+  if (autoReview && !dimensions.some(d => isReviewGalaxyDimension(d.name))) {
     const yaoguang = starDomainRegistry.get('yaoguang')
     const label = yaoguang ? `瑶光（${yaoguang.motto.slice(0, 12)}…）` : '瑶光'
     lines.push(`  ${dimensions.length + 1}. review — ${label}`)
@@ -604,7 +591,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           }
         }
         const stars = dimension.authorities ?? []
-        const profile = (dimension.profile ?? mapDimensionToProfile(dimension.name)) as import('../agent/work-order.js').WorkerProfile
+        const profile = (dimension.profile ?? mapGalaxyDimensionToProfile(dimension.name)) as import('../agent/work-order.js').WorkerProfile
         if (dimension.parallelism === 'data') {
           if (!dimension.replicas) {
             return { content: `星河已拦截：DP 维度「${dimension.name}」必须指定 replicas（2–5）。`, isError: true }
@@ -651,7 +638,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       const dataParallelGroups = new Map<number, GalaxyDataParallelGroup>()
       const dpObligationByDim = new Map<number, string>()
       const explicitReviewIndexes = new Set(
-        dimensions.flatMap((dimension, index) => isReviewDimension(dimension.name) ? [index] : []),
+        dimensions.flatMap((dimension, index) => isReviewGalaxyDimension(dimension.name) ? [index] : []),
       )
 
       for (let i = 0; i < dimensions.length; i++) {
@@ -680,7 +667,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
 
         for (let j = 0; j < stars.length; j++) {
           const star = stars[j]!
-          const profile = (dim.profile ?? mapDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile
+          const profile = (dim.profile ?? mapGalaxyDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile
           for (let replicaIndex = 0; replicaIndex < replicaCount; replicaIndex++) {
             const parentTurnId = galaxyWorkerParentTurnId(params.toolUseId, i, j, isDataParallel ? replicaIndex : undefined)
             dimensionIndexByParentTurnId.set(parentTurnId, i)
@@ -726,7 +713,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       // work-queue 也只序列化写侧）；被剥离的文件显式进报告——重叠本质是
       // 维度划分问题，静默丢弃会让维度丢上下文且无人知晓。
       const writeDim = (idx: number): boolean =>
-        profileIsWriteCapable((dimensions[idx]!.profile ?? mapDimensionToProfile(dimensions[idx]!.name)) as import('../agent/work-order.js').WorkerProfile)
+        profileIsWriteCapable((dimensions[idx]!.profile ?? mapGalaxyDimensionToProfile(dimensions[idx]!.name)) as import('../agent/work-order.js').WorkerProfile)
       const fileOwner = new Map<string, number>() // file path → first WRITE dimension index
       for (let i = 0; i < dimensions.length; i++) {
         if (!writeDim(i)) continue
@@ -1002,28 +989,23 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
     isEnabled: () => true,
     // 外层超时必须覆盖 worker pool 的波次 × profile 预算，否则工具层先杀
     timeoutMs: (params) => {
-      const dims = (params?.input?.dimensions as Array<{ name?: string; authorities?: string[]; authority?: string; profile?: string; timeoutMs?: number; parallelism?: 'expert' | 'data'; replicas?: number; tierFloor?: string }> | undefined) ?? []
-      const profiles: Array<string | undefined> = []
-      const tierFloors: Array<string | undefined> = []
-      const requestedTimeoutMs: Array<number | undefined> = []
-      for (const d of dims) {
-        const stars = d.authorities ?? (d.authority ? [d.authority] : [])
-        const replicaCount = d.parallelism === 'data' ? d.replicas ?? 1 : 1
-        // 与执行侧保持一致：profile 省略时按维度名推导（实现类落到可写 patcher，
-        // 续跑轮次更多）——按 undefined（只读）算会低估外层预算。
-        const effectiveProfile = d.profile ?? (d.name ? mapDimensionToProfile(d.name) : undefined)
-        for (let i = 0; i < stars.length * replicaCount; i++) {
-          profiles.push(effectiveProfile)
-          tierFloors.push(d.tierFloor)
-          requestedTimeoutMs.push(d.timeoutMs)
-        }
-      }
+      const dims = (params?.input?.dimensions as Array<{
+        name?: string
+        authorities?: string[]
+        authority?: string
+        profile?: string
+        timeoutMs?: number
+        parallelism?: 'expert' | 'data'
+        replicas?: number
+        tierFloor?: string
+      }> | undefined) ?? []
+      const { profiles, tierFloors, requestedTimeoutMs } = buildGalaxyBudgetInputs(dims)
       // autoReview 依赖全部执行维度，是事实上的 +1 串行波次——它的预算必须
       // 加在执行预算之后，而不是混进 profiles 一起算：混入会让 allHands 判定
       // 失效（reviewer 非写工），写工续跑倍率被拉低，总预算反而变小，外层可能
       // 在审查跑到一半时硬杀，丢掉全部 partial 打捞。
       const autoReview = (params?.input?.autoReview as boolean | undefined) ?? true
-      const hasExplicitReview = dims.some(d => d.name !== undefined && isReviewDimension(d.name))
+      const hasExplicitReview = dims.some(d => d.name !== undefined && isReviewGalaxyDimension(d.name))
       const execMs = delegationToolTimeoutMs(
         params?.sessionTurnCount,
         profiles,

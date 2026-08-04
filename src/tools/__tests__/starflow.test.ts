@@ -39,6 +39,13 @@ const DRAFTS = [
   { id: 'review', title: '审查', detail: '审查登录逻辑' },
 ]
 
+const MANY_DRAFTS = [
+  ...DRAFTS,
+  { id: 'backend', title: 'backend', detail: 'backend logic' },
+  { id: 'docs', title: 'docs', detail: 'documentation' },
+  { id: 'tests', title: 'tests', detail: 'additional tests' },
+]
+
 describe('STARFLOW_TOOL', () => {
   it('confirm 缺省 → 只展示执行方案，三个子工具零调用', async () => {
     const { tool, calls } = makeTool()
@@ -153,9 +160,59 @@ describe('STARFLOW_TOOL', () => {
 
   it('autoReview:false removes the extra Galaxy review timeout budget', () => {
     const { tool } = makeTool()
-    const withReview = tool.timeoutMs?.({ input: { objective: 'x', autoReview: true }, toolUseId: 'tu_review_budget', cwd: '/repo' })
-    const withoutReview = tool.timeoutMs?.({ input: { objective: 'x', autoReview: false }, toolUseId: 'tu_no_review_budget', cwd: '/repo' })
+    const galaxyDims = [
+      { name: 'impl', objective: 'write', authority: 'tianliang' },
+      { name: 'backend', objective: 'inspect', authority: 'tianji' },
+    ]
+    const withReview = tool.timeoutMs?.({ input: { objective: 'x', galaxyDims, autoReview: true }, toolUseId: 'tu_review_budget', cwd: '/repo' })
+    const withoutReview = tool.timeoutMs?.({ input: { objective: 'x', galaxyDims, autoReview: false }, toolUseId: 'tu_no_review_budget', cwd: '/repo' })
     assert.ok(typeof withReview === 'number' && typeof withoutReview === 'number')
     assert.ok(withReview! > withoutReview!)
+  })
+
+  it('timeoutMs follows draft-derived dimensions and does not double-count explicit review', () => {
+    const { tool } = makeTool()
+    const twoDims = tool.timeoutMs?.({
+      input: { objective: 'x', draftItems: DRAFTS, autoReview: false },
+      toolUseId: 'tu_derived_two',
+      cwd: '/repo',
+    })
+    const fiveDims = tool.timeoutMs?.({
+      input: { objective: 'x', draftItems: MANY_DRAFTS, autoReview: false },
+      toolUseId: 'tu_derived_five',
+      cwd: '/repo',
+    })
+    assert.ok(typeof twoDims === 'number' && typeof fiveDims === 'number')
+    assert.ok(fiveDims! > twoDims!, `five derived dimensions must widen the budget (${fiveDims} vs ${twoDims})`)
+
+    const explicitReview = tool.timeoutMs?.({
+      input: { objective: 'x', draftItems: DRAFTS, autoReview: true },
+      toolUseId: 'tu_explicit_review',
+      cwd: '/repo',
+    })
+    assert.equal(explicitReview, twoDims, 'a derived review dimension already covers the review wave')
+  })
+
+  it('timeoutMs carries derived EP/DP profile, tier, and per-dimension budget inputs', () => {
+    const { tool } = makeTool()
+    const base = tool.timeoutMs?.({
+      input: { objective: 'x', draftItems: DRAFTS, autoReview: false },
+      toolUseId: 'tu_budget_base',
+      cwd: '/repo',
+    })
+    const tuned = tool.timeoutMs?.({
+      input: {
+        objective: 'x',
+        autoReview: false,
+        galaxyDims: [
+          { name: 'impl', objective: 'write', authority: 'tianliang', parallelism: 'data', replicas: 2, tierFloor: 'strong', timeoutMs: 900_000 },
+          { name: 'review', objective: 'check', authority: 'yaoguang' },
+        ],
+      },
+      toolUseId: 'tu_budget_tuned',
+      cwd: '/repo',
+    })
+    assert.ok(typeof base === 'number' && typeof tuned === 'number')
+    assert.ok(tuned! > base!, `explicit DP/tier/requested budget must widen the timeout (${tuned} vs ${base})`)
   })
 })

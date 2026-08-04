@@ -15,9 +15,11 @@ import {
   deriveGalaxyDims,
   runStarflow,
   starflowStatePath,
+  type StarflowDraftItem,
   type StarflowGalaxyDimension,
 } from '../agent/starflow-orchestrator.js'
 import { validateGalaxyDimensionContract } from '../agent/galaxy-contract.js'
+import { buildGalaxyBudgetInputs, isReviewGalaxyDimension } from '../agent/galaxy-budget.js'
 import type { Tool, ToolCallParams, ToolResult } from './types.js'
 
 const GLYPH = '🌠'
@@ -69,6 +71,27 @@ const inputSchema = z.object({
   confirm: z.boolean().optional(),
   resume: z.boolean().optional(),
 })
+
+/** timeoutMs is evaluated before inputSchema, so keep its plan projection defensive. */
+function timeoutDraftItems(value: unknown): StarflowDraftItem[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.filter((item): item is StarflowDraftItem => {
+    if (!item || typeof item !== 'object') return false
+    const candidate = item as Record<string, unknown>
+    return typeof candidate.id === 'string'
+      && typeof candidate.title === 'string'
+      && typeof candidate.detail === 'string'
+  })
+}
+
+function timeoutGalaxyDims(value: unknown): StarflowGalaxyDimension[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.filter((dimension): dimension is StarflowGalaxyDimension => {
+    if (!dimension || typeof dimension !== 'object') return false
+    const candidate = dimension as Record<string, unknown>
+    return typeof candidate.name === 'string' && typeof candidate.objective === 'string'
+  })
+}
 
 export interface StarflowToolDeps {
   councilTool: Tool
@@ -274,17 +297,26 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
       const councilMs = delegationToolTimeoutMs(turnCount, [undefined, undefined, undefined], { taskCount: 3 })
       // team worker 多为写工（patcher），按 3 个写工估波次预算。
       const teamMs = delegationToolTimeoutMs(turnCount, ['patcher', 'patcher', 'patcher'], { taskCount: 3 })
-      const dims = (params?.input?.galaxyDims as Array<{ authorities?: string[]; authority?: string; parallelism?: string; replicas?: number }> | undefined) ?? []
-      const galaxyProfiles: Array<string | undefined> = []
-      for (const d of dims.length >= 2 ? dims : [{}, {}]) {
-        const stars = d.authorities?.length ? d.authorities.length : 1
-        const replicas = d.parallelism === 'data' ? d.replicas ?? 1 : 1
-        for (let i = 0; i < stars * replicas; i++) galaxyProfiles.push(undefined)
-      }
-      const galaxyMs = delegationToolTimeoutMs(turnCount, galaxyProfiles, { taskCount: galaxyProfiles.length })
-      // autoReview 追加的审查维度是事实上的 +1 串行波次（同 galaxy.ts 注释）。
+      // runStarflow derives the same dimensions when galaxyDims is omitted;
+      // use that normalized plan so the outer timeout covers the actual
+      // EP/DP fan-out instead of an arbitrary two-worker fallback.
+      const rawDims = timeoutGalaxyDims(params?.input?.galaxyDims)
+      const draftItems = timeoutDraftItems(params?.input?.draftItems)
+      const dims = rawDims ?? deriveGalaxyDims(draftItems)
+      const executableDims = dims.length >= 2 ? dims : []
+      const budgetInputs = buildGalaxyBudgetInputs(executableDims)
+      const galaxyMs = budgetInputs.profiles.length > 0
+        ? delegationToolTimeoutMs(turnCount, budgetInputs.profiles, {
+            taskCount: budgetInputs.profiles.length,
+            requestedTimeoutMs: budgetInputs.requestedTimeoutMs,
+            tierFloors: budgetInputs.tierFloors,
+          })
+        : 0
+      // autoReview is an additional serial wave only when Galaxy does not
+      // already contain an explicit review/verify dimension.
       const autoReview = (params?.input?.autoReview as boolean | undefined) ?? true
-      const reviewMs = autoReview
+      const hasExplicitReview = executableDims.some(d => isReviewGalaxyDimension(d.name))
+      const reviewMs = autoReview && executableDims.length > 0 && !hasExplicitReview
         ? delegationToolTimeoutMs(turnCount, ['reviewer'], { taskCount: 1 })
         : 0
       return councilMs + teamMs + galaxyMs + reviewMs
