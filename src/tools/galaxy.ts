@@ -193,12 +193,13 @@ function normalizeTaskShape(name: string): GalaxyTaskShape {
 
 /** 同 taskShape 历史路由按 authority × model 聚合胜率（收编 #5 召回侧 + S4
  *  模型维度）——DP 副本 A/B 沉淀后，proposal 能对比「同任务形状下哪个模型
- *  性价比最高」。model 缺失（旧记录）归入 '' 组展示为「默认」。 */
+ *  性价比最高」。model 缺失（旧记录）归入 '' 组展示为「默认」。
+ *  L3：同时聚合 token 成本，输出「每通过成本」——质量与成本双目标可见。 */
 function buildRoutingStats(
   store: import('../agent/domain-knowledge-store.js').DomainKnowledgeStore,
   dimensions: z.infer<typeof dimensionSchema>[],
-): Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string }> {
-  const out: Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string }> = []
+): Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string; costPerPass?: number }> {
+  const out: Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string; costPerPass?: number }> = []
   for (const d of dimensions) {
     const taskShape = normalizeTaskShape(d.name)
     const records = store.recallGalaxyRouting(taskShape)
@@ -213,7 +214,17 @@ function buildRoutingStats(
     for (const [key, rs] of byKey) {
       const [authority, model] = key.split('\u0000')
       const passed = rs.filter(r => r.status === 'passed').length
-      out.push({ dimensionName: d.name, taskShape, authority: authority!, model: model!, passed, total: rs.length, passRate: String(Math.round((passed / rs.length) * 100)) })
+      const totalCost = rs.reduce((acc, r) => acc + (r.costTokens ?? 0), 0)
+      out.push({
+        dimensionName: d.name,
+        taskShape,
+        authority: authority!,
+        model: model!,
+        passed,
+        total: rs.length,
+        passRate: String(Math.round((passed / rs.length) * 100)),
+        ...(passed > 0 && totalCost > 0 ? { costPerPass: Math.round(totalCost / passed) } : {}),
+      })
     }
   }
   return out
@@ -293,7 +304,7 @@ function formatGalaxyProposal(
   objective: string,
   dimensions: z.infer<typeof dimensionSchema>[],
   autoReview: boolean,
-  routingStats?: Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string }>,
+  routingStats?: Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string; costPerPass?: number }>,
 ): string {
   const lines: string[] = [
     `${GALAXY_GLYPH} 星河集群方案`,
@@ -323,12 +334,13 @@ function formatGalaxyProposal(
     lines.push(`     审查以上所有维度的输出，验证正确性、完整性和安全性`)
   }
 
-  // 路由学习召回（收编 #5 + S4）：同任务形状的历史路由，按 authority ×
-  // model 聚合胜率——DP 副本 A/B 的模型对比在这里可见。
+  // 路由学习召回（收编 #5 + S4 + L3）：同任务形状的历史路由，按
+  // authority × model 聚合胜率与每通过成本——模型性价比（质量/成本）对比可见。
   if (routingStats && routingStats.length > 0) {
-    lines.push('', '历史路由（同任务形状 · authority × 模型胜率）：')
+    lines.push('', '历史路由（同任务形状 · authority × 模型：胜率 / 每通过成本）：')
     for (const r of routingStats) {
-      lines.push(`  ${r.authority} @ ${r.dimensionName}${r.model ? ` · ${r.model}` : ' · 默认'}: ${r.passed}/${r.total} 通过（${r.passRate}%）`)
+      const cost = r.costPerPass !== undefined ? ` · 每通过 ~${(r.costPerPass / 1000).toFixed(1)}k tokens` : ''
+      lines.push(`  ${r.authority} @ ${r.dimensionName}${r.model ? ` · ${r.model}` : ' · 默认'}: ${r.passed}/${r.total} 通过（${r.passRate}%）${cost}`)
     }
   }
 
@@ -1008,6 +1020,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
             taskShape: string
             status: 'passed' | 'failed' | 'blocked'
             model?: string
+            costTokens?: number
           }> = []
           for (const req of requests) {
             const dimIndex = dimensionIndexByParentTurnId.get(req.parentTurnId)
@@ -1021,6 +1034,10 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
               // escalated 视同 blocked：结论不可采信，不记作通过
               status: result.status === 'escalated' ? 'blocked' : result.status,
               model: modelByWorkOrder.get(workerOrderId(req.parentTurnId)) ?? req.modelOverride?.model,
+              // L3：token 成本入账——胜率之外的「每通过成本」维度
+              costTokens: result.usage
+                ? (result.usage.input_tokens ?? 0) + (result.usage.output_tokens ?? 0)
+                : undefined,
             })
           }
           if (routingRecords.length > 0) {

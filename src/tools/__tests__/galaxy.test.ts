@@ -900,4 +900,72 @@ describe('GALAXY_PLAN_PRECHECK', () => {
     assert.equal(result.isError, undefined)
     assert.match(result.content, /· 1\.3s/, '每维度耗时（1.25s → 1.3s）进报告')
   })
+
+  it('L3: 结算路由事实带 token 成本（input+output）', async () => {
+    const recorded: Array<Record<string, unknown>> = []
+    const coordinator = capturingCoordinator([])
+    coordinator.domainKnowledgeStore = {
+      recallGalaxyRouting: () => [],
+      recordGalaxyRoutingBatch: (records: Array<Record<string, unknown>>) => recorded.push(...records),
+    } as never
+    const originalRun = coordinator.delegateBatch
+    coordinator.delegateBatch = async (requests) => {
+      const run = await originalRun!(requests)
+      for (const r of run.results) {
+        r.usage = { input_tokens: 1200, output_tokens: 300, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+      }
+      return run
+    }
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_cost',
+      cwd: '/repo',
+      input: {
+        objective: 'cost tracking across replicas',
+        dimensions: [
+          { name: 'verify', objective: '独立验证', authority: 'yaoguang', parallelism: 'data', replicas: 2, files: ['src/a.ts'] },
+          { name: 'search', objective: '检索代码', authority: 'tianji', profile: 'code_scout' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.ok(recorded.length > 0)
+    const withCost = recorded.filter(r => typeof r.costTokens === 'number')
+    assert.equal(withCost.length, 3, '3 个 worker 全部带成本')
+    assert.ok(withCost.every(r => r.costTokens === 1500), '成本 = input + output')
+  })
+
+  it('L3: proposal 展示每通过成本（质量/成本双目标可见）', async () => {
+    const coordinator = capturingCoordinator([])
+    coordinator.domainKnowledgeStore = {
+      recallGalaxyRouting: () => [
+        { dimensionName: 'verify', authority: 'yaoguang', taskShape: 'review', status: 'passed', model: 'deepseek-v4-pro', costTokens: 9000, depositedAt: 1 },
+        { dimensionName: 'verify', authority: 'yaoguang', taskShape: 'review', status: 'passed', model: 'deepseek-v4-pro', costTokens: 11000, depositedAt: 2 },
+        { dimensionName: 'verify', authority: 'yaoguang', taskShape: 'review', status: 'failed', model: 'deepseek-v4-pro', costTokens: 5000, depositedAt: 3 },
+      ],
+      recordGalaxyRoutingBatch: () => {},
+    } as never
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_prop_cost',
+      cwd: '/repo',
+      input: {
+        objective: 'proposal with cost stats',
+        dimensions: [
+          { name: 'verify', objective: '独立验证', authority: 'yaoguang' },
+          { name: 'search', objective: '检索代码', authority: 'tianji', profile: 'code_scout' },
+        ],
+        autoReview: false,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.match(result.content, /每通过成本/)
+    assert.match(result.content, /2\/3 通过（67%） · 每通过 ~12\.5k tokens/, '成本只按通过次摊销（25000/2）')
+  })
 })
