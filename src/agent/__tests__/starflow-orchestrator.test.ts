@@ -9,6 +9,7 @@ import {
   nextWaveOf,
   runStarflow,
   starflowStatePath,
+  __setStarflowHeartbeatMs,
   type StarflowDeps,
   type StarflowInput,
   type StarflowSeat,
@@ -100,6 +101,24 @@ function baseInput(overrides?: Partial<StarflowInput>): StarflowInput {
 // ── 测试 ─────────────────────────────────────────────────────────────────
 
 describe('STARFLOW_ORCHESTRATOR', () => {
+  it('long phase emits a concrete phase heartbeat to the parent tool stream', async () => {
+    __setStarflowHeartbeatMs(10)
+    try {
+      const outputs: string[] = []
+      const { deps } = makeDeps({
+        team: async () => {
+          await new Promise(resolve => setTimeout(resolve, 35))
+          return { content: teamPassContent() }
+        },
+      })
+      deps.params.onOutput = chunk => outputs.push(chunk)
+      await runStarflow(deps, baseInput())
+      assert.ok(outputs.some(line => /星流 · team 阶段执行中/.test(line)), 'team phase heartbeat should be streamed')
+    } finally {
+      __setStarflowHeartbeatMs(10_000)
+    }
+  })
+
   it('全通过路径：council→team→galaxy→deliver，状态落盘且报告含交付清单', async () => {
     const { deps, calls, cwd } = makeDeps({})
     const run = await runStarflow(deps, baseInput())

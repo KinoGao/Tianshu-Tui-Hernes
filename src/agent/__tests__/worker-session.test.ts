@@ -849,4 +849,40 @@ describe('worker long-tool keepalive（P0-3：tool_use→tool_result 静默窗�
       __setToolKeepaliveMs(30_000)
     }
   })
+
+  it('模型等待首字节期间也发 lifecycle 心跳', async () => {
+    __setToolKeepaliveMs(15)
+    try {
+      let calls = 0
+      const client = {
+        stream: mock.fn(async (_req: unknown, cb: StreamCallbacks) => {
+          calls++
+          await new Promise(resolve => setTimeout(resolve, 70))
+          cb.onTextDelta(validPacket('wo_first_byte'))
+          cb.onContentBlock(textBlock(validPacket('wo_first_byte')))
+          cb.onStopReason('end_turn', { input_tokens: 10, output_tokens: 5 })
+        }),
+      } as unknown as StreamClient
+      const order = createReadOnlyWorkOrder({
+        id: 'wo_first_byte', parentTurnId: 'turn_1', kind: 'code_search', profile: 'code_scout',
+        objective: 'Probe first-byte keepalive.', scope: {}, budget: { maxTurns: 1, maxRetries: 0 },
+      })
+      const activities: Array<[WorkerActivityKind, string | undefined]> = []
+      const run = await runWorkerSession({
+        order, client, promptEngine: makePromptEngine(), toolRegistry: new ToolRegistry(),
+        cwd: '/repo', maxTurns: 1, contextWindow: 1_000_000,
+        compact: { enabled: false, autoThreshold: 800_000, autoFloor: 500_000, model: 'flash' },
+        finalizeReport: false,
+        onActivity: (kind, detail) => activities.push([kind, detail]),
+      })
+      assert.equal(calls, 1)
+      assert.equal(run.result.status, 'passed')
+      assert.ok(
+        activities.some(([kind, detail]) => kind === 'lifecycle' && String(detail).includes('waiting for first response')),
+        'provider first-byte wait must be visible as a lifecycle heartbeat',
+      )
+    } finally {
+      __setToolKeepaliveMs(30_000)
+    }
+  })
 })

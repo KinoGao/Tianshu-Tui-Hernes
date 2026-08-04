@@ -128,6 +128,15 @@ const GLYPH = '🌠'
 const MAX_TEAM_WAVES = 10
 /** 摘要截断长度。 */
 const SUMMARY_CAP = 160
+/** Starflow phase heartbeat cadence. Kept below the TUI stale-info threshold so
+ * long council/team/galaxy calls remain visibly active even while the provider
+ * is waiting for its first byte. */
+let STARFLOW_HEARTBEAT_MS = 10_000
+
+/** Test-only: shrink the phase heartbeat cadence without waiting in real time. */
+export function __setStarflowHeartbeatMs(ms: number): void {
+  STARFLOW_HEARTBEAT_MS = Math.max(1, Math.trunc(ms))
+}
 
 /** council 否决标志（council-convene.ts 编译门文案）：blocking challenge 未化解。 */
 const COUNCIL_VETO_RE = /^## ⛔ 议事会否决/m
@@ -469,6 +478,27 @@ function subParams(deps: StarflowDeps, tag: string): ToolCallParams {
   return { ...deps.params, input: {}, toolUseId: `${deps.params.toolUseId}-starflow-${tag}`, cwd: deps.cwd }
 }
 
+/** Keep the primary TUI alive while a nested phase is waiting on a provider or
+ * a worker wave. The heartbeat is text-streamed through the normal tool output
+ * path, so existing renderers update `lastActivityMs` without a new transport. */
+async function runWithPhaseHeartbeat<T>(
+  deps: StarflowDeps,
+  phase: 'council' | 'team' | 'galaxy',
+  task: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now()
+  const heartbeat = setInterval(() => {
+    const elapsedS = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+    deps.params.onOutput?.(`${GLYPH} 星流 · ${phase} 阶段执行中（已 ${elapsedS}s；子代理活动见任务面板）\n`)
+  }, STARFLOW_HEARTBEAT_MS)
+  heartbeat.unref?.()
+  try {
+    return await task()
+  } finally {
+    clearInterval(heartbeat)
+  }
+}
+
 export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Promise<StarflowRun> {
   const now = () => Date.now()
   const state = (input.resume ? loadState(deps.cwd, input.objective) : undefined)
@@ -504,7 +534,8 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
     }
     if (input.rounds) councilInput.rounds = input.rounds
     if (input.seats && input.seats.length > 0) councilInput.seats = input.seats
-    const result = await deps.councilTool.execute({ ...subParams(deps, 'council'), input: councilInput })
+    const result = await runWithPhaseHeartbeat(deps, 'council', () =>
+      deps.councilTool.execute({ ...subParams(deps, 'council'), input: councilInput }))
     const gate = councilGate(result)
     if (!gate.ok) return block('council', gate.reason, firstLine(result.content))
     const planJson = extractPlanJson(result.content)
@@ -523,7 +554,8 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
       for (let wave = 0; wave < MAX_TEAM_WAVES; wave++) {
         const teamInput: Record<string, unknown> = { objective: input.objective, confirm: true, fromWave }
         if (state.planJson) teamInput.planJson = state.planJson
-        lastResult = await deps.teamTool.execute({ ...subParams(deps, `${waveTag}-w${fromWave}`), input: teamInput })
+        lastResult = await runWithPhaseHeartbeat(deps, 'team', () =>
+          deps.teamTool.execute({ ...subParams(deps, `${waveTag}-w${fromWave}`), input: teamInput }))
         const gate = teamGate(lastResult)
         if (!gate.ok) {
           // 复议上限 1 次：回 council（rounds:2 复议轮）重审契约后再跑 team。
@@ -540,7 +572,8 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
             reInput.objective = augmentCouncilObjective(input.objective, input.draftItems, deps.cwd, { precheck: false })
           }
           if (input.seats && input.seats.length > 0) reInput.seats = input.seats
-          const reResult = await deps.councilTool.execute({ ...subParams(deps, 'council-retry'), input: reInput })
+          const reResult = await runWithPhaseHeartbeat(deps, 'council', () =>
+            deps.councilTool.execute({ ...subParams(deps, 'council-retry'), input: reInput }))
           const reGate = councilGate(reResult)
           if (!reGate.ok) return block('team', `复议未过：${reGate.reason}`, firstLine(reResult.content))
           state.planJson = extractPlanJson(reResult.content) ?? state.planJson
@@ -571,10 +604,10 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
     } else {
       deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 3/4 galaxy 攻坚（${derived.length} 维度）\n`)
       const dims = derived.slice(0, 5)
-      const result = await deps.galaxyTool.execute({
+      const result = await runWithPhaseHeartbeat(deps, 'galaxy', () => deps.galaxyTool.execute({
         ...subParams(deps, 'galaxy'),
         input: { objective: input.objective, dimensions: dims, autoReview: true, confirm: true },
-      })
+      }))
       const gate = galaxyGate(result)
       if (!gate.ok) return block('galaxy', gate.reason, firstLine(result.content))
       const truncated = derived.length > 5 ? `（草稿 ${derived.length} 项截断为 5 维）` : ''

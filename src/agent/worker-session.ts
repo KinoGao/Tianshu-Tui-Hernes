@@ -289,11 +289,25 @@ async function runOnce(
   // 代价：工具真死锁不再被 stall 提前杀，改由 budget 墙钟兜底（更晚但有界）——
   // 误杀健康长任务的代价比晚杀死锁高，取此交换。
   const toolsInFlight = new Map<string, { name: string; since: number }>()
+  // 模型首字节等待同样可能长时间没有任何 worker 事件。单独记录最近一次
+  // 活动，让 keepalive 只在真正静默时播报；这条心跳会同时喂给 TUI 和
+  // coordinator 的上游活动流，避免健康请求被渲染层误报为「No response」。
+  let lastActivityAt = Date.now()
+  const emitActivity = (kind: WorkerActivityKind, detail?: string): void => {
+    lastActivityAt = Date.now()
+    onActivity?.(kind, detail)
+  }
   const keepalive = setInterval(() => {
+    const now = Date.now()
+    if (now - lastActivityAt < TOOL_KEEPALIVE_MS) return
     const oldest = toolsInFlight.values().next().value
-    if (!oldest) return
-    const elapsedS = Math.round((Date.now() - oldest.since) / 1000)
-    onActivity?.('lifecycle', `tool still running: ${oldest.name} (${elapsedS}s, ${toolsInFlight.size} in flight)`)
+    if (oldest) {
+      const elapsedS = Math.round((now - oldest.since) / 1000)
+      emitActivity('lifecycle', `tool still running: ${oldest.name} (${elapsedS}s, ${toolsInFlight.size} in flight)`)
+      return
+    }
+    const elapsedS = Math.round((now - lastActivityAt) / 1000)
+    emitActivity('lifecycle', `model request still running: waiting for first response (${elapsedS}s)`)
   }, TOOL_KEEPALIVE_MS)
   keepalive.unref?.()
   try {
@@ -301,11 +315,11 @@ async function runOnce(
     onTextDelta: (delta) => {
       text += delta
       transcript.text += delta
-      onActivity?.('text', delta)
+      emitActivity('text', delta)
     },
     onThinkingDelta: (delta) => {
       transcript.thinking += delta
-      onActivity?.('thinking', delta)
+      emitActivity('thinking', delta)
     },
     onToolUse: (id, name, input) => {
       toolsInFlight.set(id, { name, since: Date.now() })
@@ -330,7 +344,7 @@ async function runOnce(
       }
       // 活动流带关键参数(name(arg))——桌面委派 UI / TUI worker mirror 直接展示,
       // 光秃工具名无法回答"它在读哪个文件/跑什么命令"。
-      onActivity?.('tool_use', summarizeToolUseLine(name, input))
+      emitActivity('tool_use', summarizeToolUseLine(name, input))
     },
     onToolResult: (id, name, result, isError) => {
       toolsInFlight.delete(id)
@@ -340,12 +354,12 @@ async function runOnce(
         const failedCommand = bashCommandById.get(id)
         if (failedCommand) (transcript.failedBashCommands ??= []).push(failedCommand)
       }
-      onActivity?.('tool_result', name)
+      emitActivity('tool_result', name)
     },
     // usage 是累计快照（getTotalUsage）——上报累计 token 总数，供 fleet 面板实时显示。
     onTurnComplete: (usage) => {
       const total = (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0)
-      if (total > 0) onActivity?.('turn', String(total))
+      if (total > 0) emitActivity('turn', String(total))
     },
     // WC: 输入直达 — drain coordinator 注入的 per-order steer 队列
     onSteerDrain: onSteerDrain ? () => onSteerDrain() : undefined,
