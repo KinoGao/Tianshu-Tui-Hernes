@@ -149,7 +149,10 @@ describe('STARFLOW_ORCHESTRATOR', () => {
     assert.match(readFileSync(saved.phases.team.rawPath, 'utf8'), /team standard/)
     assert.ok(saved.updatedAt > 0)
     assert.equal(typeof saved.runId, 'string')
-    assert.equal(saved.revision, 4, 'one atomic checkpoint should be written per completed phase')
+    // M1：波级 checkpoint（波 0 通过时 saveState 一次）+ 四阶段各一次 = 5 次写入。
+    // revision 语义从「每阶段一次」演进为「每阶段 + 每波次推进各一次」——波级
+    // 记账让 blocked/resume 从已通过波次续跑，是 M1 的目标行为。
+    assert.equal(saved.revision, 5, 'checkpoint 写入 = 4 阶段 + 1 波级推进')
     // 报告：交付检查清单 + deliver_task 提示
     assert.match(run.report, /交付检查清单/)
     assert.match(run.report, /deliver_task/)
@@ -363,6 +366,50 @@ describe('STARFLOW_ORCHESTRATOR', () => {
 })
 
 // ── 结构化门禁验收（Phase 1）：文案面目全非、事实全在 orchestration 字段 ─────
+
+describe('STARFLOW_TEAM_WAVE_RESUME', () => {
+  const teamWaveFail = (teamWaves: number[]): ExecuteFn =>
+    async (params: ToolCallParams) => {
+      const fromWave = Number(params.input.fromWave ?? 0)
+      teamWaves.push(fromWave)
+      if (fromWave === 0) return { content: teamPassContent(1) }
+      return { content: 'team standard：派发 2，波次 1，阻塞 0\n\n⚠ 波次 1：全部 2 个 worker 失败——修复前不要派发 fromWave 2。' }
+    }
+
+  it('M1: 波 0 通过后波 1 失败 → 复议后从波 1 续跑，不重跑波 0', async () => {
+    const teamWaves: number[] = []
+    const { deps } = makeDeps({ team: teamWaveFail(teamWaves) })
+    const run = await runStarflow(deps, baseInput())
+    assert.equal(run.state.phase, 'team')
+    assert.ok(run.state.blockedReason?.includes('全部失败'), run.state.blockedReason)
+    assert.deepEqual(teamWaves, [0, 1, 1], '复议后从 completedTeamWaves=1 续跑，不重跑波 0')
+  })
+
+  it('M1: blocked 后 resume:true 从已通过波次续跑（council/波 0 不重跑）', async () => {
+    const teamWaves: number[] = []
+    const { deps } = makeDeps({ team: teamWaveFail(teamWaves) })
+    await runStarflow(deps, baseInput())
+    teamWaves.length = 0
+    const resumed = await runStarflow(deps, baseInput({ resume: true }))
+    assert.equal(resumed.state.phase, 'team')
+    assert.deepEqual(teamWaves, [1], 'resume 后直接续波 1，council 与波 0 均不重跑')
+  })
+
+  it('M1: 全波通过时 completedTeamWaves 推进到末波（resume 无残留重跑）', async () => {
+    const teamWaves: number[] = []
+    const { deps } = makeDeps({
+      team: async (params: ToolCallParams) => {
+        const fromWave = Number(params.input.fromWave ?? 0)
+        teamWaves.push(fromWave)
+        return { content: teamPassContent(fromWave < 2 ? fromWave + 1 : undefined) }
+      },
+    })
+    const run = await runStarflow(deps, baseInput())
+    assert.equal(run.state.phase, 'done')
+    assert.equal(run.state.completedTeamWaves, 2, '末波 2 已记账')
+    assert.deepEqual(teamWaves, [0, 1, 2], '三波正常推进')
+  })
+})
 
 describe('STARFLOW_TEAM_STRUCTURED_GATE', () => {
   it('结构化零派发（dispatched:0）→ blocked，reason 匹配「未派发任何 worker」', async () => {

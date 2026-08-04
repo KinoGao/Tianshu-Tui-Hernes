@@ -58,6 +58,9 @@ export interface StarflowState {
   planJson?: string
   /** team 阶段已消耗的复议次数（回 council 复议上限 1 次，跨 resume 记账）。 */
   teamRetries: number
+  /** M1：team 阶段已通过的最大波号——blocked/resume 时从此续跑，不重跑
+   *  已完成波次（工作树改动与契约已落地）。 */
+  completedTeamWaves?: number
   blockedReason?: string
   updatedAt: number
 }
@@ -797,7 +800,9 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
     deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 2/4 team 波次\n`)
     for (;;) {
       // 多波计划：team_orchestrate 每次只派一个就绪波次，按续波提示逐波推进。
-      let fromWave = 0
+      // M1：复议/恢复时从已通过的最大波号续跑（completedTeamWaves 是已通过
+      // 波号，下一波 = +1），不重跑已完成波次。
+      let fromWave = (state.completedTeamWaves ?? -1) + 1
       let lastResult: ToolResult | undefined
       const waveTag = state.teamRetries > 0 ? `team-r${state.teamRetries}` : 'team'
       for (let wave = 0; wave < MAX_TEAM_WAVES; wave++) {
@@ -850,6 +855,12 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
             ...(reElapsedMs === undefined ? {} : { elapsedMs: reElapsedMs }),
           }, phaseRawContent('council', reResult.content))
           break // 跳出波次循环，外层 for(;;) 重跑 team
+        }
+        // M1：波次通过即记账（含末波）——后续 blocked/resume 从 completedTeamWaves 续跑。
+        if (state.completedTeamWaves === undefined || fromWave > state.completedTeamWaves) {
+          state.completedTeamWaves = fromWave
+          state.updatedAt = now()
+          saveState(deps.cwd, state)
         }
         const next = nextWaveOf(lastResult)
         if (next === undefined) break // 无下一波 = 已跑到末波
