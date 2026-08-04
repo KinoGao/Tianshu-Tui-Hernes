@@ -1117,9 +1117,26 @@ export class RuntimeSessionManager {
    *  worker handles). The lightweight record/events stay; ensureAgent rebuilds
    *  on demand. Caller guarantees the session is not running. */
   private releaseAgent(s: InternalSession): void {
-    if (!s.agent) return
-    try { s.agent.shutdown?.() } catch { /* best-effort */ }
+    let shutdownResult: void | Promise<void> | undefined
+    try { shutdownResult = s.agent?.shutdown?.() } catch { /* best-effort */ }
     s.agent = null
+    // A built agent may own claims even when the session has gone idle.  Wait
+    // for async coordinator cleanup before releasing them; otherwise a worker
+    // that ignored abort could race a new session during idle eviction.
+    if (shutdownResult && typeof (shutdownResult as Promise<void>).then === 'function') {
+      void Promise.resolve(shutdownResult).then(
+        () => this.releaseClaimsIfIdle(s),
+        () => this.releaseClaimsIfIdle(s),
+      )
+    } else {
+      this.releaseClaimsIfIdle(s)
+    }
+  }
+
+  /** Release claims only after the session has no active run settlement. */
+  private releaseClaimsIfIdle(s: InternalSession): void {
+    if (s.running || s.activeRunSettlement) return
+    try { this.getRegistry?.()?.releaseAllClaims(s.record.id) } catch { /* best-effort */ }
   }
 
   /**
@@ -3563,12 +3580,16 @@ export class RuntimeSessionManager {
     }
     const pending: Promise<void>[] = []
     for (const s of this.sessions.values()) {
+      let shutdownResult: void | Promise<void> | undefined
       try {
-        const result = s.agent?.shutdown?.()
-        if (result && typeof (result as Promise<void>).then === 'function') {
-          pending.push(Promise.resolve(result).catch(() => undefined))
-        }
+        shutdownResult = s.agent?.shutdown?.()
       } catch { /* best-effort */ }
+      const releaseIdleClaims = () => this.releaseClaimsIfIdle(s)
+      if (shutdownResult && typeof (shutdownResult as Promise<void>).then === 'function') {
+        pending.push(Promise.resolve(shutdownResult).then(releaseIdleClaims, releaseIdleClaims))
+      } else {
+        releaseIdleClaims()
+      }
       try { s.jobs?.killAll() } catch { /* best-effort */ }
       // Drain any coalescing delta window so the tail is never lost on exit.
       try { this.flushDeltaBuf(s) } catch { /* best-effort */ }

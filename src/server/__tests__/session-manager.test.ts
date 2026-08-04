@@ -450,6 +450,37 @@ test('R1: a finished run releases the session claims', async () => {
   assert.deepEqual(calls.released, [s.id], 'terminal state must release claims')
 })
 
+test('R1: idle-agent eviction waits for async shutdown before releasing claims', async () => {
+  const { manager, calls } = makeManagerWithRegistry()
+  const s = manager.createSession({ cwd: '/tmp/proj' })
+  const internal = manager['sessions'].get(s.id)!
+  let finishShutdown!: () => void
+  const shutdownDone = new Promise<void>(resolve => { finishShutdown = resolve })
+  internal.agent = { shutdown: () => shutdownDone } as ManagedAgent
+
+  manager['releaseAgent'](internal)
+  assert.deepEqual(calls.released, [], 'claims stay held while the old coordinator shuts down')
+  finishShutdown()
+  await shutdownDone
+  await new Promise<void>(resolve => setImmediate(resolve))
+  assert.deepEqual(calls.released, [s.id])
+})
+
+test('R1: shutdownAll releases claims for idle sessions after agent shutdown', async () => {
+  const { manager, calls } = makeManagerWithRegistry()
+  const s = manager.createSession({ cwd: '/tmp/proj' })
+  const internal = manager['sessions'].get(s.id)!
+  let finishShutdown!: () => void
+  const shutdownDone = new Promise<void>(resolve => { finishShutdown = resolve })
+  internal.agent = { shutdown: () => shutdownDone } as ManagedAgent
+
+  const allShutdown = manager.shutdownAll()
+  assert.deepEqual(calls.released, [], 'shutdown must await the idle agent before releasing claims')
+  finishShutdown()
+  await allShutdown
+  assert.deepEqual(calls.released, [s.id])
+})
+
 test('R1: two concurrent sessions register & release independently', async () => {
   const { manager, agents, calls } = makeManagerWithRegistry()
   const a = manager.createSession({ prompt: 'a' })
