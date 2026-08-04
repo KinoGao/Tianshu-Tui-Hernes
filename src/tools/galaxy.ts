@@ -212,6 +212,76 @@ function buildRoutingStats(
   return out
 }
 
+/** 写维度判定（proposal 预检与 execute 剥离共用同一事实来源——两处漂移会让
+ *  proposal 承诺的与 execute 实际执行的不一致）。 */
+function dimensionIsWriteCapable(dim: z.infer<typeof dimensionSchema>): boolean {
+  return profileIsWriteCapable((dim.profile ?? mapGalaxyDimensionToProfile(dim.name)) as import('../agent/work-order.js').WorkerProfile)
+}
+
+/** 静态预检（proposal 阶段）：写维度文件范围的重叠与覆盖缺口。
+ *  只读维度并行读同一文件是安全的（work-queue.hasFileConflict 读读放行），
+ *  因此只对写维度做认领归属分析。与 execute 阶段的剥离逻辑同构：
+ *  fileOwner 按写维度首次认领，后续声明同一文件的写维度将丢失该文件；
+ *  声明文件全被夺走的写维度会被跳过派发。在用户确认前暴露这两类问题，
+ *  把返工堵在派发之前。 */
+export interface GalaxyPlanPrecheckIssue {
+  dimensionIndex: number
+  dimensionName: string
+  files: string[]
+  kind: 'overlap' | 'emptied'
+}
+
+export function analyzeWriteDimensionPlan(
+  dimensions: readonly z.infer<typeof dimensionSchema>[],
+): GalaxyPlanPrecheckIssue[] {
+  const issues: GalaxyPlanPrecheckIssue[] = []
+  const fileOwner = new Map<string, number>()
+  for (let i = 0; i < dimensions.length; i++) {
+    const dim = dimensions[i]!
+    if (!dimensionIsWriteCapable(dim)) continue
+    for (const f of dim.files ?? []) {
+      if (!fileOwner.has(f)) fileOwner.set(f, i)
+    }
+  }
+  for (let i = 0; i < dimensions.length; i++) {
+    const dim = dimensions[i]!
+    if (!dimensionIsWriteCapable(dim)) continue
+    const owned = dim.files ?? []
+    const overlaps: string[] = []
+    let kept = 0
+    for (const f of owned) {
+      const owner = fileOwner.get(f)
+      if (owner === undefined || owner === i) { kept++; continue }
+      overlaps.push(f)
+    }
+    if (overlaps.length > 0) {
+      issues.push({ dimensionIndex: i, dimensionName: dim.name, files: overlaps, kind: 'overlap' })
+    }
+    // 原本有文件、全部被夺走 → execute 将跳过派发（emptiedWriteDims）。
+    // 原本就没声明文件的写维度不预警——其命运由 coordinator 的 scope 闸独立裁决。
+    if (owned.length > 0 && kept === 0) {
+      issues.push({ dimensionIndex: i, dimensionName: dim.name, files: owned, kind: 'emptied' })
+    }
+  }
+  return issues
+}
+
+function formatPlanPrecheck(issues: GalaxyPlanPrecheckIssue[]): string {
+  if (issues.length === 0) {
+    return ['', '── 静态预检 ──', '✓ 写维度文件范围无重叠、无覆盖缺口。'].join('\n')
+  }
+  const lines: string[] = ['', '── 静态预检（执行前修正，避免派发后返工）──']
+  for (const issue of issues) {
+    if (issue.kind === 'overlap') {
+      lines.push(`⚠ 维度「${issue.dimensionName}」的文件与更早的写维度重叠，执行时将被剥离：${issue.files.join(', ')}`)
+    } else {
+      lines.push(`⚠ 维度「${issue.dimensionName}」声明的文件全部被其他写维度认领，派发时将被跳过：${issue.files.join(', ')}`)
+    }
+  }
+  lines.push('请调整维度划分：写维度文件范围必须互不重叠。')
+  return lines.join('\n')
+}
+
 function formatGalaxyProposal(
   objective: string,
   dimensions: z.infer<typeof dimensionSchema>[],
@@ -642,9 +712,11 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           ? buildRoutingStats(coordinator.domainKnowledgeStore, dimensions)
           : undefined
         const proposal = formatGalaxyProposal(objective, dimensions, autoReview, routingStats)
+        const precheck = formatPlanPrecheck(analyzeWriteDimensionPlan(dimensions))
         return {
           content: [
             proposal,
+            precheck,
             '',
             '请确认此星河方案是否可行。确认后调用 galaxy({..., confirm: true}) 启动执行。',
             '如需调整维度或星域，请说明修改内容。',
@@ -737,11 +809,9 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       // ── 文件重叠去重：只对可写维度生效（只读维度并行读同一快照是安全的，
       // work-queue 也只序列化写侧）；被剥离的文件显式进报告——重叠本质是
       // 维度划分问题，静默丢弃会让维度丢上下文且无人知晓。
-      const writeDim = (idx: number): boolean =>
-        profileIsWriteCapable((dimensions[idx]!.profile ?? mapGalaxyDimensionToProfile(dimensions[idx]!.name)) as import('../agent/work-order.js').WorkerProfile)
       const fileOwner = new Map<string, number>() // file path → first WRITE dimension index
       for (let i = 0; i < dimensions.length; i++) {
-        if (!writeDim(i)) continue
+        if (!dimensionIsWriteCapable(dimensions[i]!)) continue
         for (const f of dimensions[i]!.files ?? []) {
           if (!fileOwner.has(f)) fileOwner.set(f, i)
         }
@@ -749,7 +819,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       const strippedByDim = new Map<number, string[]>()
       for (const req of requests) {
         const dimIdx = dimensionIndexByParentTurnId.get(req.parentTurnId)
-        if (dimIdx === undefined || !writeDim(dimIdx)) continue
+        if (dimIdx === undefined || !dimensionIsWriteCapable(dimensions[dimIdx]!)) continue
         const owned = dimensions[dimIdx]?.files ?? []
         const deduped: string[] = []
         for (const f of owned) {
@@ -768,7 +838,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       const emptiedWriteDims: string[] = []
       for (let i = requests.length - 1; i >= 0; i--) {
         const dimIdx = dimensionIndexByParentTurnId.get(requests[i]!.parentTurnId)
-        if (dimIdx === undefined || !writeDim(dimIdx)) continue
+        if (dimIdx === undefined || !dimensionIsWriteCapable(dimensions[dimIdx]!)) continue
         const originalCount = dimensions[dimIdx]?.files?.length ?? 0
         const currentCount = requests[i]!.scope?.files?.length ?? 0
         if (originalCount > 0 && currentCount === 0) {

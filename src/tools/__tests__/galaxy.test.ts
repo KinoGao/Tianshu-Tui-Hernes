@@ -711,3 +711,72 @@ describe('GALAXY_TOOL — DP 证据冗余（收编 #2）', () => {
     assert.equal(result.isError, undefined, `unexpected error: ${result.content}`)
   })
 })
+
+describe('GALAXY_PLAN_PRECHECK', () => {
+  it('写维度文件重叠 → overlap 问题，且 proposal 展示', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const tool = createGalaxyTool(capturingCoordinator(calls))
+
+    const result = await tool.execute({
+      toolUseId: 'tu_precheck_overlap',
+      cwd: '/repo',
+      input: {
+        objective: 'proposal with overlap',
+        dimensions: [
+          { name: 'frontend', objective: '改前端', authority: 'wenqu', files: ['src/app.ts', 'src/btn.ts'] },
+          { name: 'backend', objective: '改后端', authority: 'tianji', files: ['src/app.ts', 'src/api.ts'] },
+        ],
+        autoReview: false,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.equal(calls.length, 0, 'proposal 阶段零派发')
+    assert.match(result.content, /静态预检/)
+    assert.match(result.content, /「backend」的文件与更早的写维度重叠，执行时将被剥离：src\/app\.ts/)
+    // 覆盖缺口：backend 的 src/app.ts 被剥离后仍剩 src/api.ts，不算 emptied。
+    assert.doesNotMatch(result.content, /全部被其他写维度认领/)
+  })
+
+  it('写维度文件全被夺走 → emptied 问题，proposal 预警', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const tool = createGalaxyTool(capturingCoordinator(calls))
+
+    const result = await tool.execute({
+      toolUseId: 'tu_precheck_emptied',
+      cwd: '/repo',
+      input: {
+        objective: 'proposal with emptied write dim',
+        dimensions: [
+          { name: 'frontend', objective: '改前端', authority: 'wenqu', files: ['src/app.ts'] },
+          { name: 'backend', objective: '改后端', authority: 'tianji', files: ['src/app.ts'] },
+        ],
+        autoReview: false,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.match(result.content, /「backend」声明的文件全部被其他写维度认领，派发时将被跳过：src\/app\.ts/)
+  })
+
+  it('只读维度文件重叠不预警（并行读同一快照安全）', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const tool = createGalaxyTool(capturingCoordinator(calls))
+
+    const result = await tool.execute({
+      toolUseId: 'tu_precheck_readonly',
+      cwd: '/repo',
+      input: {
+        objective: 'readonly overlap is fine',
+        dimensions: [
+          { name: 'search', objective: '检索', authority: 'tianji', profile: 'code_scout', files: ['src/app.ts'] },
+          { name: 'review', objective: '审查', authority: 'yaoguang', profile: 'reviewer', files: ['src/app.ts'] },
+        ],
+        autoReview: false,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.match(result.content, /✓ 写维度文件范围无重叠、无覆盖缺口/)
+  })
+})
