@@ -33,6 +33,7 @@ import { createActivityStreamer, createDelegationActivityMapper, progressSnippet
 import type { WorkerActivityEvent } from '../agent/coordinator.js'
 import { validateGalaxyDimensionContract } from '../agent/galaxy-contract.js'
 import { buildGalaxyBudgetInputs, isReviewGalaxyDimension, mapGalaxyDimensionToProfile } from '../agent/galaxy-budget.js'
+import type { RuntimeCoordinatorSnapshot } from '../agent/runtime-self-model.js'
 
 // ── Coordinator interface（与 delegate_batch 同构） ──────────────────────
 
@@ -44,6 +45,8 @@ export interface GalaxyCoordinator {
     onProgress?: (completed: number, total: number) => void,
     onWorkerSettled?: (result: import('../agent/work-order.js').WorkerResult) => void,
   ): Promise<CoordinatorRun>
+  /** Read-only runtime boundary check; absent in lightweight test/worker hosts. */
+  getRuntimeSnapshot?: () => RuntimeCoordinatorSnapshot
   /** 星河路由学习（收编 #5）：结算时沉淀路由事实、proposal 时召回胜率。
    *  缺省 undefined → 路由学习关闭（现状行为）。 */
   domainKnowledgeStore?: import('../agent/domain-knowledge-store.js').DomainKnowledgeStore
@@ -576,6 +579,22 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       const effectivePolicy: AggregationPolicy = hasDataParallel
         ? (isQuorumPolicy ? policy! : { kind: 'quorum', k: 1 })
         : (policy ?? 'all_required')
+
+      // Viability gate: a coordinator that is already shutting down must not
+      // admit a new fan-out. This is especially important during handoff or
+      // model/session replacement: existing workers are allowed to settle, but
+      // a new Galaxy request would otherwise reserve claims after shutdown has
+      // begun. Other degraded signals remain observable and are handled by the
+      // coordinator's normal liveness/claim gates rather than being blanket
+      // rejected here.
+      const runtime = coordinator.getRuntimeSnapshot?.()
+      if (runtime?.shuttingDown) {
+        return {
+          content: '星河已拦截：协调器正在关闭或移交中，暂不接受新的集群派发；请等待当前任务收尾后重试。',
+          isError: true,
+          errorKind: 'runtime_gate',
+        }
+      }
 
       // Pre-flight: validate file paths
       for (let i = 0; i < dimensions.length; i++) {

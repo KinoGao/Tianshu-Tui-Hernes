@@ -516,6 +516,17 @@ export function createInteractiveToolRegistry(
         if (!refs.coordinator) throw new Error('DelegationCoordinator not initialized')
         return refs.coordinator.delegateBatch(requests, policy, abortSignal, onProgress, onWorkerSettled)
       },
+      getRuntimeSnapshot: () => refs.coordinator?.getRuntimeSnapshot() ?? {
+        activeWorkers: 0,
+        maxWorkers: 0,
+        pendingWorkers: 0,
+        stalledWorkers: 0,
+        inFlightFileScopes: 0,
+        backgroundRunning: 0,
+        activeClaims: 0,
+        providerDegradation: 0,
+        shuttingDown: true,
+      },
       // 路由学习（收编 #5）存取口——getter 惰性读取，/cd 换 store 后自动指向新实例。
       get domainKnowledgeStore() { return refs.domainKnowledgeStoreRef?.current ?? undefined },
       // DP 证据冗余（收编 #2）——agent 构建后经 createAgentRuntime 回写。

@@ -58,6 +58,42 @@ describe('GALAXY_TOOL', () => {
     assert.equal(calls.length, 0, 'invalid plans must not reach the coordinator')
   })
 
+  it('blocks new fan-out while the coordinator is shutting down', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const coordinator = capturingCoordinator(calls)
+    coordinator.getRuntimeSnapshot = () => ({
+      activeWorkers: 1,
+      maxWorkers: 2,
+      pendingWorkers: 0,
+      stalledWorkers: 0,
+      inFlightFileScopes: 1,
+      backgroundRunning: 0,
+      activeClaims: 1,
+      providerDegradation: 0,
+      shuttingDown: true,
+    })
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_shutdown',
+      cwd: '/repo',
+      input: {
+        objective: 'do not admit new work during handoff',
+        dimensions: [
+          { name: 'backend', objective: 'inspect backend', authority: 'tianji' },
+          { name: 'review', objective: 'review the plan', authority: 'yaoguang' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, true)
+    assert.match(result.content, /正在关闭|移交/)
+    assert.equal(result.errorKind, 'runtime_gate')
+    assert.equal(calls.length, 0, 'shutdown gate must reject before fan-out')
+  })
+
   it('rejects duplicate EP authorities and malformed DP replicas atomically', async () => {
     const calls: Array<{ requests: DelegationRequest[] }> = []
     const tool = createGalaxyTool(capturingCoordinator(calls))

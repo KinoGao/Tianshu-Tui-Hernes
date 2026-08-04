@@ -469,6 +469,7 @@ async function main() {
         const headlessGalaxyTool = createGalaxyTool({
           delegateBatch: async (requests, policy, abortSignal, onProgress, onWorkerSettled) =>
             headlessCoordinator.delegateBatch(requests, policy, abortSignal, onProgress, onWorkerSettled),
+          getRuntimeSnapshot: () => headlessCoordinator.getRuntimeSnapshot(),
           // 路由学习（收编 #5）：headless 无 SharedRuntime，per-session 建库即可。
           domainKnowledgeStore: new DomainKnowledgeStore(join(process.cwd(), '.rivet', 'knowledge')),
           // DP 证据冗余（收编 #2）：agent 创建后由 headlessAgentRef 惰性提供。
