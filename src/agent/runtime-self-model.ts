@@ -30,6 +30,7 @@ export interface RuntimeCoordinatorSnapshot {
   stalledWorkers: number
   inFlightFileScopes: number
   backgroundRunning: number
+  activeClaims: number
   providerDegradation: number
   shuttingDown: boolean
 }
@@ -169,7 +170,7 @@ export function buildRuntimeSelfModel(input: RuntimeSelfModelInput = {}): Runtim
   const stalledWorkers = count(coordinator.stalledWorkers)
   const inFlightFileScopes = count(coordinator.inFlightFileScopes)
   const backgroundRunning = count(coordinator.backgroundRunning)
-  const activeClaims = count(input.activeClaims)
+  const activeClaims = count(input.activeClaims ?? coordinator.activeClaims)
   const providerDegradation = clamp01(coordinator.providerDegradation)
   const contextPressure = Math.max(clamp01(input.contextRatio), clamp01(input.sensorium?.pressure))
   const verificationDebt = clamp01(input.verificationDebt)

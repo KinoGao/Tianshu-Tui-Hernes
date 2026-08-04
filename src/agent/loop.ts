@@ -86,6 +86,7 @@ import { PressureMonitor } from '../context/pressure-monitor.js'
 import { createFsWatcher } from '../context/fs-watcher.js'
 import type { FsWatcherState } from '../context/fs-watcher.js'
 import { type CognitivePhaseSnapshot } from '../context/cognitive-ledger.js'
+import { buildRuntimeSelfModel } from './runtime-self-model.js'
 import { CacheAdvisor } from '../cache/advisor.js'
 import type { RecallMetricsSummary } from '../cache/recall-metrics.js'
 import { createSycophancyTrap, type SycophancyTrap } from './sycophancy-trap.js'
@@ -1890,6 +1891,30 @@ export class AgentLoop {
       .sort((a, b) => b.delivered - a.delivered)
       .slice(0, 5)
     const s = this.sensorium
+    let runtime: import('./runtime-self-model.js').RuntimeSelfModel | null = null
+    try {
+      const coordinator = this.config.coordinatorRef?.()
+      if (coordinator) {
+        const verification = this.evidence.getVerificationSummary()
+        runtime = buildRuntimeSelfModel({
+          phase: this.planModeState,
+          turn: this.session.getTurnCount(),
+          contextRatio: contextWindow > 0 ? estimatedTokens / contextWindow : 1,
+          sensorium: s ? {
+            pressure: s.pressure,
+            confidence: s.confidence,
+            stability: s.stability,
+          } : null,
+          verificationDebt: verification.total > 0
+            ? verification.pending / verification.total
+            : (this.evidence.hasVerificationDebt() ? 1 : 0),
+          coordinator: coordinator.getRuntimeSnapshot(),
+        })
+      }
+    } catch {
+      // session_vitals is diagnostic; a missing coordinator must never break it.
+      runtime = null
+    }
     return {
       ctx: {
         estimatedTokens,
@@ -1913,6 +1938,7 @@ export class AgentLoop {
         ignored: this.guardianActivity.advisoriesIgnored,
         top,
       },
+      runtime,
       turn: this.session.getTurnCount(),
     }
   }
@@ -2671,4 +2697,3 @@ export class AgentLoop {
   }
 
 }
-

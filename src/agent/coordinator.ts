@@ -86,6 +86,7 @@ import type { Usage } from '../api/types.js'
 import { PrewarmCache } from './prewarm.js'
 import { StigmergyStore } from '../context/stigmergy.js'
 import { batchPrewarm } from './prewarm-file.js'
+import type { RuntimeCoordinatorSnapshot } from './runtime-self-model.js'
 
 /** Per-turn free-energy signals pulled from the primary loop at delegation time. */
 export interface EFERoutingSignals {
@@ -1015,6 +1016,34 @@ export class DelegationCoordinator {
       if (run.status === 'running') return true
     }
     return false
+  }
+
+  /**
+   * Read-only runtime snapshot for session_vitals and diagnostics.
+   *
+   * This deliberately exposes counters, not worker transcripts or mutable
+   * internals. A snapshot must never become a second coordination protocol;
+   * callers may display or prioritize signals, but dispatch still goes through
+   * the existing gates below.
+   */
+  getRuntimeSnapshot(): RuntimeCoordinatorSnapshot {
+    let activeClaims = 0
+    try {
+      activeClaims = this.config.activeClaims?.().length ?? 0
+    } catch {
+      // Diagnostics must remain fail-open when a claim store is unavailable.
+    }
+    return {
+      activeWorkers: this.activeWorkerCount,
+      maxWorkers: Math.max(0, this.config.maxWorkers),
+      pendingWorkers: this.workerWaiters.length,
+      stalledWorkers: this.liveness.stalled().length,
+      inFlightFileScopes: this.inflightFiles.size,
+      backgroundRunning: [...this.backgroundRuns.values()].filter(run => run.status === 'running').length,
+      activeClaims,
+      providerDegradation: this.config.providerHealth?.getDegradationRatio() ?? 0,
+      shuttingDown: this.shuttingDown,
+    }
   }
 
   // ── B2: background (async) work orders ──
