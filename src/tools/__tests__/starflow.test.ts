@@ -150,4 +150,12 @@ describe('STARFLOW_TOOL', () => {
     const budget = tool.timeoutMs?.({ input: { objective: 'x' }, toolUseId: 'tu_7', cwd: '/repo' })
     assert.ok(typeof budget === 'number' && budget > 600_000, `预算应超过单工具 600s 上限，实际 ${budget}`)
   })
+
+  it('autoReview:false removes the extra Galaxy review timeout budget', () => {
+    const { tool } = makeTool()
+    const withReview = tool.timeoutMs?.({ input: { objective: 'x', autoReview: true }, toolUseId: 'tu_review_budget', cwd: '/repo' })
+    const withoutReview = tool.timeoutMs?.({ input: { objective: 'x', autoReview: false }, toolUseId: 'tu_no_review_budget', cwd: '/repo' })
+    assert.ok(typeof withReview === 'number' && typeof withoutReview === 'number')
+    assert.ok(withReview! > withoutReview!)
+  })
 })

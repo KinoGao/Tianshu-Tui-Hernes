@@ -343,10 +343,22 @@ export class DomainKnowledgeStore {
   /** 沉淀一条路由事实（galaxy 结算时调用）。追加式（每次执行一条，供胜率
    *  统计），有界截断（MAX_ROUTING_RECORDS，LRU 语义）。 */
   recordGalaxyRouting(record: Omit<GalaxyRoutingRecord, 'depositedAt'>): void {
-    const records = this.loadRoutingRecords()
-    records.push({ ...record, depositedAt: Date.now() })
-    const capped = records.slice(-MAX_ROUTING_RECORDS)
-    this.routingCache = capped
+    this.recordGalaxyRoutingBatch([record])
+  }
+
+  /**
+   * Record several routing facts with one cache update and one debounce reset.
+   * Galaxy normally deposits one fact per worker dimension, so batching avoids
+   * repeatedly scheduling the same background flush during a single run.
+   */
+  recordGalaxyRoutingBatch(records: readonly Omit<GalaxyRoutingRecord, 'depositedAt'>[]): void {
+    if (records.length === 0) return
+    const existing = this.loadRoutingRecords()
+    const depositedAt = Date.now()
+    for (let index = 0; index < records.length; index++) {
+      existing.push({ ...records[index]!, depositedAt: depositedAt + index })
+    }
+    this.routingCache = existing.slice(-MAX_ROUTING_RECORDS)
     this.routingDirty = true
     this.scheduleFlush()
   }

@@ -893,18 +893,33 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       if (coordinator.domainKnowledgeStore) {
         try {
           const resultsById = new Map(run.results.map(r => [r.workOrderId, r]))
+          const routingRecords: Array<{
+            dimensionName: string
+            authority: string
+            taskShape: string
+            status: 'passed' | 'failed' | 'blocked'
+          }> = []
           for (const req of requests) {
             const dimIndex = dimensionIndexByParentTurnId.get(req.parentTurnId)
             const dim = dimIndex === undefined ? undefined : dimensions[dimIndex]
             const result = resultsById.get(workerOrderId(req.parentTurnId))
             if (!dim || !result) continue
-            coordinator.domainKnowledgeStore.recordGalaxyRouting({
+            routingRecords.push({
               dimensionName: dim.name,
               authority: req.authority ?? 'unknown',
               taskShape: normalizeTaskShape(dim.name),
               // escalated 视同 blocked：结论不可采信，不记作通过
               status: result.status === 'escalated' ? 'blocked' : result.status,
             })
+          }
+          if (routingRecords.length > 0) {
+            const store = coordinator.domainKnowledgeStore
+            if (typeof store.recordGalaxyRoutingBatch === 'function') {
+              store.recordGalaxyRoutingBatch(routingRecords)
+            } else {
+              // Keep compatibility with lightweight test/integration doubles.
+              for (const record of routingRecords) store.recordGalaxyRouting(record)
+            }
           }
         } catch {
           // best-effort

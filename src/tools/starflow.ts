@@ -283,7 +283,10 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
       }
       const galaxyMs = delegationToolTimeoutMs(turnCount, galaxyProfiles, { taskCount: galaxyProfiles.length })
       // autoReview 追加的审查维度是事实上的 +1 串行波次（同 galaxy.ts 注释）。
-      const reviewMs = delegationToolTimeoutMs(turnCount, ['reviewer'], { taskCount: 1 })
+      const autoReview = (params?.input?.autoReview as boolean | undefined) ?? true
+      const reviewMs = autoReview
+        ? delegationToolTimeoutMs(turnCount, ['reviewer'], { taskCount: 1 })
+        : 0
       return councilMs + teamMs + galaxyMs + reviewMs
     },
   }
