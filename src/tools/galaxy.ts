@@ -793,6 +793,17 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
           dependencies: executionWorkerIds,
         })
       }
+      // Freeze the dispatch plan before handing it to the coordinator.  This
+      // is the same stable-plan boundary used by Codex's typed spawn events:
+      // the result can explain what was planned, what was actually dispatched,
+      // and which write shards were intentionally skipped.
+      const plannedWorkerCount = requests.length
+      const plannedDataWorkers = [...dataParallelGroups.values()]
+        .reduce((total, group) => total + group.workOrderIds.length, 0)
+      const plannedParallelism = {
+        expert: Math.max(0, plannedWorkerCount - plannedDataWorkers),
+        data: plannedDataWorkers,
+      }
 
       // Activity streaming
       const textStreamer = params.onOutput ? createActivityStreamer(params.onOutput) : undefined
@@ -961,6 +972,11 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         uiContent: formatGalaxyUi(run, dimensions),
         orchestration: {
           kind: 'galaxy',
+          runId: params.toolUseId,
+          planned: plannedWorkerCount,
+          dispatched: run.results.length,
+          skipped: emptiedWriteDims,
+          parallelism: plannedParallelism,
           dimensions: { passed: galaxyPassed, total: galaxyTotal, failed: failedDimensions },
         },
       }

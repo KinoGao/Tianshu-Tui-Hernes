@@ -100,6 +100,11 @@ describe('GALAXY_TOOL', () => {
     })
 
     assert.equal(result.isError, undefined, `unexpected error: ${result.content}`)
+    assert.equal(result.orchestration?.kind, 'galaxy')
+    assert.equal(result.orchestration?.runId, 'tu_dp')
+    assert.equal(result.orchestration?.planned, 4)
+    assert.equal(result.orchestration?.dispatched, 4)
+    assert.deepEqual(result.orchestration?.parallelism, { expert: 0, data: 4 })
     const ids = calls[0]!.requests.map(r => deriveStableWorkOrderId(r.parentTurnId ?? ''))
     assert.equal(ids.length, 4)
     assert.equal(new Set(ids).size, 4, `work order IDs must be unique, got: ${ids.join(', ')}`)

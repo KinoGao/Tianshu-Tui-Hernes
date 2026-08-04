@@ -64,6 +64,15 @@ export interface CouncilOrchestrationOutcome {
  *  galaxyGate 优先读它、正则降级兜底。 */
 export interface GalaxyOrchestrationOutcome {
   kind: 'galaxy'
+  /** Stable tool-call identity for correlating worker activity and results. */
+  runId?: string
+  /** Planned vs dispatched worker counts, including explicit/automatic review. */
+  planned?: number
+  dispatched?: number
+  /** Human-readable task labels intentionally skipped before dispatch. */
+  skipped?: string[]
+  /** Number of EP tasks and DP groups in the execution plan. */
+  parallelism?: { expert: number; data: number }
   /** 派发维度终态（含 autoReview 追加的审查维度）；failed 是未通过维度的
    *  报告行标签（dimension 名，与 formatter 渲染行同源）。 */
   dimensions: { total: number; passed: number; failed: string[] }
