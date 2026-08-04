@@ -149,7 +149,7 @@ describe('STARFLOW_ORCHESTRATOR', () => {
     assert.match(readFileSync(saved.phases.team.rawPath, 'utf8'), /team standard/)
     assert.ok(saved.updatedAt > 0)
     assert.equal(typeof saved.runId, 'string')
-    assert.ok(saved.revision > 0, 'checkpoint revision should be monotonic and persisted')
+    assert.equal(saved.revision, 4, 'one atomic checkpoint should be written per completed phase')
     // 报告：交付检查清单 + deliver_task 提示
     assert.match(run.report, /交付检查清单/)
     assert.match(run.report, /deliver_task/)

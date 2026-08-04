@@ -750,11 +750,13 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
     rawContent = summary,
   ): Promise<void> => {
     const elapsedMs = phaseElapsed(phase)
-    await checkpoint(phase, { status, summary, at: now(), ...(elapsedMs === undefined ? {} : { elapsedMs }) }, phaseRawContent(phase, rawContent))
     state.phase = next
     state.blockedReason = undefined
-    state.updatedAt = now()
-    saveState(deps.cwd, state)
+    // Persist the completed phase and the next phase in one atomic snapshot.
+    // The previous order wrote a checkpoint and then immediately wrote the
+    // phase transition again, doubling filesystem work on every successful
+    // stage without adding recovery information.
+    await checkpoint(phase, { status, summary, at: now(), ...(elapsedMs === undefined ? {} : { elapsedMs }) }, phaseRawContent(phase, rawContent))
   }
 
   // ── 阶段 1：council 评审 ─────────────────────────────────────────────
