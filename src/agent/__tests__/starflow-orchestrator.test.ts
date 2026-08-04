@@ -411,6 +411,58 @@ describe('STARFLOW_TEAM_WAVE_RESUME', () => {
   })
 })
 
+describe('STARFLOW_PREWARM_FACTS', () => {
+  const draftWithFile = (cwd: string): StarflowInput =>
+    baseInput({
+      draftItems: [
+        { id: 'impl', title: '实现核心逻辑', detail: '实现核心逻辑并过测试', files: ['src/core.ts'] },
+        { id: 'review', title: '审查改动', detail: '审查核心逻辑的正确性', files: ['src/core.ts'] },
+      ],
+    })
+
+  it('M3: council 等待期预取目标文件，派生维度 objective 注入摘要', async () => {
+    const { deps, calls } = makeDeps({})
+    mkdirSync(join(deps.cwd, 'src'), { recursive: true })
+    writeFileSync(join(deps.cwd, 'src/core.ts'), 'export function core() { return 42 }\n', 'utf8')
+
+    const run = await runStarflow(deps, draftWithFile(deps.cwd))
+
+    assert.equal(run.state.phase, 'done')
+    const dims = calls.galaxy[0]!.input.dimensions as Array<{ objective: string }>
+    assert.match(dims[0]!.objective, /目标文件预取摘要/, '派生维度 objective 带预取事实块')
+    assert.match(dims[0]!.objective, /src[/\\]core\.ts/, '预取块含文件路径')
+    assert.match(dims[0]!.objective, /export function core/, '预取块含文件首行摘要')
+  })
+
+  it('M3: 显式 galaxyDims 不注入预取摘要（用户定义优先）', async () => {
+    const { deps, calls } = makeDeps({})
+    mkdirSync(join(deps.cwd, 'src'), { recursive: true })
+    writeFileSync(join(deps.cwd, 'src/core.ts'), 'export function core() { return 42 }\n', 'utf8')
+
+    await runStarflow(deps, {
+      objective: '给项目加登录功能',
+      draftItems: draftWithFile(deps.cwd).draftItems,
+      galaxyDims: [
+        { name: 'impl', objective: '用户指定的精确目标', authority: 'tianliang' },
+        { name: 'review', objective: '用户指定的审查目标', authority: 'yaoguang' },
+      ],
+    })
+
+    const dims = calls.galaxy[0]!.input.dimensions as Array<{ objective: string }>
+    assert.equal(dims[0]!.objective, '用户指定的精确目标', '显式维度 objective 原样透传')
+    assert.equal(dims[1]!.objective, '用户指定的审查目标')
+  })
+
+  it('M3: 目标文件不存在时预取降级为空块，流程不受影响', async () => {
+    const { deps, calls } = makeDeps({})
+    // 不创建 src/core.ts——buildPrewarmValue 返回 undefined，无摘要
+    const run = await runStarflow(deps, draftWithFile(deps.cwd))
+    assert.equal(run.state.phase, 'done')
+    const dims = calls.galaxy[0]!.input.dimensions as Array<{ objective: string }>
+    assert.doesNotMatch(dims[0]!.objective, /目标文件预取摘要/, '无预取内容时不注入')
+  })
+})
+
 describe('STARFLOW_TEAM_STRUCTURED_GATE', () => {
   it('结构化零派发（dispatched:0）→ blocked，reason 匹配「未派发任何 worker」', async () => {
     const { deps, calls } = makeDeps({ team: async () => structuredTeam({ dispatched: 0 }) })

@@ -21,6 +21,7 @@ import { execFileSync } from 'node:child_process'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomicSync } from '../fs-atomic.js'
+import { buildPrewarmValue, type PrewarmValue } from './prewarm-file.js'
 import type { Tool, ToolCallParams, ToolResult } from '../tools/types.js'
 
 // ── 类型 ─────────────────────────────────────────────────────────────────
@@ -411,6 +412,28 @@ export function deriveGalaxyDims(items: StarflowDraftItem[] | undefined): Starfl
   return dims.slice(0, 5)
 }
 
+/** M3：预取事实摘要块——`<path>：首行/前 200 字符`，总量 ≤1500 字符。
+ *  注入派生 galaxy 维度的 objective 前部，让 worker 省掉首轮文件探索。 */
+const PREWARM_FACT_CAP = 1500
+const PREWARM_LINE_CAP = 200
+
+export function buildPrewarmFactBlock(values: PrewarmValue[]): string | undefined {
+  const lines: string[] = ['── 目标文件预取摘要（评审期间已读取，供直接引用）──']
+  let budget = PREWARM_FACT_CAP
+  for (const v of values) {
+    if (budget <= 0) { lines.push('…（摘要截断）'); break }
+    const head = (v.uiContent ?? v.content ?? '').split('\n').map(l => l.trim()).find(l => l.length > 0) ?? ''
+    const snippet = head.length > PREWARM_LINE_CAP ? `${head.slice(0, PREWARM_LINE_CAP)}…` : head
+    if (!snippet) continue
+    const line = `  ${v.canonicalPath}：${snippet}`
+    if (line.length > budget) { lines.push('…（摘要截断）'); break }
+    lines.push(line)
+    budget -= line.length
+  }
+  if (lines.length <= 1) return undefined
+  return lines.join('\n')
+}
+
 // ── council 输入增强（复盘 A-D：基线预检 C + 增量评审 B） ─────────────────
 
 /** C: 基线预检块——git status 命中 draftItems 目标文件的行 + 目标文件最近 5 条
@@ -709,6 +732,8 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
 async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, state: StarflowState): Promise<StarflowRun> {
   const now = () => Date.now()
   let teamRetried = false
+  /** M3：council 等待期预取的目标文件摘要（galaxy 派生维度注入用）。 */
+  let prewarmFactBlock: string | undefined
   const phaseStartedAt = new Map<'council' | 'team' | 'galaxy' | 'deliver', number>()
   const phaseOutputs = new Map<'council' | 'team' | 'galaxy' | 'deliver', string[]>()
   const beginPhase = (phase: 'council' | 'team' | 'galaxy' | 'deliver'): void => {
@@ -777,6 +802,13 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
     }
     if (input.rounds) councilInput.rounds = input.rounds
     if (input.seats && input.seats.length > 0) councilInput.seats = input.seats
+    // M3：council 等待期预热——与评审并行预取草稿目标文件（OS 缓存 + 事实
+    // 摘要），galaxy 派生维度据此省掉首轮探索。best-effort：预取失败绝不影响
+    // 评审；显式 galaxyDims 不注入（用户已给精确定义）。
+    const prewarmFiles = input.draftItems?.flatMap(i => i.files ?? []) ?? []
+    const prewarmPromise = prewarmFiles.length > 0
+      ? Promise.all(prewarmFiles.slice(0, 20).map(f => buildPrewarmValue(deps.cwd, f))).then(vals => vals.filter((v): v is PrewarmValue => v !== undefined))
+      : Promise.resolve([] as PrewarmValue[])
     let result: ToolResult
     try {
       result = await runWithPhaseHeartbeat(deps, 'council', () =>
@@ -786,6 +818,9 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
       rememberPhaseOutput('council', message)
       return block('council', `council 执行中断：${message}`, message)
     }
+    const prewarmed = await prewarmPromise
+    // M3：跨阶段共享（galaxy 段消费）——函数顶部声明，council 块内赋值。
+    prewarmFactBlock = prewarmed.length > 0 ? buildPrewarmFactBlock(prewarmed) : undefined
     rememberPhaseOutput('council', result.content)
     const gate = councilGate(result)
     if (!gate.ok) return block('council', gate.reason, firstLine(result.content), result.content)
@@ -879,15 +914,19 @@ async function runStarflowUnlocked(deps: StarflowDeps, input: StarflowInput, sta
   if (state.phase === 'galaxy') {
     beginPhase('galaxy')
     const derived = input.galaxyDims ?? deriveGalaxyDims(input.draftItems)
-    if (derived.length < 2) {
+    // M3：只对派生维度注入预取摘要（显式 galaxyDims 是用户精确定义，不稀释）。
+    const dimsWithFacts = !input.galaxyDims && prewarmFactBlock
+      ? derived.map(d => ({ ...d, objective: `${prewarmFactBlock}\n\n${d.objective}` }))
+      : derived
+    if (dimsWithFacts.length < 2) {
       // 无显式维度也无可派生草稿——galaxy schema 要求 min 2，不足即跳过。
       const why = input.galaxyDims
-        ? `显式 galaxyDims 仅 ${derived.length} 个（min 2），跳过攻坚`
+        ? `显式 galaxyDims 仅 ${dimsWithFacts.length} 个（min 2），跳过攻坚`
         : '无 draftItems 可派生维度，跳过攻坚'
       await pass('galaxy', 'deliver', why, 'skipped')
     } else {
-      deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 3/4 galaxy 攻坚（${derived.length} 维度）\n`)
-      const dims = derived.slice(0, 5)
+      deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 3/4 galaxy 攻坚（${dimsWithFacts.length} 维度）\n`)
+      const dims = dimsWithFacts.slice(0, 5)
       let result: ToolResult
       try {
         result = await runWithPhaseHeartbeat(deps, 'galaxy', () => deps.galaxyTool.execute({
