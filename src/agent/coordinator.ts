@@ -306,6 +306,11 @@ export interface DelegationCoordinatorConfig {
   maxExploreWorkers?: number
   /** Max concurrent hands (write) workers. Default: maxWorkers. */
   maxWriteWorkers?: number
+  /** S4：DP 副本 A/B 候选模型池来源——已配置凭据的提供商（每 provider 首个
+   *  模型）。缺省 undefined → 无候选池，DP 副本不轮换（旧行为）。 */
+  providers?: Record<string, ProviderConfig>
+  /** S4：显式候选模型提供者（测试/定制装配用）。缺省 → 用 providers 推导。 */
+  getCandidateModels?: () => Array<{ provider: string; model: string }>
   runtimeFactory: WorkerRuntimeFactory
   routing?: WorkerRouteConfig
   runWorker?: (config: WorkerSessionConfig) => Promise<WorkerSessionRun>
@@ -1828,6 +1833,18 @@ export class DelegationCoordinator {
     const explore = this.config.maxExploreWorkers ?? this.config.maxWorkers
     const write = this.config.maxWriteWorkers ?? this.config.maxWorkers
     return Math.max(this.config.maxWorkers, explore, write)
+  }
+
+  /** S4：DP 副本 A/B 候选模型池。显式注入优先；缺省从 providers 配置推导
+   *  （每 provider 首个模型，天然只含已配置凭据的提供商）。 */
+  getCandidateModels(): Array<{ provider: string; model: string }> {
+    if (this.config.getCandidateModels) return this.config.getCandidateModels()
+    const out: Array<{ provider: string; model: string }> = []
+    for (const [providerId, p] of Object.entries(this.config.providers ?? {})) {
+      const first = p.models?.[0]
+      if (first?.id) out.push({ provider: providerId, model: first.id })
+    }
+    return out
   }
 
   private async acquireWorkerSlot(order: WorkOrder, parentSignal?: AbortSignal): Promise<void> {

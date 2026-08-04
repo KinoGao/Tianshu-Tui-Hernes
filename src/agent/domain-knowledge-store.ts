@@ -60,13 +60,16 @@ export interface DepositInput {
 }
 
 /** 星河路由记录（收编 #5）：一次 galaxy/维度派发的路由事实。
- *  按 taskShape（归一化维度名）聚合胜率，供 formatGalaxyProposal 回召。 */
+ *  按 taskShape（归一化维度名）聚合胜率，供 formatGalaxyProposal 回召。
+ *  model（收编 S4）：实际执行模型——DP 副本 A/B 轮换后按模型沉淀性价比。 */
 export interface GalaxyRoutingRecord {
   dimensionName: string
   authority: string
   /** 归一化任务形状（小写去空白）——胜率聚合键。 */
   taskShape: string
   status: 'passed' | 'failed' | 'blocked'
+  /** 实际执行模型（可能为空：旧记录/未记账）。 */
+  model?: string
   depositedAt: number
 }
 

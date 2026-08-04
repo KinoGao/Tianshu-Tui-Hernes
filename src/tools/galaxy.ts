@@ -47,6 +47,9 @@ export interface GalaxyCoordinator {
   ): Promise<CoordinatorRun>
   /** Read-only runtime boundary check; absent in lightweight test/worker hosts. */
   getRuntimeSnapshot?: () => RuntimeCoordinatorSnapshot
+  /** S4：DP 副本 A/B 候选模型池。缺省 undefined → DP 副本全部走默认路由
+   *  （与旧行为一致，不轮换）。 */
+  getCandidateModels?: () => Array<{ provider: string; model: string }>
   /** 星河路由学习（收编 #5）：结算时沉淀路由事实、proposal 时召回胜率。
    *  缺省 undefined → 路由学习关闭（现状行为）。 */
   domainKnowledgeStore?: import('../agent/domain-knowledge-store.js').DomainKnowledgeStore
@@ -188,25 +191,29 @@ function normalizeTaskShape(name: string): GalaxyTaskShape {
   }
 }
 
-/** 同 taskShape 历史路由按 authority 聚合胜率（收编 #5 召回侧）。 */
+/** 同 taskShape 历史路由按 authority × model 聚合胜率（收编 #5 召回侧 + S4
+ *  模型维度）——DP 副本 A/B 沉淀后，proposal 能对比「同任务形状下哪个模型
+ *  性价比最高」。model 缺失（旧记录）归入 '' 组展示为「默认」。 */
 function buildRoutingStats(
   store: import('../agent/domain-knowledge-store.js').DomainKnowledgeStore,
   dimensions: z.infer<typeof dimensionSchema>[],
-): Array<{ dimensionName: string; taskShape: string; authority: string; passed: number; total: number; passRate: string }> {
-  const out: Array<{ dimensionName: string; taskShape: string; authority: string; passed: number; total: number; passRate: string }> = []
+): Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string }> {
+  const out: Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string }> = []
   for (const d of dimensions) {
     const taskShape = normalizeTaskShape(d.name)
     const records = store.recallGalaxyRouting(taskShape)
     if (records.length === 0) continue
-    const byAuthority = new Map<string, import('../agent/domain-knowledge-store.js').GalaxyRoutingRecord[]>()
+    const byKey = new Map<string, import('../agent/domain-knowledge-store.js').GalaxyRoutingRecord[]>()
     for (const r of records) {
-      const list = byAuthority.get(r.authority)
+      const key = `${r.authority}\u0000${r.model ?? ''}`
+      const list = byKey.get(key)
       if (list) list.push(r)
-      else byAuthority.set(r.authority, [r])
+      else byKey.set(key, [r])
     }
-    for (const [authority, rs] of byAuthority) {
+    for (const [key, rs] of byKey) {
+      const [authority, model] = key.split('\u0000')
       const passed = rs.filter(r => r.status === 'passed').length
-      out.push({ dimensionName: d.name, taskShape, authority, passed, total: rs.length, passRate: String(Math.round((passed / rs.length) * 100)) })
+      out.push({ dimensionName: d.name, taskShape, authority: authority!, model: model!, passed, total: rs.length, passRate: String(Math.round((passed / rs.length) * 100)) })
     }
   }
   return out
@@ -286,7 +293,7 @@ function formatGalaxyProposal(
   objective: string,
   dimensions: z.infer<typeof dimensionSchema>[],
   autoReview: boolean,
-  routingStats?: Array<{ dimensionName: string; taskShape: string; authority: string; passed: number; total: number; passRate: string }>,
+  routingStats?: Array<{ dimensionName: string; taskShape: string; authority: string; model: string; passed: number; total: number; passRate: string }>,
 ): string {
   const lines: string[] = [
     `${GALAXY_GLYPH} 星河集群方案`,
@@ -316,11 +323,12 @@ function formatGalaxyProposal(
     lines.push(`     审查以上所有维度的输出，验证正确性、完整性和安全性`)
   }
 
-  // 路由学习召回（收编 #5）：同任务形状的历史路由，按 authority 聚合胜率。
+  // 路由学习召回（收编 #5 + S4）：同任务形状的历史路由，按 authority ×
+  // model 聚合胜率——DP 副本 A/B 的模型对比在这里可见。
   if (routingStats && routingStats.length > 0) {
-    lines.push('', '历史路由（同任务形状 · 按 authority 聚合胜率）：')
+    lines.push('', '历史路由（同任务形状 · authority × 模型胜率）：')
     for (const r of routingStats) {
-      lines.push(`  ${r.authority} @ ${r.dimensionName}: ${r.passed}/${r.total} 通过（${r.passRate}%）`)
+      lines.push(`  ${r.authority} @ ${r.dimensionName}${r.model ? ` · ${r.model}` : ' · 默认'}: ${r.passed}/${r.total} 通过（${r.passRate}%）`)
     }
   }
 
@@ -772,6 +780,19 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
             const workOrderId = workerOrderId(parentTurnId)
             if (isDataParallel) dataParallelGroups.get(i)!.workOrderIds.push(workOrderId)
 
+            // S4：DP 副本模型 A/B——副本 1 走默认路由，副本 2..N 轮换候选
+            // 模型（仅当未显式 modelOverride 且协调器提供候选池）。同一任务
+            // 不同模型跑出独立副本，结算时按 model 沉淀路由事实，供后续
+            // proposal 选择「同任务形状下性价比最高」的模型。
+            let modelOverride = dim.modelOverride
+            if (isDataParallel && modelOverride === undefined && replicaIndex > 0) {
+              const candidates = coordinator.getCandidateModels?.() ?? []
+              if (candidates.length > 0) {
+                const candidate = candidates[(replicaIndex - 1) % candidates.length]!
+                modelOverride = { provider: candidate.provider, model: candidate.model }
+              }
+            }
+
             requests.push({
             parentTurnId,
             objective: isDataParallel
@@ -789,7 +810,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
               ? [...(dim.constraints ?? []), ...planConstraints]
               : dim.constraints,
             scope: { files: dim.files, symbols: dim.symbols },
-            modelOverride: dim.modelOverride,
+            modelOverride,
             tierFloor: dim.tierFloor,
             groupId: dataParallelGroupId ?? perspectiveGroupId,
             quorumK: isDataParallel ? Math.floor(dim.replicas! / 2) + 1 : undefined,
@@ -970,16 +991,19 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
         }
       }
 
-      // 路由学习沉淀（收编 #5）：结算时按维度记录路由事实，供下次 proposal
-      // 召回聚合胜率。best-effort——store 故障绝不影响交付。
+      // 路由学习沉淀（收编 #5 + S4）：结算时按维度记录路由事实（含实际执行
+      // 模型），供下次 proposal 召回聚合胜率。best-effort——store 故障绝不
+      // 影响交付。
       if (coordinator.domainKnowledgeStore) {
         try {
           const resultsById = new Map(run.results.map(r => [r.workOrderId, r]))
+          const modelByWorkOrder = new Map((run.workerModels ?? []).map(w => [w.workOrderId, w.model]))
           const routingRecords: Array<{
             dimensionName: string
             authority: string
             taskShape: string
             status: 'passed' | 'failed' | 'blocked'
+            model?: string
           }> = []
           for (const req of requests) {
             const dimIndex = dimensionIndexByParentTurnId.get(req.parentTurnId)
@@ -992,6 +1016,7 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
               taskShape: normalizeTaskShape(dim.name),
               // escalated 视同 blocked：结论不可采信，不记作通过
               status: result.status === 'escalated' ? 'blocked' : result.status,
+              model: modelByWorkOrder.get(workerOrderId(req.parentTurnId)) ?? req.modelOverride?.model,
             })
           }
           if (routingRecords.length > 0) {

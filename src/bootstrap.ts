@@ -1209,6 +1209,7 @@ export function createAgentRuntime(deps: {
     // 全局信号量（activeWorkerCount ≤ maxWorkers）在 coordinator 层实施。
     maxWorkers: resolveCoordinatorMaxWorkers(config),
     ...resolveCoordinatorPoolCaps(config),
+    providers: config.provider.providers,
     runtimeFactory,
     routing: workerRouting,
     providerHealth,

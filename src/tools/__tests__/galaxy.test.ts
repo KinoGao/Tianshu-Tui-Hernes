@@ -779,4 +779,95 @@ describe('GALAXY_PLAN_PRECHECK', () => {
     assert.equal(result.isError, undefined)
     assert.match(result.content, /✓ 写维度文件范围无重叠、无覆盖缺口/)
   })
+
+  it('S4: DP 副本 2..N 轮换候选模型，副本 1 走默认路由', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const coordinator = capturingCoordinator(calls)
+    coordinator.getCandidateModels = () => [
+      { provider: 'minimax', model: 'MiniMax-M2.7' },
+      { provider: 'glm', model: 'glm-5.2' },
+    ]
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_ab',
+      cwd: '/repo',
+      input: {
+        objective: 'ab test across replicas',
+        dimensions: [
+          { name: 'verify', objective: '独立验证注入链', authority: 'yaoguang', parallelism: 'data', replicas: 3, files: ['src/a.ts'] },
+          { name: 'search', objective: '检索代码', authority: 'tianji', profile: 'code_scout' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, undefined, `unexpected error: ${result.content}`)
+    const reqs = calls[0]!.requests
+    const dpReqs = reqs.filter(r => r.parentTurnId?.includes('-galaxy-0:'))
+    assert.equal(dpReqs.length, 3, 'DP 维度派发 3 个副本')
+    assert.equal(dpReqs[0]!.modelOverride, undefined, '副本 1 走默认路由')
+    assert.deepEqual(dpReqs[1]!.modelOverride, { provider: 'minimax', model: 'MiniMax-M2.7' }, '副本 2 轮换到候选 1')
+    assert.deepEqual(dpReqs[2]!.modelOverride, { provider: 'glm', model: 'glm-5.2' }, '副本 3 轮换到候选 2')
+  })
+
+  it('S4: 显式 modelOverride 时副本不轮换', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const coordinator = capturingCoordinator(calls)
+    coordinator.getCandidateModels = () => [{ provider: 'minimax', model: 'MiniMax-M2.7' }]
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_ab_override',
+      cwd: '/repo',
+      input: {
+        objective: 'explicit override wins',
+        dimensions: [
+          { name: 'verify', objective: '独立验证', authority: 'yaoguang', parallelism: 'data', replicas: 2, files: ['src/a.ts'], modelOverride: { provider: 'deepseek', model: 'deepseek-v4-pro' } },
+          { name: 'search', objective: '检索代码', authority: 'tianji', profile: 'code_scout' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    const dpReqs = calls[0]!.requests.filter(r => r.parentTurnId?.includes('-galaxy-0:'))
+    assert.equal(dpReqs.length, 2)
+    for (const req of dpReqs) {
+      assert.deepEqual(req.modelOverride, { provider: 'deepseek', model: 'deepseek-v4-pro' }, '显式覆盖优先，不轮换')
+    }
+  })
+
+  it('S4: 结算路由事实带实际执行模型（modelOverride 回退）', async () => {
+    const recorded: Array<Record<string, unknown>> = []
+    const coordinator = capturingCoordinator([])
+    coordinator.getCandidateModels = () => [{ provider: 'minimax', model: 'MiniMax-M2.7' }]
+    coordinator.domainKnowledgeStore = {
+      recallGalaxyRouting: () => [],
+      recordGalaxyRoutingBatch: (records: Array<Record<string, unknown>>) => recorded.push(...records),
+    } as never
+    const tool = createGalaxyTool(coordinator)
+
+    const result = await tool.execute({
+      toolUseId: 'tu_ab_record',
+      cwd: '/repo',
+      input: {
+        objective: 'record routing with model',
+        dimensions: [
+          { name: 'verify', objective: '独立验证', authority: 'yaoguang', parallelism: 'data', replicas: 2, files: ['src/a.ts'] },
+          { name: 'search', objective: '检索代码', authority: 'tianji', profile: 'code_scout' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.ok(recorded.length > 0, '结算必须沉淀路由事实')
+    const dpWithModel = recorded.find(r => r.taskShape === 'review' && r.model === 'MiniMax-M2.7')
+    assert.ok(dpWithModel, '副本 2 轮换模型的记录必须带实际模型进入路由事实')
+    assert.ok(recorded.some(r => r.taskShape === 'review' && r.model === undefined), '副本 1 默认路由无 model 覆盖')
+  })
 })
