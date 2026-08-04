@@ -212,7 +212,7 @@ export function createStarflowTool(deps: StarflowToolDeps): Tool {
       // 纯静态方案展示——不调任何子工具（零派发），与 galaxy proposal 同构。
       if (!confirm) {
         return {
-          content: formatProposal(objective, rounds ?? 1, dims, !galaxyDims, starflowStatePath(deps.cwd, objective)),
+          content: formatProposal(objective, rounds ?? 1, dims, !galaxyDims, starflowStatePath(deps.cwd, objective, params.sessionId)),
           uiContent: `${GLYPH} 星流方案 · ${dims.length >= 2 ? `${dims.length} 维度` : '无攻坚维度'}`,
         }
       }

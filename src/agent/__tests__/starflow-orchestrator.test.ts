@@ -150,6 +150,37 @@ describe('STARFLOW_ORCHESTRATOR', () => {
     assert.match(run.report, /阶段 1 council 评审：✅/)
   })
 
+  it('阶段异常会保存可恢复的原始检查点，而不是只返回一行错误', async () => {
+    const { deps, cwd } = makeDeps({
+      council: async () => { throw new Error('provider first-byte timeout') },
+    })
+    const run = await runStarflow(deps, baseInput())
+
+    assert.equal(run.state.phase, 'council')
+    assert.equal(run.state.phases.council?.status, 'blocked')
+    const rawPath = run.state.phases.council?.rawPath
+    assert.ok(rawPath, 'phase error should have a durable raw report path')
+    assert.match(readFileSync(rawPath!, 'utf8'), /provider first-byte timeout/)
+    assert.ok(existsSync(starflowStatePath(cwd, '给项目加登录功能')))
+  })
+
+  it('新会话 resume 会发现旧会话状态，同时把后续 checkpoint 写入新命名空间', async () => {
+    const first = makeDeps({})
+    first.deps.params.sessionId = 'session-old'
+    const firstRun = await runStarflow(first.deps, baseInput())
+    assert.equal(firstRun.state.phase, 'done')
+    assert.ok(existsSync(starflowStatePath(first.cwd, '给项目加登录功能', 'session-old')))
+
+    const second = makeDeps({ cwd: first.cwd })
+    second.deps.params.sessionId = 'session-new'
+    const secondRun = await runStarflow(second.deps, baseInput({ resume: true }))
+    assert.equal(secondRun.state.phase, 'done')
+    assert.equal(second.calls.council.length, 0)
+    assert.equal(second.calls.team.length, 0)
+    assert.equal(second.calls.galaxy.length, 0)
+    assert.ok(existsSync(starflowStatePath(first.cwd, '给项目加登录功能', 'session-new')))
+  })
+
   it('council 否决（blocking challenge 未化解）→ blocked，附驳回理由，team/galaxy 不执行', async () => {
     const veto = ['# 议事记录', '', '## ⛔ 议事会否决（blocking challenge 未化解）', '- 华盖否决: 方案破坏向后兼容', '- 天权质疑: 缺少迁移路径', '', '计划未编译执行。'].join('\n')
     const { deps, calls } = makeDeps({ council: async () => ({ content: veto }) })

@@ -18,8 +18,9 @@
 
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { writeFileAtomicSync } from '../fs-atomic.js'
 import type { Tool, ToolCallParams, ToolResult } from '../tools/types.js'
 
 // ── 类型 ─────────────────────────────────────────────────────────────────
@@ -33,10 +34,18 @@ export interface StarflowPhaseRecord {
   /** 阶段摘要（工具输出的首行/关键行截断）。 */
   summary: string
   at: number
+  /** Wall-clock duration of the phase, when it reached a checkpoint. */
+  elapsedMs?: number
+  /** Full phase output in the session artifact store, when available. */
+  rawArtifactId?: string
+  /** Fallback raw report path when no artifact store was injected. */
+  rawPath?: string
 }
 
 export interface StarflowState {
   objective: string
+  /** Session namespace used for new writes; resume can still discover older sessions. */
+  sessionId?: string
   /** 下一个要执行的阶段；blocked 时停留在受阻阶段（resume 从该阶段重跑）。 */
   phase: StarflowPhase
   phases: Partial<Record<'council' | 'team' | 'galaxy' | 'deliver', StarflowPhaseRecord>>
@@ -169,18 +178,22 @@ function starflowDir(cwd: string): string {
   return join(cwd, '.rivet', 'starflow')
 }
 
-export function starflowStatePath(cwd: string, objective: string): string {
-  const hash = createHash('sha1').update(objective).digest('hex').slice(0, 12)
+export function starflowStatePath(cwd: string, objective: string, sessionId?: string): string {
+  const hash = createHash('sha1')
+    .update(objective)
+    .update('\0')
+    .update(sessionId ?? '')
+    .digest('hex')
+    .slice(0, 12)
   return join(starflowDir(cwd), `${hash}.json`)
 }
 
-function freshState(objective: string, now: number): StarflowState {
-  return { objective, phase: 'council', phases: {}, teamRetries: 0, updatedAt: now }
+function freshState(objective: string, now: number, sessionId?: string): StarflowState {
+  return { objective, ...(sessionId ? { sessionId } : {}), phase: 'council', phases: {}, teamRetries: 0, updatedAt: now }
 }
 
-function loadState(cwd: string, objective: string): StarflowState | undefined {
+function readStateFile(path: string, objective: string): StarflowState | undefined {
   try {
-    const path = starflowStatePath(cwd, objective)
     if (!existsSync(path)) return undefined
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as StarflowState
     if (parsed.objective !== objective || typeof parsed.phase !== 'string') return undefined
@@ -190,13 +203,69 @@ function loadState(cwd: string, objective: string): StarflowState | undefined {
   }
 }
 
-/** 状态落盘是 resume 便利，写盘失败绝不影响编排（同 checkpoint 先例）。 */
+/**
+ * Resume first prefers this session's namespace, then discovers the newest
+ * matching state from another session. This prevents concurrent sessions from
+ * overwriting one another while preserving handoff/resume across sessions.
+ */
+function loadState(cwd: string, objective: string, sessionId?: string): StarflowState | undefined {
+  const preferred = readStateFile(starflowStatePath(cwd, objective, sessionId), objective)
+  if (preferred) return preferred
+
+  const candidates: StarflowState[] = []
+  try {
+    for (const entry of readdirSync(starflowDir(cwd))) {
+      if (!entry.endsWith('.json')) continue
+      const state = readStateFile(join(starflowDir(cwd), entry), objective)
+      if (state) candidates.push(state)
+    }
+  } catch {
+    return undefined
+  }
+  const newest = candidates.sort((a, b) => b.updatedAt - a.updatedAt)[0]
+  return newest
+}
+
+/** State writes use the shared temp+rename primitive so a killed session cannot
+ * leave half a JSON document that silently resets a later resume. */
 function saveState(cwd: string, state: StarflowState): void {
   try {
     mkdirSync(starflowDir(cwd), { recursive: true })
-    writeFileSync(starflowStatePath(cwd, state.objective), JSON.stringify(state, null, 2), 'utf8')
+    writeFileAtomicSync(starflowStatePath(cwd, state.objective, state.sessionId), JSON.stringify(state, null, 2))
   } catch {
     // best-effort
+  }
+}
+
+async function persistPhaseOutput(
+  deps: StarflowDeps,
+  state: StarflowState,
+  phase: 'council' | 'team' | 'galaxy' | 'deliver',
+  content: string,
+): Promise<Pick<StarflowPhaseRecord, 'rawArtifactId' | 'rawPath'>> {
+  if (!content.trim()) return {}
+  try {
+    const artifactId = deps.params.artifactStore
+      ? await deps.params.artifactStore.save({
+          tool: 'starflow',
+          target: `${state.objective}:${phase}`,
+          rawContent: content,
+          summary: firstLine(content),
+          sections: [],
+        })
+      : undefined
+    if (artifactId) return { rawArtifactId: artifactId }
+  } catch {
+    // Fall through to the project-local raw report so a store failure never
+    // turns into information loss.
+  }
+
+  try {
+    const rawPath = `${starflowStatePath(deps.cwd, state.objective, state.sessionId)}.${phase}.raw`
+    writeFileAtomicSync(rawPath, content)
+    return { rawPath }
+  } catch {
+    return {}
   }
 }
 
@@ -501,21 +570,45 @@ async function runWithPhaseHeartbeat<T>(
 
 export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Promise<StarflowRun> {
   const now = () => Date.now()
-  const state = (input.resume ? loadState(deps.cwd, input.objective) : undefined)
-    ?? freshState(input.objective, now())
+  const loadedState = input.resume ? loadState(deps.cwd, input.objective, deps.params.sessionId) : undefined
+  const state = loadedState
+    ? { ...loadedState, ...(deps.params.sessionId ? { sessionId: deps.params.sessionId } : {}) }
+    : freshState(input.objective, now(), deps.params.sessionId)
+  // Promote a cross-session resume into the new session namespace immediately,
+  // including when the loaded state is already `done` and no phase re-runs.
+  if (loadedState && deps.params.sessionId && loadedState.sessionId !== deps.params.sessionId) {
+    saveState(deps.cwd, state)
+  }
   // 非 resume 的显式重跑：丢弃旧状态从头来（freshState 已覆盖）。
   let teamRetried = false
 
-  const block = (phase: 'council' | 'team' | 'galaxy', reason: string, summary: string): StarflowRun => {
-    state.phase = phase
-    state.phases[phase] = { status: 'blocked', summary, at: now() }
-    state.blockedReason = reason
+  const checkpoint = async (
+    phase: 'council' | 'team' | 'galaxy' | 'deliver',
+    record: StarflowPhaseRecord,
+    rawContent: string,
+  ): Promise<void> => {
+    const persisted = await persistPhaseOutput(deps, state, phase, rawContent)
+    state.phases[phase] = { ...record, ...persisted }
     state.updatedAt = now()
     saveState(deps.cwd, state)
+  }
+  const block = async (phase: 'council' | 'team' | 'galaxy', reason: string, summary: string, rawContent = summary): Promise<StarflowRun> => {
+    state.phase = phase
+    state.blockedReason = reason
+    const previousAt = state.phases[phase]?.at ?? now()
+    await checkpoint(phase, { status: 'blocked', summary, at: now(), elapsedMs: Math.max(0, now() - previousAt) }, rawContent)
+    deps.params.onOutput?.(`${GLYPH} 星流 · ${phase} 阶段已保存中断检查点，可用 resume: true 续跑\n`)
     return { state, report: buildReport(state, teamRetried) }
   }
-  const pass = (phase: 'council' | 'team' | 'galaxy' | 'deliver', next: StarflowPhase, summary: string, status: 'passed' | 'skipped' = 'passed'): void => {
-    state.phases[phase] = { status, summary, at: now() }
+  const pass = async (
+    phase: 'council' | 'team' | 'galaxy' | 'deliver',
+    next: StarflowPhase,
+    summary: string,
+    status: 'passed' | 'skipped' = 'passed',
+    rawContent = summary,
+  ): Promise<void> => {
+    const previousAt = state.phases[phase]?.at ?? now()
+    await checkpoint(phase, { status, summary, at: now(), elapsedMs: Math.max(0, now() - previousAt) }, rawContent)
     state.phase = next
     state.blockedReason = undefined
     state.updatedAt = now()
@@ -534,13 +627,19 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
     }
     if (input.rounds) councilInput.rounds = input.rounds
     if (input.seats && input.seats.length > 0) councilInput.seats = input.seats
-    const result = await runWithPhaseHeartbeat(deps, 'council', () =>
-      deps.councilTool.execute({ ...subParams(deps, 'council'), input: councilInput }))
+    let result: ToolResult
+    try {
+      result = await runWithPhaseHeartbeat(deps, 'council', () =>
+        deps.councilTool.execute({ ...subParams(deps, 'council'), input: councilInput }))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return block('council', `council 执行中断：${message}`, message)
+    }
     const gate = councilGate(result)
-    if (!gate.ok) return block('council', gate.reason, firstLine(result.content))
+    if (!gate.ok) return block('council', gate.reason, firstLine(result.content), result.content)
     const planJson = extractPlanJson(result.content)
     if (planJson) state.planJson = planJson
-    pass('council', 'team', firstLine(result.content))
+    await pass('council', 'team', firstLine(result.content), 'passed', result.content)
   }
 
   // ── 阶段 2：team 波次（失败可回 council 复议一次） ─────────────────────
@@ -554,12 +653,17 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
       for (let wave = 0; wave < MAX_TEAM_WAVES; wave++) {
         const teamInput: Record<string, unknown> = { objective: input.objective, confirm: true, fromWave }
         if (state.planJson) teamInput.planJson = state.planJson
-        lastResult = await runWithPhaseHeartbeat(deps, 'team', () =>
-          deps.teamTool.execute({ ...subParams(deps, `${waveTag}-w${fromWave}`), input: teamInput }))
+        try {
+          lastResult = await runWithPhaseHeartbeat(deps, 'team', () =>
+            deps.teamTool.execute({ ...subParams(deps, `${waveTag}-w${fromWave}`), input: teamInput }))
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return block('team', `team 执行中断：${message}`, message)
+        }
         const gate = teamGate(lastResult)
         if (!gate.ok) {
           // 复议上限 1 次：回 council（rounds:2 复议轮）重审契约后再跑 team。
-          if (state.teamRetries >= 1) return block('team', gate.reason, firstLine(lastResult.content))
+          if (state.teamRetries >= 1) return block('team', gate.reason, firstLine(lastResult.content), lastResult.content)
           state.teamRetries++
           teamRetried = true
           state.updatedAt = now()
@@ -572,22 +676,33 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
             reInput.objective = augmentCouncilObjective(input.objective, input.draftItems, deps.cwd, { precheck: false })
           }
           if (input.seats && input.seats.length > 0) reInput.seats = input.seats
-          const reResult = await runWithPhaseHeartbeat(deps, 'council', () =>
-            deps.councilTool.execute({ ...subParams(deps, 'council-retry'), input: reInput }))
+          let reResult: ToolResult
+          try {
+            reResult = await runWithPhaseHeartbeat(deps, 'council', () =>
+              deps.councilTool.execute({ ...subParams(deps, 'council-retry'), input: reInput }))
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return block('team', `复议执行中断：${message}`, message)
+          }
           const reGate = councilGate(reResult)
-          if (!reGate.ok) return block('team', `复议未过：${reGate.reason}`, firstLine(reResult.content))
+          if (!reGate.ok) return block('team', `复议未过：${reGate.reason}`, firstLine(reResult.content), reResult.content)
           state.planJson = extractPlanJson(reResult.content) ?? state.planJson
+          await checkpoint('council', {
+            status: reGate.ok ? 'passed' : 'blocked',
+            summary: firstLine(reResult.content),
+            at: now(),
+          }, reResult.content)
           break // 跳出波次循环，外层 for(;;) 重跑 team
         }
         const next = nextWaveOf(lastResult)
         if (next === undefined) break // 无下一波 = 已跑到末波
         fromWave = next
         if (wave === MAX_TEAM_WAVES - 1) {
-          return block('team', `波次推进超过上限（${MAX_TEAM_WAVES}）——异常续波循环`, firstLine(lastResult.content))
+          return block('team', `波次推进超过上限（${MAX_TEAM_WAVES}）——异常续波循环`, firstLine(lastResult.content), lastResult.content)
         }
       }
       if (lastResult && !teamGate(lastResult).ok) continue // 已决定复议：回外层循环
-      pass('team', 'galaxy', firstLine(lastResult?.content ?? ''))
+      await pass('team', 'galaxy', firstLine(lastResult?.content ?? ''), 'passed', lastResult?.content ?? '')
       break
     }
   }
@@ -600,24 +715,30 @@ export async function runStarflow(deps: StarflowDeps, input: StarflowInput): Pro
       const why = input.galaxyDims
         ? `显式 galaxyDims 仅 ${derived.length} 个（min 2），跳过攻坚`
         : '无 draftItems 可派生维度，跳过攻坚'
-      pass('galaxy', 'deliver', why, 'skipped')
+      await pass('galaxy', 'deliver', why, 'skipped')
     } else {
       deps.params.onOutput?.(`${GLYPH} 星流 · 阶段 3/4 galaxy 攻坚（${derived.length} 维度）\n`)
       const dims = derived.slice(0, 5)
-      const result = await runWithPhaseHeartbeat(deps, 'galaxy', () => deps.galaxyTool.execute({
-        ...subParams(deps, 'galaxy'),
-        input: { objective: input.objective, dimensions: dims, autoReview: true, confirm: true },
-      }))
+      let result: ToolResult
+      try {
+        result = await runWithPhaseHeartbeat(deps, 'galaxy', () => deps.galaxyTool.execute({
+          ...subParams(deps, 'galaxy'),
+          input: { objective: input.objective, dimensions: dims, autoReview: true, confirm: true },
+        }))
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return block('galaxy', `galaxy 执行中断：${message}`, message)
+      }
       const gate = galaxyGate(result)
-      if (!gate.ok) return block('galaxy', gate.reason, firstLine(result.content))
+      if (!gate.ok) return block('galaxy', gate.reason, firstLine(result.content), result.content)
       const truncated = derived.length > 5 ? `（草稿 ${derived.length} 项截断为 5 维）` : ''
-      pass('galaxy', 'deliver', `${firstLine(result.content)}${truncated}`)
+      await pass('galaxy', 'deliver', `${firstLine(result.content)}${truncated}`, 'passed', result.content)
     }
   }
 
   // ── 阶段 4：交付清单（硬门禁归 deliver_task，此处只输出清单） ────────────
   if (state.phase === 'deliver') {
-    pass('deliver', 'done', '交付清单已输出，待调用 deliver_task')
+    await pass('deliver', 'done', '交付清单已输出，待调用 deliver_task')
   }
 
   return { state, report: buildReport(state, teamRetried) }
