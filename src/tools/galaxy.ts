@@ -31,6 +31,7 @@ import {
 import type { Tool, ToolCallParams, ToolResult } from './types.js'
 import { createActivityStreamer, createDelegationActivityMapper, progressSnippet } from './worker-activity-stream.js'
 import type { WorkerActivityEvent } from '../agent/coordinator.js'
+import { validateGalaxyDimensionContract } from '../agent/galaxy-contract.js'
 
 // ── Coordinator interface（与 delegate_batch 同构） ──────────────────────
 
@@ -550,6 +551,22 @@ export function createGalaxyTool(coordinator: GalaxyCoordinator): Tool {
       }
 
       const { objective, dimensions, autoReview, confirm, policy, planPath } = parsed.data
+
+      // Validate the complete plan before creating obligations or reserving
+      // workers. This mirrors Codex's spawn protocol: invalid child
+      // configuration is rejected atomically and all corrections are shown
+      // together instead of failing after a partial fan-out.
+      const contractIssues = validateGalaxyDimensionContract(dimensions)
+      if (contractIssues.length > 0) {
+        return {
+          content: [
+            'Galaxy contract validation failed:',
+            ...contractIssues.map(issue => `- dimension #${issue.dimensionIndex + 1}: ${issue.message}`),
+          ].join('\n'),
+          isError: true,
+          errorKind: 'format_error',
+        }
+      }
 
       // D8 L2：从 planPath 解析计划约束（反目标/待验证假设），合并进各维度的 constraints。
       const planConstraints = planPath

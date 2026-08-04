@@ -35,6 +35,52 @@ function capturingCoordinator(calls: Array<{ requests: DelegationRequest[] }>): 
 }
 
 describe('GALAXY_TOOL', () => {
+  it('rejects ambiguous or duplicate EP/DP contracts before dispatch', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const tool = createGalaxyTool(capturingCoordinator(calls))
+
+    const result = await tool.execute({
+      toolUseId: 'tu_contract',
+      cwd: '/repo',
+      input: {
+        objective: 'validate the galaxy plan',
+        dimensions: [
+          { name: 'Review', objective: 'check the change', authority: 'yaoguang', authorities: ['yaoguang', 'tianji'] },
+          { name: ' review ', objective: 'duplicate name', authority: 'tianji', replicas: 2 },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, true)
+    assert.match(result.content, /ambiguous|duplicates dimension|cannot set replicas/i)
+    assert.equal(calls.length, 0, 'invalid plans must not reach the coordinator')
+  })
+
+  it('rejects duplicate EP authorities and malformed DP replicas atomically', async () => {
+    const calls: Array<{ requests: DelegationRequest[] }> = []
+    const tool = createGalaxyTool(capturingCoordinator(calls))
+
+    const result = await tool.execute({
+      toolUseId: 'tu_contract_dp',
+      cwd: '/repo',
+      input: {
+        objective: 'validate parallel work',
+        dimensions: [
+          { name: 'perspectives', objective: 'independent review', authorities: ['tianji', 'tianji'] },
+          { name: 'replicas', objective: 'independent evidence', authority: 'yaoguang', parallelism: 'data' },
+        ],
+        autoReview: false,
+        confirm: true,
+      },
+    })
+
+    assert.equal(result.isError, true)
+    assert.match(result.content, /repeats authority|requires replicas/i)
+    assert.equal(calls.length, 0)
+  })
+
   it('DP 副本跨维度不撞 work order ID（B2 回归）', async () => {
     const calls: Array<{ requests: DelegationRequest[] }> = []
     const tool = createGalaxyTool(capturingCoordinator(calls))
